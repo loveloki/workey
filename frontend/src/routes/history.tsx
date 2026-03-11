@@ -75,24 +75,24 @@ function HistoryPage() {
   if (loading) return null
 
   return (
-    <main className="page-wrap px-4 pb-8 pt-8">
-      <div className="rise-in mb-6">
-        <p className="island-kicker mb-1">历史记录</p>
-        <h1 className="display-title text-3xl font-bold tracking-tight text-[var(--sea-ink)]">
+    <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
+      <div className="mb-6">
+        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[#333]">历史记录</p>
+        <h1 className="text-3xl font-normal tracking-tight text-black" style={{ fontFamily: 'Georgia, serif' }}>
           工作回顾
         </h1>
       </div>
 
       {/* Preset buttons */}
-      <div className="rise-in mb-4 flex flex-wrap gap-2" style={{ animationDelay: '80ms' }}>
+      <div className="mb-4 flex flex-wrap gap-2">
         {presets.map(p => (
           <button
             key={p.key}
             onClick={() => setPreset(p.key)}
-            className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 ${
+            className={`rounded-md border px-4 py-2 font-mono text-sm ${
               preset === p.key
-                ? 'border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] text-[var(--lagoon-deep)]'
-                : 'border-[var(--line)] bg-[var(--surface)] text-[var(--sea-ink-soft)] hover:text-[var(--sea-ink)]'
+                ? 'border-[#d0d0d0] bg-[#f5f5f5] font-medium text-black'
+                : 'border-[#e5e5e5] bg-white text-[#414141] hover:bg-[#f5f5f5]'
             }`}
           >
             {p.label}
@@ -102,23 +102,23 @@ function HistoryPage() {
 
       {/* Custom date range */}
       {preset === 'custom' && (
-        <div className="rise-in mb-4 flex flex-wrap items-center gap-2">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <input
             type="date"
             value={customStart}
             onChange={e => setCustomStart(e.target.value)}
-            className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--sea-ink)] focus:border-[var(--lagoon)] focus:outline-none"
+            className="rounded-lg border border-black/10 bg-[#fffdf5] px-4 py-3.5 font-mono text-sm text-black focus:border-black focus:outline-none"
           />
-          <span className="text-sm text-[var(--sea-ink-soft)]">至</span>
+          <span className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>至</span>
           <input
             type="date"
             value={customEnd}
             onChange={e => setCustomEnd(e.target.value)}
-            className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--sea-ink)] focus:border-[var(--lagoon)] focus:outline-none"
+            className="rounded-lg border border-black/10 bg-[#fffdf5] px-4 py-3.5 font-mono text-sm text-black focus:border-black focus:outline-none"
           />
           <button
             onClick={handleCustomSearch}
-            className="rounded-full border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] px-4 py-2 text-xs font-semibold text-[var(--lagoon-deep)] transition hover:-translate-y-0.5 hover:bg-[rgba(79,184,178,0.24)]"
+            className="rounded-md bg-black px-5 py-2.5 font-mono text-sm text-white hover:bg-[#222]"
           >
             查询
           </button>
@@ -127,38 +127,37 @@ function HistoryPage() {
 
       {/* Results */}
       {fetching ? (
-        <p className="text-sm text-[var(--sea-ink-soft)]">加载中...</p>
+        <p className="font-mono text-sm text-[#666]">加载中...</p>
       ) : sortedDates.length === 0 ? (
-        <div className="island-shell rise-in rounded-2xl p-8 text-center">
-          <p className="text-sm text-[var(--sea-ink-soft)]">暂无记录</p>
+        <div className="rounded-lg border border-[#e5e5e5] bg-white p-8 text-center">
+          <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>暂无记录</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {sortedDates.map((date, i) => {
+          {sortedDates.map(date => {
             const entry = dateMap.get(date)!
             return (
               <div
                 key={date}
-                className="island-shell rise-in rounded-2xl p-5"
-                style={{ animationDelay: `${Math.min(i, 10) * 50 + 100}ms` }}
+                className="rounded-lg border border-[#e5e5e5] bg-white p-5"
               >
                 <div className="mb-2 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-[var(--sea-ink)]">
+                  <h3 className="font-mono text-sm font-semibold text-black">
                     {formatDateDisplay(date)}
                   </h3>
                   {entry.attendance && (
-                    <div className="flex items-center gap-3 text-xs text-[var(--sea-ink-soft)]">
+                    <div className="flex items-center gap-3 font-mono text-xs text-[#666]">
                       <span>上班 {formatTime(entry.attendance.clock_in)}</span>
                       <span>下班 {formatTime(entry.attendance.clock_out)}</span>
                     </div>
                   )}
                 </div>
                 {entry.log ? (
-                  <p className="m-0 whitespace-pre-wrap text-sm text-[var(--sea-ink-soft)]">
+                  <p className="m-0 whitespace-pre-wrap text-sm text-[#333]" style={{ fontFamily: 'Georgia, serif' }}>
                     {entry.log.content}
                   </p>
                 ) : (
-                  <p className="m-0 text-sm italic text-[var(--sea-ink-soft)] opacity-50">
+                  <p className="m-0 text-sm italic text-[#9ca3af]" style={{ fontFamily: 'Georgia, serif' }}>
                     未记录工作内容
                   </p>
                 )}

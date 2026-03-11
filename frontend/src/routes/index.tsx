@@ -4,9 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { attendance, workLogs } from '../lib/api'
 import { formatTime, getToday } from '../lib/date-utils'
 
-export const Route = createFileRoute('/')({
-  component: Dashboard,
-})
+export const Route = createFileRoute('/')({ component: Dashboard })
 
 function Dashboard() {
   const { user, loading } = useAuth()
@@ -20,10 +18,10 @@ function Dashboard() {
   if (!user) return null
 
   return (
-    <main className="page-wrap px-4 pb-8 pt-8">
-      <div className="rise-in mb-6">
-        <p className="island-kicker mb-1">今日工作</p>
-        <h1 className="display-title text-3xl font-bold tracking-tight text-[var(--sea-ink)] sm:text-4xl">
+    <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
+      <div className="mb-6">
+        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[#333]">今日工作</p>
+        <h1 className="text-3xl font-normal tracking-tight text-black sm:text-4xl" style={{ fontFamily: 'Georgia, serif' }}>
           {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
         </h1>
       </div>
@@ -73,22 +71,22 @@ function ClockCard() {
   const clockedOut = !!data?.clock_out
 
   return (
-    <div className="island-shell rise-in rounded-2xl p-6" style={{ animationDelay: '80ms' }}>
-      <p className="island-kicker mb-3">打卡签到</p>
+    <div className="rounded-lg border border-[#e5e5e5] bg-white p-6">
+      <p className="mb-4 font-mono text-sm uppercase tracking-[0.3em] text-[#333]">§ 打卡签到 §</p>
 
       {loading ? (
-        <p className="text-sm text-[var(--sea-ink-soft)]">加载中...</p>
+        <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
       ) : (
         <>
-          <div className="mb-4 flex items-center gap-6">
+          <div className="mb-5 flex items-center gap-6">
             <div>
-              <p className="text-xs text-[var(--sea-ink-soft)]">上班</p>
-              <p className="text-2xl font-bold text-[var(--sea-ink)]">{formatTime(data?.clock_in)}</p>
+              <p className="font-mono text-xs uppercase tracking-wide text-[#666]">上班</p>
+              <p className="font-mono text-2xl font-bold text-black">{formatTime(data?.clock_in)}</p>
             </div>
-            <div className="h-8 w-px bg-[var(--line)]" />
+            <div className="h-8 w-px bg-[#e5e5e5]" />
             <div>
-              <p className="text-xs text-[var(--sea-ink-soft)]">下班</p>
-              <p className="text-2xl font-bold text-[var(--sea-ink)]">{formatTime(data?.clock_out)}</p>
+              <p className="font-mono text-xs uppercase tracking-wide text-[#666]">下班</p>
+              <p className="font-mono text-2xl font-bold text-black">{formatTime(data?.clock_out)}</p>
             </div>
           </div>
 
@@ -97,7 +95,7 @@ function ClockCard() {
               <button
                 onClick={clockIn}
                 disabled={acting}
-                className="rounded-full border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] px-5 py-2 text-sm font-semibold text-[var(--lagoon-deep)] transition hover:-translate-y-0.5 hover:bg-[rgba(79,184,178,0.24)] disabled:opacity-50"
+                className="rounded-md bg-black px-5 py-2.5 font-mono text-sm text-white hover:bg-[#222] disabled:opacity-50"
               >
                 上班打卡
               </button>
@@ -106,7 +104,7 @@ function ClockCard() {
               <button
                 onClick={clockOut}
                 disabled={acting}
-                className="rounded-full border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] px-5 py-2 text-sm font-semibold text-[var(--lagoon-deep)] transition hover:-translate-y-0.5 hover:bg-[rgba(79,184,178,0.24)] disabled:opacity-50"
+                className="rounded-md bg-black px-5 py-2.5 font-mono text-sm text-white hover:bg-[#222] disabled:opacity-50"
               >
                 {clockedOut ? '更新下班时间' : '下班打卡'}
               </button>
@@ -114,7 +112,7 @@ function ClockCard() {
           </div>
 
           {clockedIn && clockedOut && (
-            <p className="mt-2 text-xs text-[var(--sea-ink-soft)]">
+            <p className="mt-3 text-xs text-[#9ca3af]" style={{ fontFamily: 'Georgia, serif' }}>
               可多次点击更新下班时间
             </p>
           )}
@@ -149,29 +147,30 @@ function WorkLogCard() {
   }
 
   return (
-    <div className="island-shell rise-in rounded-2xl p-6" style={{ animationDelay: '160ms' }}>
-      <p className="island-kicker mb-3">工作内容</p>
+    <div className="rounded-lg border border-[#e5e5e5] bg-white p-6">
+      <p className="mb-4 font-mono text-sm uppercase tracking-[0.3em] text-[#333]">§ 工作内容 §</p>
 
       {loading ? (
-        <p className="text-sm text-[var(--sea-ink-soft)]">加载中...</p>
+        <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
       ) : (
         <>
           <textarea
             value={content}
             onChange={e => setContent(e.target.value)}
             placeholder="记录今天的工作内容..."
-            className="mb-3 w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] p-3 text-sm text-[var(--sea-ink)] placeholder:text-[var(--sea-ink-soft)] focus:border-[var(--lagoon)] focus:outline-none"
+            className="mb-4 w-full rounded-lg border border-black/10 bg-[#fffdf5] p-4 text-base text-[#333] placeholder:text-[#9ca3af] focus:border-black focus:outline-none"
+            style={{ fontFamily: 'Georgia, serif' }}
             rows={6}
           />
           <div className="flex items-center gap-3">
             <button
               onClick={save}
               disabled={saving}
-              className="rounded-full border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] px-5 py-2 text-sm font-semibold text-[var(--lagoon-deep)] transition hover:-translate-y-0.5 hover:bg-[rgba(79,184,178,0.24)] disabled:opacity-50"
+              className="rounded-md bg-black px-5 py-2.5 font-mono text-sm text-white hover:bg-[#222] disabled:opacity-50"
             >
               {saving ? '保存中...' : '保存'}
             </button>
-            {saved && <span className="text-xs text-[var(--palm)]">✓ 已保存</span>}
+            {saved && <span className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>✓ 已保存</span>}
           </div>
         </>
       )}
@@ -181,8 +180,8 @@ function WorkLogCard() {
 
 function LoadingScreen() {
   return (
-    <main className="page-wrap flex min-h-[60vh] items-center justify-center px-4">
-      <p className="text-sm text-[var(--sea-ink-soft)]">加载中...</p>
+    <main className="flex min-h-[60vh] items-center justify-center px-4">
+      <p className="font-mono text-sm text-[#666]">加载中...</p>
     </main>
   )
 }

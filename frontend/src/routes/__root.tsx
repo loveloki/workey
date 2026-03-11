@@ -8,9 +8,11 @@ export const Route = createRootRoute({
 function RootLayout() {
   return (
     <AuthProvider>
-      <div className="min-h-screen">
+      <div className="min-h-screen flex flex-col">
         <Header />
-        <Outlet />
+        <main className="flex-1">
+          <Outlet />
+        </main>
         <Footer />
       </div>
     </AuthProvider>
@@ -22,37 +24,58 @@ function Header() {
   const navigate = useNavigate()
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--header-bg)] px-4 backdrop-blur-lg">
-      <nav className="page-wrap flex items-center gap-3 py-3 sm:py-4">
+    <header className="sticky top-0 z-50 bg-white border-b" style={{ borderColor: '#e5e5e5' }}>
+      <nav className="max-w-5xl mx-auto flex items-center justify-between px-4 py-3">
+        {/* Left: Logo */}
         <Link
           to="/"
-          className="inline-flex items-center gap-2 rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] px-3 py-1.5 text-sm font-semibold text-[var(--sea-ink)] no-underline shadow-[0_8px_24px_rgba(30,90,72,0.08)]"
+          className="font-mono text-lg font-bold text-black no-underline"
         >
-          <span className="h-2 w-2 rounded-full bg-[linear-gradient(90deg,#56c6be,#7ed3bf)]" />
           Workey
         </Link>
 
+        {/* Middle: Nav links */}
         {user && (
-          <div className="flex items-center gap-4 text-sm font-semibold">
-            <Link to="/" className="nav-link" activeOptions={{ exact: true }} activeProps={{ className: 'nav-link is-active' }}>
+          <div className="flex items-center gap-6">
+            <Link
+              to="/"
+              className="font-mono text-sm no-underline transition-colors"
+              style={{ color: '#414141' }}
+              activeOptions={{ exact: true }}
+              activeProps={{ className: 'font-mono text-sm no-underline font-medium !text-black' }}
+            >
               今日
             </Link>
-            <Link to="/history" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
+            <Link
+              to="/history"
+              className="font-mono text-sm no-underline transition-colors"
+              style={{ color: '#414141' }}
+              activeProps={{ className: 'font-mono text-sm no-underline font-medium !text-black' }}
+            >
               历史
             </Link>
-            <Link to="/trends" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
+            <Link
+              to="/trends"
+              className="font-mono text-sm no-underline transition-colors"
+              style={{ color: '#414141' }}
+              activeProps={{ className: 'font-mono text-sm no-underline font-medium !text-black' }}
+            >
               趋势
             </Link>
           </div>
         )}
 
-        <div className="ml-auto flex items-center gap-2">
+        {/* Right: User + logout */}
+        <div className="flex items-center gap-3">
           {user && (
             <>
-              <span className="hidden text-sm text-[var(--sea-ink-soft)] sm:inline">{user.username}</span>
+              <span className="hidden sm:inline font-mono text-sm text-neutral-600">
+                {user.username}
+              </span>
               <button
                 onClick={() => { logout(); navigate({ to: '/login' }) }}
-                className="rounded-full border border-[var(--chip-line)] bg-[var(--chip-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--sea-ink-soft)] transition hover:-translate-y-0.5 hover:text-[var(--sea-ink)]"
+                className="font-mono text-sm px-4 py-2 rounded-md bg-white transition-colors hover:bg-neutral-50"
+                style={{ border: '1px solid #e5e5e5', borderRadius: '6px' }}
               >
                 退出
               </button>
@@ -66,8 +89,10 @@ function Header() {
 
 function Footer() {
   return (
-    <footer className="mt-16 border-t border-[var(--line)] px-4 pb-10 pt-8 text-center">
-      <p className="island-kicker m-0">Workey · 工作记录</p>
+    <footer className="py-8 text-center">
+      <p className="font-mono text-xs" style={{ color: '#9ca3af' }}>
+        Workey · 工作记录
+      </p>
     </footer>
   )
 }
