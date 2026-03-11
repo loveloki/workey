@@ -1,0 +1,15 @@
+[Unit]
+Description=Workey Work Logger
+After=network.target
+
+[Service]
+Type=simple
+User=exedev
+WorkingDirectory=/home/exedev/workey
+ExecStart=/home/exedev/workey/workey
+Restart=always
+RestartSec=3
+Environment=HOME=/home/exedev
+
+[Install]
+WantedBy=multi-user.target
