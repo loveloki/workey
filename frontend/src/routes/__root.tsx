@@ -62,6 +62,14 @@ function Header() {
             >
               趋势
             </Link>
+            <Link
+              to="/settings"
+              className="font-mono text-sm no-underline transition-colors"
+              style={{ color: '#414141' }}
+              activeProps={{ className: 'font-mono text-sm no-underline font-medium !text-black' }}
+            >
+              设置
+            </Link>
           </div>
         )}
 

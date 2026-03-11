@@ -68,3 +68,24 @@ export const workLogs = {
   range: (start: string, end: string) =>
     request<{ work_logs: any[] }>(`/api/work-logs/range?start=${start}&end=${end}`),
 }
+
+// Settings
+export const settings = {
+  get: () => request<{ timezone: string }>('/api/settings'),
+  save: (timezone: string) =>
+    request<{ timezone: string }>('/api/settings', {
+      method: 'POST',
+      body: JSON.stringify({ timezone }),
+    }),
+  changePassword: (old_password: string, new_password: string) =>
+    request<{ message: string }>('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ old_password, new_password }),
+    }),
+  exportData: () => request<any>('/api/data/export'),
+  importData: (data: any) =>
+    request<{ message: string; attendance_count: number; work_log_count: number }>('/api/data/import', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+}

@@ -395,3 +395,249 @@ func getWorkLog(userID int64, date string) *WorkLog {
 	}
 	return &wl
 }
+
+// --- Change Password ---
+
+func handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+
+	var req struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.OldPassword == "" || req.NewPassword == "" {
+		jsonError(w, "Old and new passwords are required", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.NewPassword) < 6 {
+		jsonError(w, "New password must be at least 6 characters", http.StatusBadRequest)
+		return
+	}
+
+	var currentHash string
+	err := db.QueryRow("SELECT password_hash FROM users WHERE id = ?", userID).Scan(&currentHash)
+	if err != nil {
+		jsonError(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	if !checkPassword(req.OldPassword, currentHash) {
+		jsonError(w, "Old password is incorrect", http.StatusUnauthorized)
+		return
+	}
+
+	newHash, err := hashPassword(req.NewPassword)
+	if err != nil {
+		jsonError(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", newHash, userID)
+	if err != nil {
+		jsonError(w, "Failed to update password", http.StatusInternalServerError)
+		return
+	}
+
+	jsonOK(w, map[string]string{"message": "Password changed successfully"})
+}
+
+// --- User Settings ---
+
+func handleSettings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		handleGetSettings(w, r)
+	case "POST":
+		handlePostSettings(w, r)
+	default:
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func handleGetSettings(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+
+	var timezone string
+	err := db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'timezone'", userID).Scan(&timezone)
+	if err == sql.ErrNoRows {
+		timezone = "+8"
+	} else if err != nil {
+		jsonError(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	jsonOK(w, map[string]string{"timezone": timezone})
+}
+
+func handlePostSettings(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+
+	var req struct {
+		Timezone string `json:"timezone"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Timezone == "" {
+		jsonError(w, "Timezone is required", http.StatusBadRequest)
+		return
+	}
+
+	_, err := db.Exec(
+		"INSERT INTO user_settings (user_id, key, value) VALUES (?, 'timezone', ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
+		userID, req.Timezone,
+	)
+	if err != nil {
+		jsonError(w, "Failed to save settings", http.StatusInternalServerError)
+		return
+	}
+
+	jsonOK(w, map[string]string{"timezone": req.Timezone})
+}
+
+// --- Export/Import Data ---
+
+type ExportData struct {
+	Attendance []Attendance `json:"attendance"`
+	WorkLogs   []WorkLog    `json:"work_logs"`
+	ExportedAt string       `json:"exported_at"`
+}
+
+func handleDataExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+
+	attendances := []Attendance{}
+	rows, err := db.Query(
+		"SELECT id, user_id, date, clock_in, clock_out, created_at, updated_at FROM attendance WHERE user_id = ? ORDER BY date",
+		userID,
+	)
+	if err != nil {
+		jsonError(w, "Failed to export attendance", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var a Attendance
+		rows.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.CreatedAt, &a.UpdatedAt)
+		attendances = append(attendances, a)
+	}
+	rows.Close()
+
+	workLogsList := []WorkLog{}
+	rows, err = db.Query(
+		"SELECT id, user_id, date, content, created_at, updated_at FROM work_logs WHERE user_id = ? ORDER BY date",
+		userID,
+	)
+	if err != nil {
+		jsonError(w, "Failed to export work logs", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var wl WorkLog
+		rows.Scan(&wl.ID, &wl.UserID, &wl.Date, &wl.Content, &wl.CreatedAt, &wl.UpdatedAt)
+		workLogsList = append(workLogsList, wl)
+	}
+	rows.Close()
+
+	exportData := ExportData{
+		Attendance: attendances,
+		WorkLogs:   workLogsList,
+		ExportedAt: time.Now().Format(time.RFC3339),
+	}
+
+	jsonOK(w, exportData)
+}
+
+func handleDataImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+
+	var importData struct {
+		Attendance []Attendance `json:"attendance"`
+		WorkLogs   []WorkLog    `json:"work_logs"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&importData); err != nil {
+		jsonError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	attendanceCount := 0
+	workLogCount := 0
+
+	for _, a := range importData.Attendance {
+		if a.Date == "" {
+			continue
+		}
+		now := nowDatetime()
+		result, err := db.Exec(
+			"UPDATE attendance SET clock_in = ?, clock_out = ?, updated_at = ? WHERE user_id = ? AND date = ?",
+			a.ClockIn, a.ClockOut, now, userID, a.Date,
+		)
+		if err != nil {
+			continue
+		}
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			_, err = db.Exec(
+				"INSERT INTO attendance (user_id, date, clock_in, clock_out, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+				userID, a.Date, a.ClockIn, a.ClockOut, now, now,
+			)
+			if err != nil {
+				continue
+			}
+		}
+		attendanceCount++
+	}
+
+	for _, wl := range importData.WorkLogs {
+		if wl.Date == "" {
+			continue
+		}
+		now := nowDatetime()
+		result, err := db.Exec(
+			"UPDATE work_logs SET content = ?, updated_at = ? WHERE user_id = ? AND date = ?",
+			wl.Content, now, userID, wl.Date,
+		)
+		if err != nil {
+			continue
+		}
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			_, err = db.Exec(
+				"INSERT INTO work_logs (user_id, date, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+				userID, wl.Date, wl.Content, now, now,
+			)
+			if err != nil {
+				continue
+			}
+		}
+		workLogCount++
+	}
+
+	jsonOK(w, map[string]interface{}{
+		"message":          "Data imported successfully",
+		"attendance_count": attendanceCount,
+		"work_log_count":   workLogCount,
+	})
+}
