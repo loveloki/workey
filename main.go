@@ -17,8 +17,13 @@ var db *sql.DB
 var jwtSecret []byte
 
 func main() {
+	dbPath := os.Getenv("WORKEY_DB")
+	if dbPath == "" {
+		dbPath = "workey.db"
+	}
+
 	var err error
-	db, err = sql.Open("sqlite", "workey.db")
+	db, err = sql.Open("sqlite", dbPath)
 	if err != nil {
 		log.Fatal("Failed to open database:", err)
 	}
