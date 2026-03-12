@@ -15,11 +15,23 @@ import (
 
 var db *sql.DB
 var jwtSecret []byte
+var dataDir string
 
 func main() {
+	dataDir = os.Getenv("WORKEY_DATA")
+	if dataDir == "" {
+		dataDir = "."
+	}
+
+	// Ensure uploads directory exists
+	uploadsDir := filepath.Join(dataDir, "uploads")
+	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
+		log.Fatal("Failed to create uploads directory:", err)
+	}
+
 	dbPath := os.Getenv("WORKEY_DB")
 	if dbPath == "" {
-		dbPath = "workey.db"
+		dbPath = filepath.Join(dataDir, "workey.db")
 	}
 
 	var err error
@@ -61,6 +73,12 @@ func main() {
 	// Export/Import routes
 	mux.HandleFunc("/api/data/export", corsMiddleware(authMiddleware(handleDataExport)))
 	mux.HandleFunc("/api/data/import", corsMiddleware(authMiddleware(handleDataImport)))
+
+	// Upload route
+	mux.HandleFunc("/api/upload", corsMiddleware(authMiddleware(handleUpload)))
+
+	// Serve uploaded files
+	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(filepath.Join(dataDir, "uploads")))))
 
 	// SPA fallback: serve frontend
 	mux.HandleFunc("/", handleSPA)

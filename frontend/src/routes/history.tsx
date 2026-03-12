@@ -3,6 +3,7 @@ import { useAuth } from '../lib/auth-context'
 import { useState, useEffect } from 'react'
 import { workLogs as workLogsApi, attendance as attendanceApi } from '../lib/api'
 import { getDateRange, formatDateDisplay, formatTime, type RangePreset } from '../lib/date-utils'
+import { MarkdownContent } from '../lib/markdown-editor'
 
 export const Route = createFileRoute('/history')({
   component: HistoryPage,
@@ -153,9 +154,9 @@ function HistoryPage() {
                   )}
                 </div>
                 {entry.log ? (
-                  <p className="m-0 whitespace-pre-wrap text-sm text-[#333]" style={{ fontFamily: 'Georgia, serif' }}>
-                    {entry.log.content}
-                  </p>
+                  <div className="markdown-body text-sm text-[#333]" style={{ fontFamily: 'Georgia, serif' }}>
+                    <MarkdownContent content={entry.log.content} />
+                  </div>
                 ) : (
                   <p className="m-0 text-sm italic text-[#9ca3af]" style={{ fontFamily: 'Georgia, serif' }}>
                     未记录工作内容

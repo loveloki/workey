@@ -23,6 +23,6 @@ COPY --from=frontend /app/frontend/dist ./frontend/dist/
 
 EXPOSE 8000
 VOLUME /app/data
-ENV WORKEY_DB=/app/data/workey.db
+ENV WORKEY_DATA=/app/data
 
 CMD ["./workey"]

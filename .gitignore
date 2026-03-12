@@ -5,3 +5,4 @@ workey.db-wal
 frontend/node_modules/
 frontend/dist/
 frontend/src/routeTree.gen.ts
+uploads/

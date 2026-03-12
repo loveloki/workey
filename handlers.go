@@ -1,9 +1,15 @@
 package main
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -639,5 +645,65 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		"message":          "Data imported successfully",
 		"attendance_count": attendanceCount,
 		"work_log_count":   workLogCount,
+	})
+}
+
+// --- Image Upload ---
+
+func handleUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 10MB max
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		jsonError(w, "File too large (max 10MB)", http.StatusBadRequest)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		jsonError(w, "No file provided", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Validate file type
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	allowed := map[string]bool{
+		".jpg": true, ".jpeg": true, ".png": true,
+		".gif": true, ".webp": true, ".svg": true,
+	}
+	if !allowed[ext] {
+		jsonError(w, "Only image files are allowed (jpg, png, gif, webp, svg)", http.StatusBadRequest)
+		return
+	}
+
+	// Generate unique filename: timestamp + random hex
+	b := make([]byte, 8)
+	rand.Read(b)
+	filename := fmt.Sprintf("%d-%s%s", time.Now().UnixMilli(), hex.EncodeToString(b), ext)
+
+	uploadsDir := filepath.Join(dataDir, "uploads")
+	dstPath := filepath.Join(uploadsDir, filename)
+
+	dst, err := os.Create(dstPath)
+	if err != nil {
+		jsonError(w, "Failed to save file", http.StatusInternalServerError)
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		jsonError(w, "Failed to save file", http.StatusInternalServerError)
+		return
+	}
+
+	url := "/uploads/" + filename
+	jsonOK(w, map[string]string{
+		"url":      url,
+		"filename": filename,
+		"markdown": fmt.Sprintf("![%s](%s)", header.Filename, url),
 	})
 }

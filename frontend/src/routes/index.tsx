@@ -3,6 +3,7 @@ import { useAuth } from '../lib/auth-context'
 import { useState, useEffect, useCallback } from 'react'
 import { attendance, workLogs } from '../lib/api'
 import { formatTime, getToday } from '../lib/date-utils'
+import { MarkdownEditor } from '../lib/markdown-editor'
 
 export const Route = createFileRoute('/')({ component: Dashboard })
 
@@ -154,14 +155,14 @@ function WorkLogCard() {
         <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
       ) : (
         <>
-          <textarea
-            value={content}
-            onChange={e => setContent(e.target.value)}
-            placeholder="记录今天的工作内容..."
-            className="mb-4 w-full rounded-lg border border-black/10 bg-[#fffdf5] p-4 text-base text-[#333] placeholder:text-[#9ca3af] focus:border-black focus:outline-none"
-            style={{ fontFamily: 'Georgia, serif' }}
-            rows={6}
-          />
+          <div className="mb-4">
+            <MarkdownEditor
+              value={content}
+              onChange={setContent}
+              placeholder="记录今天的工作内容..."
+              rows={6}
+            />
+          </div>
           <div className="flex items-center gap-3">
             <button
               onClick={save}

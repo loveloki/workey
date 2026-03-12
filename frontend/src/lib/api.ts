@@ -69,6 +69,21 @@ export const workLogs = {
     request<{ work_logs: any[] }>(`/api/work-logs/range?start=${start}&end=${end}`),
 }
 
+// Upload
+export async function uploadImage(file: File): Promise<{ url: string; filename: string; markdown: string }> {
+  const token = getToken()
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch('/api/upload', {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Upload failed')
+  return data
+}
+
 // Settings
 export const settings = {
   get: () => request<{ timezone: string }>('/api/settings'),
