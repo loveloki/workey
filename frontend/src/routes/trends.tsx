@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { attendance as attendanceApi } from '../lib/api'
 import { getDateRange, type RangePreset } from '../lib/date-utils'
 
@@ -35,6 +35,7 @@ function TrendsPage() {
   const [customEnd, setCustomEnd] = useState('')
   const [data, setData] = useState<AttendanceRecord[]>([])
   const [fetching, setFetching] = useState(false)
+  const [hasLoaded, setHasLoaded] = useState(false)
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: '/login' })
@@ -51,6 +52,7 @@ function TrendsPage() {
     try {
       const res = await attendanceApi.range(start, end)
       setData(res.attendances)
+      setHasLoaded(true)
     } catch (e) {
       console.error(e)
     }
@@ -121,15 +123,16 @@ function TrendsPage() {
         </div>
       )}
 
-      {fetching ? (
+      {/* Chart area: always mounted after first load so it transitions smoothly */}
+      {hasLoaded ? (
+        <div className="rounded-lg border border-[#e5e5e5] bg-white p-6">
+          <TrendChart data={data} loading={fetching} />
+        </div>
+      ) : fetching ? (
         <p className="font-mono text-sm text-[#666]">加载中...</p>
-      ) : data.length === 0 ? (
+      ) : (
         <div className="rounded-lg border border-[#e5e5e5] bg-white p-8 text-center">
           <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>暂无打卡数据</p>
-        </div>
-      ) : (
-        <div className="rounded-lg border border-[#e5e5e5] bg-white p-6">
-          <TrendChart data={data} />
         </div>
       )}
 
@@ -169,19 +172,28 @@ function StatCard({ label, value }: { label: string; value: string }) {
   )
 }
 
-function TrendChart({ data }: { data: AttendanceRecord[] }) {
-  const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date))
+function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: boolean }) {
+  // Compute chart data from props
+  const chartData = useMemo(() => {
+    const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date))
+    const clockIns = sorted.map(d => ({ date: d.date, minutes: timeToMinutes(d.clock_in) }))
+    const clockOuts = sorted.map(d => ({ date: d.date, minutes: timeToMinutes(d.clock_out) }))
 
-  const clockIns = sorted.map(d => ({ date: d.date, minutes: timeToMinutes(d.clock_in) }))
-  const clockOuts = sorted.map(d => ({ date: d.date, minutes: timeToMinutes(d.clock_out) }))
+    const allMinutes = [...clockIns, ...clockOuts]
+      .map(d => d.minutes)
+      .filter((v): v is number => v !== null)
 
-  // Find min/max for Y axis
-  const allMinutes = [...clockIns, ...clockOuts]
-    .map(d => d.minutes)
-    .filter((v): v is number => v !== null)
+    return { sorted, clockIns, clockOuts, allMinutes }
+  }, [data])
+
+  const { sorted, clockIns, clockOuts, allMinutes } = chartData
+
+  if (loading && data.length === 0) {
+    return <p className="font-mono text-sm text-[#666]">加载中...</p>
+  }
 
   if (allMinutes.length === 0) {
-    return <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>无有效数据</p>
+    return <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>暂无打卡数据</p>
   }
 
   const minY = Math.floor(Math.min(...allMinutes) / 60) * 60 - 30
@@ -194,7 +206,8 @@ function TrendChart({ data }: { data: AttendanceRecord[] }) {
   const plotH = H - PAD.top - PAD.bottom
 
   const xScale = (i: number) => PAD.left + (sorted.length === 1 ? plotW / 2 : (i / (sorted.length - 1)) * plotW)
-  const yScale = (m: number) => PAD.top + plotH - ((m - minY) / (maxY - minY)) * plotH
+  // Y axis: INVERTED — earlier times (smaller minutes) at top, later times at bottom
+  const yScale = (m: number) => PAD.top + ((m - minY) / (maxY - minY)) * plotH
 
   const makePath = (points: { minutes: number | null }[]) => {
     const validPoints = points
@@ -226,7 +239,7 @@ function TrendChart({ data }: { data: AttendanceRecord[] }) {
           下班时间
         </span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: '350px' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: '350px', opacity: loading ? 0.5 : 1, transition: 'opacity 0.2s' }}>
         {/* Grid lines */}
         {yTicks.map(m => (
           <g key={m}>
