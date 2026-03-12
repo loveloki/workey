@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { attendance, workLogs } from '../lib/api'
 import { formatTime, getToday } from '../lib/date-utils'
 import { MarkdownEditor } from '../lib/markdown-editor'
@@ -8,118 +8,75 @@ import { MarkdownEditor } from '../lib/markdown-editor'
 export const Route = createFileRoute('/')({ component: Dashboard })
 
 function Dashboard() {
-  const { user, loading } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
+  const [todayData, setTodayData] = useState<any>(null)
+  const [checking, setChecking] = useState(true)
 
   useEffect(() => {
-    if (!loading && !user) navigate({ to: '/login' })
-  }, [loading, user, navigate])
+    if (!authLoading && !user) navigate({ to: '/login' })
+  }, [authLoading, user, navigate])
 
-  if (loading) return <LoadingScreen />
+  // Check if clocked in today
+  useEffect(() => {
+    if (!user) return
+    attendance.today()
+      .then(d => {
+        if (!d.attendance?.clock_in) {
+          // Not clocked in — go to clock page
+          navigate({ to: '/clock' })
+        } else {
+          setTodayData(d.attendance)
+          setChecking(false)
+        }
+      })
+      .catch(() => setChecking(false))
+  }, [user, navigate])
+
+  if (authLoading || checking) return <LoadingScreen />
   if (!user) return null
 
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
       <div className="mb-6">
         <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[#333]">今日工作</p>
-        <h1 className="text-3xl font-normal tracking-tight text-black sm:text-4xl" style={{ fontFamily: 'Georgia, serif' }}>
+        <h1
+          className="text-3xl font-normal tracking-tight text-black sm:text-4xl"
+          style={{ fontFamily: 'Georgia, serif' }}
+        >
           {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
         </h1>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <ClockCard />
-        <WorkLogCard />
-      </div>
-    </main>
-  )
-}
-
-function ClockCard() {
-  const [data, setData] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [acting, setActing] = useState(false)
-
-  const load = useCallback(() => {
-    attendance.today().then(d => setData(d.attendance)).catch(() => {}).finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => { load() }, [load])
-
-  const clockIn = async () => {
-    setActing(true)
-    try {
-      const res = await attendance.clockIn()
-      setData(res)
-    } catch (e: any) {
-      alert(e.message)
-    }
-    setActing(false)
-  }
-
-  const clockOut = async () => {
-    setActing(true)
-    try {
-      const res = await attendance.clockOut()
-      setData(res)
-    } catch (e: any) {
-      alert(e.message)
-    }
-    setActing(false)
-  }
-
-  const clockedIn = !!data?.clock_in
-  const clockedOut = !!data?.clock_out
-
-  return (
-    <div className="rounded-lg border border-[#e5e5e5] bg-white p-6">
-      <p className="mb-4 font-mono text-sm uppercase tracking-[0.3em] text-[#333]">§ 打卡签到 §</p>
-
-      {loading ? (
-        <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
-      ) : (
-        <>
-          <div className="mb-5 flex items-center gap-6">
-            <div>
-              <p className="font-mono text-xs uppercase tracking-wide text-[#666]">上班</p>
-              <p className="font-mono text-2xl font-bold text-black">{formatTime(data?.clock_in)}</p>
-            </div>
-            <div className="h-8 w-px bg-[#e5e5e5]" />
-            <div>
-              <p className="font-mono text-xs uppercase tracking-wide text-[#666]">下班</p>
-              <p className="font-mono text-2xl font-bold text-black">{formatTime(data?.clock_out)}</p>
-            </div>
+      {/* Attendance summary bar */}
+      {todayData && (
+        <div
+          className="mb-6 flex items-center gap-6 rounded-lg px-5 py-3"
+          style={{ background: 'var(--surface-strong)', border: '1px solid var(--line)' }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs uppercase tracking-wide text-[#666]">上班</span>
+            <span className="font-mono text-sm font-bold text-black">{formatTime(todayData.clock_in)}</span>
           </div>
-
-          <div className="flex gap-2">
-            {!clockedIn && (
-              <button
-                onClick={clockIn}
-                disabled={acting}
-                className="rounded-md bg-black px-5 py-2.5 font-mono text-sm text-white hover:bg-[#222] disabled:opacity-50"
-              >
-                上班打卡
-              </button>
-            )}
-            {clockedIn && (
-              <button
-                onClick={clockOut}
-                disabled={acting}
-                className="rounded-md bg-black px-5 py-2.5 font-mono text-sm text-white hover:bg-[#222] disabled:opacity-50"
-              >
-                {clockedOut ? '更新下班时间' : '下班打卡'}
-              </button>
-            )}
+          <div className="h-4 w-px bg-[#e5e5e5]" />
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs uppercase tracking-wide text-[#666]">下班</span>
+            <span className="font-mono text-sm font-bold text-black">{formatTime(todayData.clock_out)}</span>
           </div>
-
-          {clockedIn && clockedOut && (
-            <p className="mt-3 text-xs text-[#9ca3af]" style={{ fontFamily: 'Georgia, serif' }}>
-              可多次点击更新下班时间
-            </p>
-          )}
-        </>
+          <div className="flex-1" />
+          <button
+            onClick={() => navigate({ to: '/clock' })}
+            className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[#f0f0f0]"
+            style={{ border: '1px solid #e5e5e5', borderRadius: '6px', color: '#666' }}
+          >
+            打卡 →
+          </button>
+        </div>
       )}
-    </div>
+
+      {/* Work log */}
+      <WorkLogCard />
+    </main>
   )
 }
 
@@ -160,7 +117,7 @@ function WorkLogCard() {
               value={content}
               onChange={setContent}
               placeholder="记录今天的工作内容..."
-              rows={6}
+              rows={10}
             />
           </div>
           <div className="flex items-center gap-3">
