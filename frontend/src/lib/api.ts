@@ -97,10 +97,28 @@ export const settings = {
       method: 'POST',
       body: JSON.stringify({ old_password, new_password }),
     }),
-  exportData: () => request<any>('/api/data/export'),
-  importData: (data: any) =>
-    request<{ message: string; attendance_count: number; work_log_count: number }>('/api/data/import', {
+  exportData: async (): Promise<Blob> => {
+    const token = getToken()
+    const res = await fetch('/api/data/export', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || 'Export failed')
+    }
+    return res.blob()
+  },
+  importData: async (file: File): Promise<{ message: string; attendance_count: number; work_log_count: number; image_count: number }> => {
+    const token = getToken()
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch('/api/data/import', {
       method: 'POST',
-      body: JSON.stringify(data),
-    }),
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Import failed')
+    return data
+  },
 }

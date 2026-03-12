@@ -231,12 +231,11 @@ function DataSection() {
     setExporting(true)
     setMsg('')
     try {
-      const data = await settings.exportData()
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const blob = await settings.exportData()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `workey-export-${new Date().toISOString().split('T')[0]}.json`
+      a.download = `workey-export-${new Date().toISOString().split('T')[0]}.zip`
       a.click()
       URL.revokeObjectURL(url)
       setMsg('导出成功')
@@ -260,20 +259,18 @@ function DataSection() {
     setImporting(true)
     setMsg('')
     try {
-      const text = await file.text()
-      const data = JSON.parse(text)
-      if (!data.attendance && !data.work_logs) {
-        throw new Error('无效的数据格式')
-      }
-      const result = await settings.importData(data)
-      setMsg(`导入成功：${result.attendance_count} 条考勤，${result.work_log_count} 条工作日志`)
+      const result = await settings.importData(file)
+      const parts = []
+      if (result.attendance_count) parts.push(`${result.attendance_count} 条考勤`)
+      if (result.work_log_count) parts.push(`${result.work_log_count} 条工作日志`)
+      if (result.image_count) parts.push(`${result.image_count} 张图片`)
+      setMsg(`导入成功：${parts.join('，') || '无新数据'}`)
       setIsError(false)
     } catch (e: any) {
       setMsg(e.message || '导入失败')
       setIsError(true)
     } finally {
       setImporting(false)
-      // Reset the file input
       if (fileRef.current) fileRef.current.value = ''
     }
   }
@@ -281,7 +278,7 @@ function DataSection() {
   return (
     <Card title="数据管理">
       <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: '#666' }}>
-        导出所有考勤和工作日志数据为 JSON 文件，或从 JSON 文件导入数据。
+        导出所有考勤、工作日志和图片为 ZIP 压缩包，或从 ZIP 文件导入数据。
       </p>
       <div className="flex flex-col sm:flex-row items-start gap-3">
         <button
@@ -303,7 +300,7 @@ function DataSection() {
         <input
           ref={fileRef}
           type="file"
-          accept=".json"
+          accept=".zip"
           onChange={onFileChange}
           className="hidden"
         />

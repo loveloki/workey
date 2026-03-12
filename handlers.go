@@ -1,6 +1,8 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -10,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -522,6 +525,9 @@ type ExportData struct {
 	ExportedAt string       `json:"exported_at"`
 }
 
+// uploadPathRe matches /uploads/filename references in markdown content
+var uploadPathRe = regexp.MustCompile(`/uploads/([^\s\)"]+)`)
+
 func handleDataExport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -568,7 +574,43 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		ExportedAt: time.Now().Format(time.RFC3339),
 	}
 
-	jsonOK(w, exportData)
+	// Collect referenced image filenames from work log content
+	imageFiles := map[string]bool{}
+	for _, wl := range workLogsList {
+		for _, m := range uploadPathRe.FindAllStringSubmatch(wl.Content, -1) {
+			imageFiles[m[1]] = true
+		}
+	}
+
+	// Build zip in memory
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	// Write data.json
+	jsonBytes, _ := json.MarshalIndent(exportData, "", "  ")
+	fw, _ := zw.Create("data.json")
+	fw.Write(jsonBytes)
+
+	// Write image files
+	uploadsDir := filepath.Join(dataDir, "uploads")
+	for filename := range imageFiles {
+		// Sanitize: only allow base filename, no path traversal
+		base := filepath.Base(filename)
+		srcPath := filepath.Join(uploadsDir, base)
+		fileData, err := os.ReadFile(srcPath)
+		if err != nil {
+			continue // skip missing files
+		}
+		fw, _ := zw.Create("uploads/" + base)
+		fw.Write(fileData)
+	}
+
+	zw.Close()
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition",
+		fmt.Sprintf(`attachment; filename="workey-export-%s.zip"`, time.Now().Format("2006-01-02")))
+	w.Write(buf.Bytes())
 }
 
 func handleDataImport(w http.ResponseWriter, r *http.Request) {
@@ -579,15 +621,90 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserID(r)
 
+	// Read the uploaded file (50MB max)
+	if err := r.ParseMultipartForm(50 << 20); err != nil {
+		jsonError(w, "File too large (max 50MB)", http.StatusBadRequest)
+		return
+	}
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		jsonError(w, "No file provided", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	zipBytes, err := io.ReadAll(file)
+	if err != nil {
+		jsonError(w, "Failed to read file", http.StatusBadRequest)
+		return
+	}
+
+	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+	if err != nil {
+		jsonError(w, "Invalid zip file", http.StatusBadRequest)
+		return
+	}
+
+	// Extract data.json
 	var importData struct {
 		Attendance []Attendance `json:"attendance"`
 		WorkLogs   []WorkLog    `json:"work_logs"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&importData); err != nil {
-		jsonError(w, "Invalid request body", http.StatusBadRequest)
+	foundJSON := false
+	imageCount := 0
+
+	for _, f := range zr.File {
+		if f.Name == "data.json" {
+			rc, err := f.Open()
+			if err != nil {
+				jsonError(w, "Failed to read data.json", http.StatusBadRequest)
+				return
+			}
+			if err := json.NewDecoder(rc).Decode(&importData); err != nil {
+				rc.Close()
+				jsonError(w, "Invalid data.json format", http.StatusBadRequest)
+				return
+			}
+			rc.Close()
+			foundJSON = true
+		}
+	}
+
+	if !foundJSON {
+		jsonError(w, "data.json not found in zip", http.StatusBadRequest)
 		return
 	}
 
+	// Extract image files from uploads/ directory
+	uploadsDir := filepath.Join(dataDir, "uploads")
+	os.MkdirAll(uploadsDir, 0755)
+
+	for _, f := range zr.File {
+		if !strings.HasPrefix(f.Name, "uploads/") || f.FileInfo().IsDir() {
+			continue
+		}
+		baseName := filepath.Base(f.Name)
+		// Sanitize: only allow safe filenames
+		if baseName == "" || strings.Contains(baseName, "..") {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			continue
+		}
+		dstPath := filepath.Join(uploadsDir, baseName)
+		dst, err := os.Create(dstPath)
+		if err != nil {
+			rc.Close()
+			continue
+		}
+		io.Copy(dst, rc)
+		dst.Close()
+		rc.Close()
+		imageCount++
+	}
+
+	// Upsert attendance and work logs
 	attendanceCount := 0
 	workLogCount := 0
 
@@ -645,6 +762,7 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		"message":          "Data imported successfully",
 		"attendance_count": attendanceCount,
 		"work_log_count":   workLogCount,
+		"image_count":      imageCount,
 	})
 }
 
