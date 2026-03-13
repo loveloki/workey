@@ -63,6 +63,14 @@ function Header() {
               历史
             </Link>
             <Link
+              to="/todos"
+              className="font-mono text-sm no-underline transition-colors"
+              style={{ color: '#414141' }}
+              activeProps={{ className: 'font-mono text-sm no-underline font-medium !text-black' }}
+            >
+              待办
+            </Link>
+            <Link
               to="/trends"
               className="font-mono text-sm no-underline transition-colors"
               style={{ color: '#414141' }}

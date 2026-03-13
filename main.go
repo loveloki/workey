@@ -74,6 +74,9 @@ func main() {
 	mux.HandleFunc("/api/data/export", corsMiddleware(authMiddleware(handleDataExport)))
 	mux.HandleFunc("/api/data/import", corsMiddleware(authMiddleware(handleDataImport)))
 
+	// Todo routes
+	mux.HandleFunc("/api/todos", corsMiddleware(authMiddleware(handleTodos)))
+
 	// Upload route
 	mux.HandleFunc("/api/upload", corsMiddleware(authMiddleware(handleUpload)))
 
@@ -126,6 +129,15 @@ func initDB() {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(user_id, date)
+		)`,
+		`CREATE TABLE IF NOT EXISTS todos (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL REFERENCES users(id),
+			content TEXT NOT NULL DEFAULT '',
+			url TEXT NOT NULL DEFAULT '',
+			done INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 	}
 	for _, q := range queries {

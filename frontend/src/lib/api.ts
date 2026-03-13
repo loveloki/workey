@@ -84,13 +84,41 @@ export async function uploadImage(file: File): Promise<{ url: string; filename: 
   return data
 }
 
+// Todos
+export const todos = {
+  list: (all = false) =>
+    request<{ todos: Todo[] }>(`/api/todos${all ? '?all=1' : ''}`),
+  create: (content: string, url: string) =>
+    request<{ todo: Todo }>('/api/todos', {
+      method: 'POST',
+      body: JSON.stringify({ content, url }),
+    }),
+  update: (id: number, data: { content?: string; url?: string; done?: boolean }) =>
+    request<{ todo: Todo }>(`/api/todos?id=${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: number) =>
+    request<{ message: string }>(`/api/todos?id=${id}`, { method: 'DELETE' }),
+}
+
+export interface Todo {
+  id: number
+  user_id: number
+  content: string
+  url: string
+  done: boolean
+  created_at: string
+  updated_at: string
+}
+
 // Settings
 export const settings = {
-  get: () => request<{ timezone: string }>('/api/settings'),
-  save: (timezone: string) =>
-    request<{ timezone: string }>('/api/settings', {
+  get: () => request<{ timezone: string; kanban_url: string }>('/api/settings'),
+  save: (data: { timezone?: string; kanban_url?: string }) =>
+    request<{ timezone: string; kanban_url: string }>('/api/settings', {
       method: 'POST',
-      body: JSON.stringify({ timezone }),
+      body: JSON.stringify(data),
     }),
   changePassword: (old_password: string, new_password: string) =>
     request<{ message: string }>('/api/auth/change-password', {
