@@ -27,6 +27,9 @@ importers:
       '@tailwindcss/oxide-linux-x64-gnu':
         specifier: 4.2.1
         version: 4.2.1
+      '@tailwindcss/oxide-linux-x64-musl':
+        specifier: 4.2.1
+        version: 4.2.1
       '@tailwindcss/vite':
         specifier: ^4.1.18
         version: 4.2.1(vite@6.4.1(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0))
@@ -676,7 +679,6 @@ packages:
     engines: {node: '>= 20'}
     cpu: [x64]
     os: [linux]
-    libc: [musl]
 
   '@tailwindcss/oxide-wasm32-wasi@4.2.1':
     resolution: {integrity: sha512-MGFB5cVPvshR85MTJkEvqDUnuNoysrsRxd6vnk1Lf2tbiqNlXpHYZqkqOQalydienEWOHHFyyuTSYRsLfxFJ2Q==}
@@ -1943,8 +1945,7 @@ snapshots:
 
   '@tailwindcss/oxide-linux-x64-gnu@4.2.1': {}
 
-  '@tailwindcss/oxide-linux-x64-musl@4.2.1':
-    optional: true
+  '@tailwindcss/oxide-linux-x64-musl@4.2.1': {}
 
   '@tailwindcss/oxide-wasm32-wasi@4.2.1':
     optional: true

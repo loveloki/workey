@@ -4,7 +4,8 @@
   "type": "module",
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild"
+      "esbuild",
+      "@tailwindcss/oxide"
     ]
   },
   "scripts": {
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@tailwindcss/oxide-linux-x64-gnu": "4.2.1",
+    "@tailwindcss/oxide-linux-x64-musl": "4.2.1",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/router-plugin": "^1.120.0",
     "@types/react": "^19.2.0",
