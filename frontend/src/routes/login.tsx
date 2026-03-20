@@ -52,8 +52,10 @@ function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="mb-1.5 block font-mono text-sm font-semibold tracking-wide text-black">用户名</label>
+            <label htmlFor="username" className="mb-1.5 block font-mono text-sm font-semibold tracking-wide text-black">用户名</label>
             <input
+              id="username"
+              name="username"
               type="text"
               value={username}
               onChange={e => setUsername(e.target.value)}
@@ -63,8 +65,10 @@ function LoginPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block font-mono text-sm font-semibold tracking-wide text-black">密码</label>
+            <label htmlFor="password" className="mb-1.5 block font-mono text-sm font-semibold tracking-wide text-black">密码</label>
             <input
+              id="password"
+              name="password"
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
