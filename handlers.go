@@ -512,7 +512,7 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
 
 	var req struct {
-		Timezone string `json:"timezone"`
+		Timezone  string `json:"timezone"`
 		KanbanURL string `json:"kanban_url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -520,22 +520,19 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Timezone == "" {
-		jsonError(w, "Timezone is required", http.StatusBadRequest)
-		return
-	}
-
-	_, err := db.Exec(
-		"INSERT INTO user_settings (user_id, key, value) VALUES (?, 'timezone', ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
-		userID, req.Timezone,
-	)
-	if err != nil {
-		jsonError(w, "Failed to save settings", http.StatusInternalServerError)
-		return
+	if req.Timezone != "" {
+		_, err := db.Exec(
+			"INSERT INTO user_settings (user_id, key, value) VALUES (?, 'timezone', ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
+			userID, req.Timezone,
+		)
+		if err != nil {
+			jsonError(w, "Failed to save settings", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	if req.KanbanURL != "" {
-		_, err = db.Exec(
+		_, err := db.Exec(
 			"INSERT INTO user_settings (user_id, key, value) VALUES (?, 'kanban_url', ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
 			userID, req.KanbanURL,
 		)
@@ -545,14 +542,20 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Re-read kanban_url for the response (use default if not set)
+	// Read current values for response
+	var timezone string
+	err := db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'timezone'", userID).Scan(&timezone)
+	if err != nil {
+		timezone = "+8"
+	}
+
 	var kanbanURL string
 	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'kanban_url'", userID).Scan(&kanbanURL)
 	if err != nil {
 		kanbanURL = "https://www.fizzy.do/"
 	}
 
-	jsonOK(w, map[string]string{"timezone": req.Timezone, "kanban_url": kanbanURL})
+	jsonOK(w, map[string]string{"timezone": timezone, "kanban_url": kanbanURL})
 }
 
 // --- Todo handlers ---
