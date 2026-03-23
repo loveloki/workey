@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect } from 'react'
-import { workLogs as workLogsApi, attendance as attendanceApi } from '../lib/api'
+import { workLogs as workLogsApi, attendance as attendanceApi, lessons as lessonsApi } from '../lib/api'
 import { getDateRange, formatDateDisplay, formatTime, type RangePreset } from '../lib/date-utils'
 import { MarkdownContent } from '../lib/markdown-editor'
 
@@ -17,6 +17,7 @@ function HistoryPage() {
   const [customEnd, setCustomEnd] = useState('')
   const [logs, setLogs] = useState<any[]>([])
   const [attendances, setAttendances] = useState<any[]>([])
+  const [lessonsList, setLessonsList] = useState<any[]>([])
   const [fetching, setFetching] = useState(false)
 
   useEffect(() => {
@@ -32,12 +33,14 @@ function HistoryPage() {
   const fetchData = async (start: string, end: string) => {
     setFetching(true)
     try {
-      const [logsRes, attRes] = await Promise.all([
+      const [logsRes, attRes, lessonsRes] = await Promise.all([
         workLogsApi.range(start, end),
         attendanceApi.range(start, end),
+        lessonsApi.range(start, end),
       ])
       setLogs(logsRes.work_logs)
       setAttendances(attRes.attendances)
+      setLessonsList(lessonsRes.lessons)
     } catch (e) {
       console.error(e)
     }
@@ -59,8 +62,8 @@ function HistoryPage() {
     { key: 'custom', label: '自定义' },
   ]
 
-  // Merge logs and attendance by date
-  const dateMap = new Map<string, { attendance?: any; log?: any }>()
+  // Merge logs, attendance and lessons by date
+  const dateMap = new Map<string, { attendance?: any; log?: any; lesson?: any }>()
   attendances.forEach(a => {
     const entry = dateMap.get(a.date) || {}
     entry.attendance = a
@@ -69,6 +72,11 @@ function HistoryPage() {
   logs.forEach(l => {
     const entry = dateMap.get(l.date) || {}
     entry.log = l
+    dateMap.set(l.date, entry)
+  })
+  lessonsList.forEach(l => {
+    const entry = dateMap.get(l.date) || {}
+    entry.lesson = l
     dateMap.set(l.date, entry)
   })
   const sortedDates = [...dateMap.keys()].sort().reverse()
@@ -161,6 +169,14 @@ function HistoryPage() {
                   <p className="m-0 text-sm italic text-[#9ca3af]" style={{ fontFamily: 'Georgia, serif' }}>
                     未记录工作内容
                   </p>
+                )}
+                {entry.lesson && entry.lesson.content && (
+                  <div className="mt-3 border-t border-dashed border-[#e5e5e5] pt-3">
+                    <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[#999]">💡 经验教训</p>
+                    <div className="markdown-body text-sm text-[#555]" style={{ fontFamily: 'Georgia, serif' }}>
+                      <MarkdownContent content={entry.lesson.content} />
+                    </div>
+                  </div>
                 )}
               </div>
             )

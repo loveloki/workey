@@ -74,6 +74,11 @@ func main() {
 	mux.HandleFunc("/api/data/export", corsMiddleware(authMiddleware(handleDataExport)))
 	mux.HandleFunc("/api/data/import", corsMiddleware(authMiddleware(handleDataImport)))
 
+	// Lesson routes
+	mux.HandleFunc("/api/lessons", corsMiddleware(authMiddleware(handleLessons)))
+	mux.HandleFunc("/api/lessons/today", corsMiddleware(authMiddleware(handleLessonToday)))
+	mux.HandleFunc("/api/lessons/range", corsMiddleware(authMiddleware(handleLessonRange)))
+
 	// Todo routes
 	mux.HandleFunc("/api/todos", corsMiddleware(authMiddleware(handleTodos)))
 
@@ -122,6 +127,15 @@ func initDB() {
 			UNIQUE(user_id, date)
 		)`,
 		`CREATE TABLE IF NOT EXISTS work_logs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL REFERENCES users(id),
+			date TEXT NOT NULL,
+			content TEXT NOT NULL DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, date)
+		)`,
+		`CREATE TABLE IF NOT EXISTS lessons (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER NOT NULL REFERENCES users(id),
 			date TEXT NOT NULL,

@@ -69,6 +69,18 @@ export const workLogs = {
     request<{ work_logs: any[] }>(`/api/work-logs/range?start=${start}&end=${end}`),
 }
 
+// Lessons
+export const lessons = {
+  save: (date: string, content: string) =>
+    request<{ lesson: any }>('/api/lessons', {
+      method: 'POST',
+      body: JSON.stringify({ date, content }),
+    }),
+  today: () => request<{ lesson: any }>('/api/lessons/today'),
+  range: (start: string, end: string) =>
+    request<{ lessons: any[] }>(`/api/lessons/range?start=${start}&end=${end}`),
+}
+
 // Upload
 export async function uploadImage(file: File): Promise<{ url: string; filename: string; markdown: string }> {
   const token = getToken()

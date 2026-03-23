@@ -44,6 +44,15 @@ type WorkLog struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+type Lesson struct {
+	ID        int64  `json:"id"`
+	UserID    int64  `json:"user_id"`
+	Date      string `json:"date"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 type Todo struct {
 	ID        int64  `json:"id"`
 	UserID    int64  `json:"user_id"`
@@ -415,6 +424,119 @@ func getWorkLog(userID int64, date string) *WorkLog {
 	return &wl
 }
 
+// --- Lesson handlers ---
+
+func handleLessons(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		handleLessonCreate(w, r)
+		return
+	}
+	jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func handleLessonCreate(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+
+	var req struct {
+		Date    string `json:"date"`
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Date == "" {
+		req.Date = today()
+	}
+
+	now := nowDatetime()
+
+	result, err := db.Exec(
+		"UPDATE lessons SET content = ?, updated_at = ? WHERE user_id = ? AND date = ?",
+		req.Content, now, userID, req.Date,
+	)
+	if err != nil {
+		jsonError(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		_, err = db.Exec(
+			"INSERT INTO lessons (user_id, date, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+			userID, req.Date, req.Content, now, now,
+		)
+		if err != nil {
+			jsonError(w, "Internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	lesson := getLesson(userID, req.Date)
+	jsonOK(w, map[string]interface{}{"lesson": lesson})
+}
+
+func handleLessonToday(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+	lesson := getLesson(userID, today())
+	if lesson == nil {
+		jsonOK(w, map[string]interface{}{"lesson": nil})
+		return
+	}
+	jsonOK(w, map[string]interface{}{"lesson": lesson})
+}
+
+func handleLessonRange(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+	start := r.URL.Query().Get("start")
+	end := r.URL.Query().Get("end")
+	if start == "" || end == "" {
+		jsonError(w, "start and end query parameters are required", http.StatusBadRequest)
+		return
+	}
+
+	rows, err := db.Query(
+		"SELECT id, user_id, date, content, created_at, updated_at FROM lessons WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date",
+		userID, start, end,
+	)
+	if err != nil {
+		jsonError(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	lessons := []Lesson{}
+	for rows.Next() {
+		var l Lesson
+		rows.Scan(&l.ID, &l.UserID, &l.Date, &l.Content, &l.CreatedAt, &l.UpdatedAt)
+		lessons = append(lessons, l)
+	}
+	jsonOK(w, map[string]interface{}{"lessons": lessons})
+}
+
+func getLesson(userID int64, date string) *Lesson {
+	var l Lesson
+	err := db.QueryRow(
+		"SELECT id, user_id, date, content, created_at, updated_at FROM lessons WHERE user_id = ? AND date = ?",
+		userID, date,
+	).Scan(&l.ID, &l.UserID, &l.Date, &l.Content, &l.CreatedAt, &l.UpdatedAt)
+	if err != nil {
+		return nil
+	}
+	return &l
+}
+
 // --- Change Password ---
 
 func handleChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -736,6 +858,7 @@ func handleDeleteTodo(w http.ResponseWriter, r *http.Request) {
 type ExportData struct {
 	Attendance []Attendance `json:"attendance"`
 	WorkLogs   []WorkLog    `json:"work_logs"`
+	Lessons    []Lesson     `json:"lessons"`
 	ExportedAt string       `json:"exported_at"`
 }
 
@@ -782,16 +905,38 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 	}
 	rows.Close()
 
+	lessonsList := []Lesson{}
+	rows, err = db.Query(
+		"SELECT id, user_id, date, content, created_at, updated_at FROM lessons WHERE user_id = ? ORDER BY date",
+		userID,
+	)
+	if err != nil {
+		jsonError(w, "Failed to export lessons", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var l Lesson
+		rows.Scan(&l.ID, &l.UserID, &l.Date, &l.Content, &l.CreatedAt, &l.UpdatedAt)
+		lessonsList = append(lessonsList, l)
+	}
+	rows.Close()
+
 	exportData := ExportData{
 		Attendance: attendances,
 		WorkLogs:   workLogsList,
+		Lessons:    lessonsList,
 		ExportedAt: time.Now().Format(time.RFC3339),
 	}
 
-	// Collect referenced image filenames from work log content
+	// Collect referenced image filenames from work log and lesson content
 	imageFiles := map[string]bool{}
 	for _, wl := range workLogsList {
 		for _, m := range uploadPathRe.FindAllStringSubmatch(wl.Content, -1) {
+			imageFiles[m[1]] = true
+		}
+	}
+	for _, l := range lessonsList {
+		for _, m := range uploadPathRe.FindAllStringSubmatch(l.Content, -1) {
 			imageFiles[m[1]] = true
 		}
 	}
@@ -863,6 +1008,7 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 	var importData struct {
 		Attendance []Attendance `json:"attendance"`
 		WorkLogs   []WorkLog    `json:"work_logs"`
+		Lessons    []Lesson     `json:"lessons"`
 	}
 	foundJSON := false
 	imageCount := 0
@@ -972,10 +1118,37 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		workLogCount++
 	}
 
+	lessonCount := 0
+	for _, l := range importData.Lessons {
+		if l.Date == "" {
+			continue
+		}
+		now := nowDatetime()
+		result, err := db.Exec(
+			"UPDATE lessons SET content = ?, updated_at = ? WHERE user_id = ? AND date = ?",
+			l.Content, now, userID, l.Date,
+		)
+		if err != nil {
+			continue
+		}
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			_, err = db.Exec(
+				"INSERT INTO lessons (user_id, date, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+				userID, l.Date, l.Content, now, now,
+			)
+			if err != nil {
+				continue
+			}
+		}
+		lessonCount++
+	}
+
 	jsonOK(w, map[string]interface{}{
 		"message":          "Data imported successfully",
 		"attendance_count": attendanceCount,
 		"work_log_count":   workLogCount,
+		"lesson_count":     lessonCount,
 		"image_count":      imageCount,
 	})
 }

@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect } from 'react'
-import { attendance, workLogs } from '../lib/api'
+import { attendance, workLogs, lessons as lessonsApi } from '../lib/api'
 import { formatTime, getToday } from '../lib/date-utils'
 import { MarkdownEditor } from '../lib/markdown-editor'
 
@@ -76,6 +76,11 @@ function Dashboard() {
 
       {/* Work log */}
       <WorkLogCard />
+
+      {/* Lesson */}
+      <div className="mt-6">
+        <LessonCard />
+      </div>
     </main>
   )
 }
@@ -118,6 +123,62 @@ function WorkLogCard() {
               onChange={setContent}
               placeholder="记录今天的工作内容..."
               rows={10}
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="rounded-md bg-black px-5 py-2.5 font-mono text-sm text-white hover:bg-[#222] disabled:opacity-50"
+            >
+              {saving ? '保存中...' : '保存'}
+            </button>
+            {saved && <span className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>✓ 已保存</span>}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function LessonCard() {
+  const [content, setContent] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    lessonsApi.today().then(d => {
+      if (d.lesson) setContent(d.lesson.content)
+    }).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await lessonsApi.save(getToday(), content)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e: any) {
+      alert(e.message)
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="rounded-lg border border-[#e5e5e5] bg-white p-6">
+      <p className="mb-4 font-mono text-sm uppercase tracking-[0.3em] text-[#333]">§ 经验教训 §</p>
+
+      {loading ? (
+        <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
+      ) : (
+        <>
+          <div className="mb-4">
+            <MarkdownEditor
+              value={content}
+              onChange={setContent}
+              placeholder="记录今天的经验教训、反思与收获..."
+              rows={6}
             />
           </div>
           <div className="flex items-center gap-3">
