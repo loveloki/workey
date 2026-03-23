@@ -70,9 +70,10 @@ func main() {
 	mux.HandleFunc("/api/auth/change-password", corsMiddleware(authMiddleware(handleChangePassword)))
 	mux.HandleFunc("/api/settings", corsMiddleware(authMiddleware(handleSettings)))
 
-	// Export/Import routes
+	// Export/Import/Delete routes
 	mux.HandleFunc("/api/data/export", corsMiddleware(authMiddleware(handleDataExport)))
 	mux.HandleFunc("/api/data/import", corsMiddleware(authMiddleware(handleDataImport)))
+	mux.HandleFunc("/api/data/delete", corsMiddleware(authMiddleware(handleDataDelete)))
 
 	// Lesson routes
 	mux.HandleFunc("/api/lessons", corsMiddleware(authMiddleware(handleLessons)))

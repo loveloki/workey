@@ -148,6 +148,11 @@ export const settings = {
     }
     return res.blob()
   },
+  deleteData: (password: string) =>
+    request<{ message: string; attendance_count: number; work_log_count: number; lesson_count: number; todo_count: number }>('/api/data/delete', {
+      method: 'DELETE',
+      body: JSON.stringify({ password }),
+    }),
   importData: async (file: File): Promise<{ message: string; attendance_count: number; work_log_count: number; image_count: number }> => {
     const token = getToken()
     const form = new FormData()

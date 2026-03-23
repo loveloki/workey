@@ -1153,6 +1153,59 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// --- Delete All Data ---
+
+func handleDataDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "DELETE" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+
+	// Verify password for safety
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Password == "" {
+		jsonError(w, "Password is required to delete data", http.StatusBadRequest)
+		return
+	}
+
+	var passwordHash string
+	err := db.QueryRow("SELECT password_hash FROM users WHERE id = ?", userID).Scan(&passwordHash)
+	if err != nil {
+		jsonError(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	if !checkPassword(req.Password, passwordHash) {
+		jsonError(w, "Password is incorrect", http.StatusUnauthorized)
+		return
+	}
+
+	// Delete all user data
+	tables := []string{"attendance", "work_logs", "lessons", "todos"}
+	counts := map[string]int64{}
+	for _, table := range tables {
+		result, err := db.Exec("DELETE FROM "+table+" WHERE user_id = ?", userID)
+		if err != nil {
+			jsonError(w, "Failed to delete "+table, http.StatusInternalServerError)
+			return
+		}
+		n, _ := result.RowsAffected()
+		counts[table] = n
+	}
+
+	jsonOK(w, map[string]interface{}{
+		"message":          "All data deleted successfully",
+		"attendance_count": counts["attendance"],
+		"work_log_count":   counts["work_logs"],
+		"lesson_count":     counts["lessons"],
+		"todo_count":       counts["todos"],
+	})
+}
+
 // --- Image Upload ---
 
 func handleUpload(w http.ResponseWriter, r *http.Request) {
