@@ -81,6 +81,7 @@ func main() {
 	mux.HandleFunc("/api/lessons/range", corsMiddleware(authMiddleware(handleLessonRange)))
 
 	// Todo routes
+	mux.HandleFunc("/api/todos/completed-today", corsMiddleware(authMiddleware(handleCompletedTodayTodos)))
 	mux.HandleFunc("/api/todos", corsMiddleware(authMiddleware(handleTodos)))
 
 	// Upload route

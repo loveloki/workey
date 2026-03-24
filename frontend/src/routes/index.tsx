@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect } from 'react'
-import { attendance, workLogs, lessons as lessonsApi } from '../lib/api'
+import { attendance, workLogs, lessons as lessonsApi, todos as todosApi, type Todo } from '../lib/api'
 import { formatTime, getToday } from '../lib/date-utils'
 import { MarkdownEditor } from '../lib/markdown-editor'
 
@@ -76,6 +76,11 @@ function Dashboard() {
 
       {/* Work log */}
       <WorkLogCard />
+
+      {/* Completed todos today */}
+      <div className="mt-6">
+        <CompletedTodosCard />
+      </div>
 
       {/* Lesson */}
       <div className="mt-6">
@@ -192,6 +197,96 @@ function LessonCard() {
             {saved && <span className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>✓ 已保存</span>}
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+function CompletedTodosCard() {
+  const [items, setItems] = useState<Todo[]>([])
+  const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    todosApi.completedToday()
+      .then(d => setItems(d.todos || []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  // Poll every 30s to sync completed todos
+  useEffect(() => {
+    const timer = setInterval(() => {
+      todosApi.completedToday()
+        .then(d => setItems(d.todos || []))
+        .catch(() => {})
+    }, 30000)
+    return () => clearInterval(timer)
+  }, [])
+
+  return (
+    <div className="rounded-lg border border-[#e5e5e5] bg-white p-6">
+      <div className="flex items-center justify-between mb-4">
+        <p className="font-mono text-sm uppercase tracking-[0.3em] text-[#333]">§ 今日已完成待办 §</p>
+        <button
+          onClick={() => navigate({ to: '/todos' })}
+          className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[#f0f0f0]"
+          style={{ border: '1px solid #e5e5e5', borderRadius: '6px', color: '#666' }}
+        >
+          查看全部 →
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
+      ) : items.length === 0 ? (
+        <p className="text-sm text-[#999]" style={{ fontFamily: 'Georgia, serif' }}>今天还没有完成的待办事项</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map(todo => (
+            <div
+              key={todo.id}
+              onClick={() => navigate({ to: '/todos' })}
+              className="flex items-center gap-3 rounded-lg px-4 py-3 cursor-pointer transition-colors hover:bg-[#fafafa]"
+              style={{
+                background: 'var(--surface-strong)',
+                border: '1px solid var(--line)',
+                borderRadius: '8px',
+              }}
+            >
+              {/* Checkmark icon */}
+              <div
+                className="w-5 h-5 rounded flex items-center justify-center shrink-0"
+                style={{ background: '#000', border: '1px solid #000' }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                <p
+                  className="font-mono text-sm"
+                  style={{ color: '#666', textDecoration: 'line-through', wordBreak: 'break-word' }}
+                >
+                  {todo.content || <span style={{ color: '#999' }}>(无内容)</span>}
+                </p>
+                {todo.url && (
+                  <span
+                    className="font-mono text-xs mt-1 inline-block truncate max-w-full"
+                    style={{ color: '#999' }}
+                  >
+                    {todo.url}
+                  </span>
+                )}
+              </div>
+
+              {/* Arrow */}
+              <span className="text-xs shrink-0" style={{ color: '#ccc' }}>→</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
