@@ -1,4 +1,5 @@
-import { createRootRoute, Outlet, Link, useNavigate } from '@tanstack/react-router'
+import { createRootRoute, Outlet, Link, useNavigate, useRouterState } from '@tanstack/react-router'
+import { useState, useRef, useEffect } from 'react'
 import { AuthProvider, useAuth } from '../lib/auth-context'
 import { ThemeProvider } from '../lib/theme-context'
 
@@ -22,9 +23,38 @@ function RootLayout() {
   )
 }
 
+const secondaryLinks = [
+  { to: '/clock' as const, label: '打卡' },
+  { to: '/history' as const, label: '历史' },
+  { to: '/trends' as const, label: '趋势' },
+  { to: '/settings' as const, label: '设置' },
+]
+
 function Header() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const routerState = useRouterState()
+
+  // Close menu on route change
+  useEffect(() => {
+    setMenuOpen(false)
+  }, [routerState.location.pathname])
+
+  // Close menu on click outside
+  useEffect(() => {
+    if (!menuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [menuOpen])
+
+  const isSecondaryActive = secondaryLinks.some(l => routerState.location.pathname === l.to)
 
   return (
     <header className="sticky top-0 z-50 border-b" style={{ background: 'var(--color-surface-strong)', borderColor: 'var(--color-border)' }}>
@@ -32,22 +62,14 @@ function Header() {
         {/* Left: Logo */}
         <Link
           to="/"
-          className="font-mono text-lg font-bold no-underline text-[var(--color-ink)]"
+          className="font-mono text-lg font-bold no-underline text-[var(--color-ink)] shrink-0"
         >
           Workey
         </Link>
 
         {/* Middle: Nav links */}
         {user && (
-          <div className="flex items-center gap-6">
-            <Link
-              to="/clock"
-              className="font-mono text-sm no-underline transition-colors"
-              style={{ color: 'var(--color-ink-muted)' }}
-              activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
-            >
-              打卡
-            </Link>
+          <div className="flex items-center gap-4 sm:gap-6 whitespace-nowrap">
             <Link
               to="/"
               className="font-mono text-sm no-underline transition-colors"
@@ -58,14 +80,6 @@ function Header() {
               今日
             </Link>
             <Link
-              to="/history"
-              className="font-mono text-sm no-underline transition-colors"
-              style={{ color: 'var(--color-ink-muted)' }}
-              activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
-            >
-              历史
-            </Link>
-            <Link
               to="/todos"
               className="font-mono text-sm no-underline transition-colors"
               style={{ color: 'var(--color-ink-muted)' }}
@@ -73,27 +87,45 @@ function Header() {
             >
               待办
             </Link>
-            <Link
-              to="/trends"
-              className="font-mono text-sm no-underline transition-colors"
-              style={{ color: 'var(--color-ink-muted)' }}
-              activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
-            >
-              趋势
-            </Link>
-            <Link
-              to="/settings"
-              className="font-mono text-sm no-underline transition-colors"
-              style={{ color: 'var(--color-ink-muted)' }}
-              activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
-            >
-              设置
-            </Link>
+
+            {/* More menu */}
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen(v => !v)}
+                className="font-mono text-sm px-2 py-1 rounded transition-colors"
+                style={{
+                  color: isSecondaryActive ? 'var(--color-ink)' : 'var(--color-ink-muted)',
+                  fontWeight: isSecondaryActive ? 500 : 400,
+                  background: menuOpen ? 'var(--color-surface-hover)' : 'transparent',
+                }}
+              >
+                更多
+                <span className="ml-0.5 text-xs">▾</span>
+              </button>
+              {menuOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1 py-1 rounded-md shadow-lg min-w-[120px]"
+                  style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)' }}
+                >
+                  {secondaryLinks.map(link => (
+                    <Link
+                      key={link.to}
+                      to={link.to}
+                      className="block px-4 py-2 font-mono text-sm no-underline transition-colors hover:bg-[var(--color-surface-hover)]"
+                      style={{ color: 'var(--color-ink-muted)' }}
+                      activeProps={{ className: 'block px-4 py-2 font-mono text-sm no-underline font-medium text-[var(--color-ink)] bg-[var(--color-surface-hover)]' }}
+                    >
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* Right: User + logout */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           {user && (
             <>
               <span className="hidden sm:inline font-mono text-sm text-[var(--color-ink-muted)]">
@@ -101,7 +133,7 @@ function Header() {
               </span>
               <button
                 onClick={() => { logout(); navigate({ to: '/login' }) }}
-                className="font-mono text-sm px-4 py-2 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
+                className="font-mono text-sm px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] whitespace-nowrap"
                 style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: '6px' }}
               >
                 退出
