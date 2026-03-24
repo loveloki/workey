@@ -112,6 +112,11 @@ function TodoList() {
     }
   }
 
+  const updateTodo = async (id: number, data: { content?: string; url?: string }) => {
+    const { todo: updated } = await todosApi.update(id, data)
+    setItems(prev => prev.map(t => t.id === id ? updated : t))
+  }
+
   const deleteTodo = async (id: number) => {
     await todosApi.delete(id)
     setItems(prev => prev.filter(t => t.id !== id))
@@ -190,6 +195,7 @@ function TodoList() {
               key={todo.id}
               todo={todo}
               onToggle={() => toggleDone(todo)}
+              onUpdate={(data) => updateTodo(todo.id, data)}
               onDelete={() => deleteTodo(todo.id)}
             />
           ))}
@@ -204,12 +210,106 @@ function TodoList() {
 function TodoItem({
   todo,
   onToggle,
+  onUpdate,
   onDelete,
 }: {
   todo: Todo
   onToggle: () => void
+  onUpdate: (data: { content?: string; url?: string }) => Promise<void>
   onDelete: () => void
 }) {
+  const [editing, setEditing] = useState(false)
+  const [editContent, setEditContent] = useState(todo.content)
+  const [editUrl, setEditUrl] = useState(todo.url)
+  const [saving, setSaving] = useState(false)
+  const contentRef = useRef<HTMLInputElement>(null)
+
+  const startEdit = () => {
+    setEditContent(todo.content)
+    setEditUrl(todo.url)
+    setEditing(true)
+    setTimeout(() => contentRef.current?.focus(), 0)
+  }
+
+  const cancelEdit = () => {
+    setEditing(false)
+  }
+
+  const saveEdit = async () => {
+    if (!editContent.trim() && !editUrl.trim()) return
+    setSaving(true)
+    try {
+      await onUpdate({ content: editContent.trim(), url: editUrl.trim() })
+      setEditing(false)
+    } catch (err: any) {
+      alert(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      saveEdit()
+    } else if (e.key === 'Escape') {
+      cancelEdit()
+    }
+  }
+
+  if (editing) {
+    return (
+      <div
+        className="rounded-lg px-4 py-3"
+        style={{
+          background: 'var(--surface-strong)',
+          border: '2px solid #000',
+          borderRadius: '8px',
+        }}
+      >
+        <div className="flex flex-col gap-2">
+          <input
+            ref={contentRef}
+            type="text"
+            value={editContent}
+            onChange={e => setEditContent(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="待办内容..."
+            className="font-mono text-sm w-full px-3 py-2 bg-white"
+            style={{ border: '1px solid #e5e5e5', borderRadius: '6px', outline: 'none' }}
+          />
+          <input
+            type="url"
+            value={editUrl}
+            onChange={e => setEditUrl(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="相关链接（可选）"
+            className="font-mono text-sm w-full px-3 py-2 bg-white"
+            style={{ border: '1px solid #e5e5e5', borderRadius: '6px', outline: 'none' }}
+          />
+          <div className="flex items-center gap-2 mt-1">
+            <button
+              onClick={saveEdit}
+              disabled={saving || (!editContent.trim() && !editUrl.trim())}
+              className="font-mono text-xs px-4 py-1.5 rounded-md text-white transition-colors disabled:opacity-50"
+              style={{ background: '#000', borderRadius: '6px' }}
+            >
+              {saving ? '保存中...' : '保存'}
+            </button>
+            <button
+              onClick={cancelEdit}
+              className="font-mono text-xs px-4 py-1.5 rounded-md transition-colors hover:bg-[#f0f0f0]"
+              style={{ border: '1px solid #e5e5e5', borderRadius: '6px', color: '#666' }}
+            >
+              取消
+            </button>
+            <span className="font-mono text-xs" style={{ color: '#bbb' }}>Enter 保存 · Esc 取消</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       className="flex items-start gap-3 rounded-lg px-4 py-3 group transition-colors"
@@ -236,8 +336,8 @@ function TodoItem({
         )}
       </button>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0">
+      {/* Content — double click to edit */}
+      <div className="flex-1 min-w-0" onDoubleClick={startEdit}>
         <p
           className="font-mono text-sm"
           style={{
@@ -255,11 +355,25 @@ function TodoItem({
             rel="noopener noreferrer"
             className="font-mono text-xs mt-1 inline-block truncate max-w-full"
             style={{ color: '#666', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+            onClick={e => e.stopPropagation()}
           >
             {todo.url}
           </a>
         )}
       </div>
+
+      {/* Edit */}
+      <button
+        onClick={startEdit}
+        className="opacity-0 group-hover:opacity-100 transition-opacity font-mono text-xs px-2 py-1 rounded hover:bg-[#f0f0f0] shrink-0"
+        style={{ color: '#666' }}
+        title="编辑"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+        </svg>
+      </button>
 
       {/* Delete */}
       <button
