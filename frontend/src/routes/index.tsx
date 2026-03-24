@@ -48,49 +48,51 @@ function Dashboard() {
         </h1>
       </div>
 
-      {/* Attendance summary bar */}
-      {todayData && (
-        <div
-          className="mb-6 flex items-center gap-6 rounded-lg px-5 py-3"
-          style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)' }}
-        >
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">上班</span>
-            <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_in)}</span>
+      {/* Daily report card */}
+      <div
+        className="rounded-lg overflow-hidden"
+        style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)' }}
+      >
+        {/* Attendance header */}
+        {todayData && (
+          <div className="flex items-center gap-6 px-6 py-4">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">上班</span>
+              <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_in)}</span>
+            </div>
+            <div className="h-4 w-px" style={{ background: 'var(--color-border)' }} />
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">下班</span>
+              <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_out)}</span>
+            </div>
+            <div className="flex-1" />
+            <button
+              onClick={() => navigate({ to: '/clock' })}
+              className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
+              style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+            >
+              打卡 →
+            </button>
           </div>
-          <div className="h-4 w-px" style={{ background: 'var(--color-border)' }} />
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">下班</span>
-            <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_out)}</span>
-          </div>
-          <div className="flex-1" />
-          <button
-            onClick={() => navigate({ to: '/clock' })}
-            className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
-            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
-          >
-            打卡 →
-          </button>
-        </div>
-      )}
+        )}
 
-      {/* Work log */}
-      <WorkLogCard />
+        {/* ── Work log ── */}
+        <div style={{ borderTop: '1px dashed var(--color-border)' }} />
+        <WorkLogSection />
 
-      {/* Completed todos today */}
-      <div className="mt-6">
-        <CompletedTodosCard />
-      </div>
+        {/* ── Completed todos ── */}
+        <div style={{ borderTop: '1px dashed var(--color-border)' }} />
+        <CompletedTodosSection />
 
-      {/* Lesson */}
-      <div className="mt-6">
-        <LessonCard />
+        {/* ── Lessons ── */}
+        <div style={{ borderTop: '1px dashed var(--color-border)' }} />
+        <LessonSection />
       </div>
     </main>
   )
 }
 
-function WorkLogCard() {
+function WorkLogSection() {
   const [content, setContent] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -115,10 +117,7 @@ function WorkLogCard() {
   }
 
   return (
-    <div
-      className="rounded-lg p-6"
-      style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)' }}
-    >
+    <div className="px-6 py-5">
       <p className="mb-4 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">§ 工作内容 §</p>
 
       {loading ? (
@@ -150,7 +149,7 @@ function WorkLogCard() {
   )
 }
 
-function LessonCard() {
+function LessonSection() {
   const [content, setContent] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -175,10 +174,7 @@ function LessonCard() {
   }
 
   return (
-    <div
-      className="rounded-lg p-6"
-      style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)' }}
-    >
+    <div className="px-6 py-5">
       <p className="mb-4 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">§ 经验教训 §</p>
 
       {loading ? (
@@ -210,7 +206,7 @@ function LessonCard() {
   )
 }
 
-function CompletedTodosCard() {
+function CompletedTodosSection() {
   const [items, setItems] = useState<Todo[]>([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
@@ -233,12 +229,9 @@ function CompletedTodosCard() {
   }, [])
 
   return (
-    <div
-      className="rounded-lg p-6"
-      style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)' }}
-    >
+    <div className="px-6 py-5">
       <div className="flex items-center justify-between mb-4">
-        <p className="font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">§ 今日已完成待办 §</p>
+        <p className="font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">§ 已完成待办 §</p>
         <button
           onClick={() => navigate({ to: '/todos' })}
           className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
