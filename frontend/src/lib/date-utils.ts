@@ -57,3 +57,13 @@ export function formatDateDisplay(dateStr: string): string {
   const w = weekdays[date.getDay()]
   return `${m}月${d}日 周${w}`
 }
+
+export function formatDateFull(dateStr: string): string {
+  const date = new Date(dateStr + 'T00:00:00')
+  const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+  const y = date.getFullYear()
+  const m = date.getMonth() + 1
+  const d = date.getDate()
+  const w = weekdays[date.getDay()]
+  return `${y}年${m}月${d}日 ${w}`
+}

@@ -102,6 +102,8 @@ export const todos = {
     request<{ todos: Todo[] }>(`/api/todos${all ? '?all=1' : ''}`),
   completedToday: () =>
     request<{ todos: Todo[] }>('/api/todos/completed-today'),
+  completedRange: (start: string, end: string) =>
+    request<{ todos: Todo[] }>(`/api/todos/completed-range?start=${start}&end=${end}`),
   create: (content: string, url: string) =>
     request<{ todo: Todo }>('/api/todos', {
       method: 'POST',

@@ -1,11 +1,40 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { attendance, workLogs, lessons as lessonsApi, todos as todosApi, type Todo } from '../lib/api'
 import { formatTime, getToday } from '../lib/date-utils'
 import { MarkdownEditor } from '../lib/markdown-editor'
+import { formatDayMarkdown } from '../lib/report-utils'
 
 export const Route = createFileRoute('/')({ component: Dashboard })
+
+function CopyButton({ getText, className = '' }: { getText: () => Promise<string> | string; className?: string }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = async () => {
+    const text = await getText()
+    await navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <button
+      onClick={handleCopy}
+      className={`font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] ${className}`}
+      style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+      title="复制为 Markdown"
+    >
+      {copied ? '✓ 已复制' : (
+        <span className="flex items-center gap-1">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          复制
+        </span>
+      )}
+    </button>
+  )
+}
 
 function Dashboard() {
   const { user, loading: authLoading } = useAuth()
@@ -23,7 +52,6 @@ function Dashboard() {
     attendance.today()
       .then(d => {
         if (!d.attendance?.clock_in) {
-          // Not clocked in — go to clock page
           navigate({ to: '/clock' })
         } else {
           setTodayData(d.attendance)
@@ -33,19 +61,39 @@ function Dashboard() {
       .catch(() => setChecking(false))
   }, [user, navigate])
 
+  const copyTodayReport = useCallback(async () => {
+    const today = getToday()
+    const [attRes, logRes, todosRes, lessonRes] = await Promise.all([
+      attendance.today(),
+      workLogs.today(),
+      todosApi.completedToday(),
+      lessonsApi.today(),
+    ])
+    return formatDayMarkdown(
+      today,
+      attRes.attendance,
+      logRes.work_log?.content || '',
+      todosRes.todos || [],
+      lessonRes.lesson?.content || '',
+    )
+  }, [])
+
   if (authLoading || checking) return <LoadingScreen />
   if (!user) return null
 
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
-      <div className="mb-6">
-        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">今日工作</p>
-        <h1
-          className="text-3xl font-normal tracking-tight text-[var(--color-ink)] sm:text-4xl"
-          style={{ fontFamily: 'Georgia, serif' }}
-        >
-          {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
-        </h1>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">今日工作</p>
+          <h1
+            className="text-3xl font-normal tracking-tight text-[var(--color-ink)] sm:text-4xl"
+            style={{ fontFamily: 'Georgia, serif' }}
+          >
+            {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
+          </h1>
+        </div>
+        <CopyButton getText={copyTodayReport} className="mt-2" />
       </div>
 
       {/* Daily report card */}
