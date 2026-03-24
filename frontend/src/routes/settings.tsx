@@ -19,9 +19,9 @@ function SettingsPage() {
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
       <div className="mb-6">
-        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[#333]">§ 设置</p>
+        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">§ 设置</p>
         <h1
-          className="text-3xl font-normal tracking-tight text-black sm:text-4xl"
+          className="text-3xl font-normal tracking-tight text-[var(--color-ink)] sm:text-4xl"
           style={{ fontFamily: 'Georgia, serif' }}
         >
           偏好设置
@@ -99,7 +99,7 @@ function TimezoneSection() {
 
   return (
     <Card title="时区设置">
-      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: '#666' }}>
+      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
         设置你的工作时区，影响打卡时间的显示。
       </p>
       {loaded && (
@@ -107,8 +107,8 @@ function TimezoneSection() {
           <select
             value={timezone}
             onChange={e => setTimezone(e.target.value)}
-            className="font-mono text-sm px-3 py-2 rounded-md bg-white w-full sm:w-auto"
-            style={{ border: '1px solid #e5e5e5', borderRadius: '6px' }}
+            className="font-mono text-sm px-3 py-2 rounded-md bg-[var(--color-surface-strong)] w-full sm:w-auto"
+            style={{ border: '1px solid var(--color-border)', borderRadius: '6px' }}
           >
             {TIMEZONE_OPTIONS.map(opt => (
               <option key={opt.value} value={opt.value}>
@@ -119,13 +119,13 @@ function TimezoneSection() {
           <button
             onClick={save}
             disabled={saving}
-            className="font-mono text-sm px-5 py-2 rounded-md text-white transition-colors disabled:opacity-50"
-            style={{ background: '#000', borderRadius: '6px' }}
+            className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
+            style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
           >
             {saving ? '保存中...' : '保存'}
           </button>
           {msg && (
-            <span className="font-mono text-sm" style={{ color: msg === '已保存' ? '#555' : '#c00' }}>
+            <span className="font-mono text-sm" style={{ color: msg === '已保存' ? 'var(--color-ink-muted)' : 'var(--color-danger-text)' }}>
               {msg}
             </span>
           )}
@@ -166,7 +166,7 @@ function KanbanUrlSection() {
 
   return (
     <Card title="看板链接">
-      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: '#666' }}>
+      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
         设置外部看板工具的链接，在"待办"页面可快捷跳转。
       </p>
       {loaded && (
@@ -176,19 +176,19 @@ function KanbanUrlSection() {
             value={url}
             onChange={e => setUrl(e.target.value)}
             placeholder="https://www.fizzy.do/"
-            className="font-mono text-sm px-3 py-2 bg-white w-full sm:w-96"
-            style={{ border: '1px solid #e5e5e5', borderRadius: '6px', outline: 'none' }}
+            className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)] w-full sm:w-96"
+            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
           />
           <button
             onClick={save}
             disabled={saving}
-            className="font-mono text-sm px-5 py-2 rounded-md text-white transition-colors disabled:opacity-50"
-            style={{ background: '#000', borderRadius: '6px' }}
+            className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
+            style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
           >
             {saving ? '保存中...' : '保存'}
           </button>
           {msg && (
-            <span className="font-mono text-sm" style={{ color: msg === '已保存' ? '#555' : '#c00' }}>
+            <span className="font-mono text-sm" style={{ color: msg === '已保存' ? 'var(--color-ink-muted)' : 'var(--color-danger-text)' }}>
               {msg}
             </span>
           )}
@@ -267,13 +267,13 @@ function PasswordSection() {
           <button
             type="submit"
             disabled={saving}
-            className="font-mono text-sm px-5 py-2 rounded-md text-white transition-colors disabled:opacity-50"
-            style={{ background: '#000', borderRadius: '6px' }}
+            className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
+            style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
           >
             {saving ? '修改中...' : '修改密码'}
           </button>
           {msg && (
-            <span className="font-mono text-sm" style={{ color: isError ? '#c00' : '#555' }}>
+            <span className="font-mono text-sm" style={{ color: isError ? 'var(--color-danger-text)' : 'var(--color-ink-muted)' }}>
               {msg}
             </span>
           )}
@@ -342,23 +342,23 @@ function DataSection() {
 
   return (
     <Card title="数据管理">
-      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: '#666' }}>
+      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
         导出所有考勤、工作日志和图片为 ZIP 压缩包，或从 ZIP 文件导入数据。
       </p>
       <div className="flex flex-col sm:flex-row items-start gap-3">
         <button
           onClick={handleExport}
           disabled={exporting}
-          className="font-mono text-sm px-5 py-2 rounded-md text-white transition-colors disabled:opacity-50"
-          style={{ background: '#000', borderRadius: '6px' }}
+          className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
+          style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
         >
           {exporting ? '导出中...' : '↓ 导出数据'}
         </button>
         <button
           onClick={handleImport}
           disabled={importing}
-          className="font-mono text-sm px-5 py-2 rounded-md bg-white transition-colors hover:bg-neutral-50 disabled:opacity-50"
-          style={{ border: '1px solid #e5e5e5', borderRadius: '6px' }}
+          className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-surface-strong)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
+          style={{ border: '1px solid var(--color-border)', borderRadius: '6px' }}
         >
           {importing ? '导入中...' : '↑ 导入数据'}
         </button>
@@ -371,7 +371,7 @@ function DataSection() {
         />
       </div>
       {msg && (
-        <p className="font-mono text-sm mt-3" style={{ color: isError ? '#c00' : '#555' }}>
+        <p className="font-mono text-sm mt-3" style={{ color: isError ? 'var(--color-danger-text)' : 'var(--color-ink-muted)' }}>
           {msg}
         </p>
       )}
@@ -423,37 +423,37 @@ function DeleteDataSection() {
 
   return (
     <Card title="危险操作">
-      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: '#c00' }}>
+      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-danger-text)' }}>
         删除所有数据（考勤、工作日志、经验教训、待办事项），此操作不可恢复。
       </p>
 
       {step === 'idle' && (
         <button
           onClick={() => setStep('confirm')}
-          className="font-mono text-sm px-5 py-2 rounded-md text-white transition-colors"
-          style={{ background: '#c00', borderRadius: '6px' }}
+          className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors"
+          style={{ background: 'var(--color-danger)', borderRadius: '6px' }}
         >
           🗑 删除所有数据
         </button>
       )}
 
       {step === 'confirm' && (
-        <div className="rounded-lg p-4" style={{ background: '#fff5f5', border: '1px solid #fecaca' }}>
-          <p className="font-mono text-sm font-semibold mb-3" style={{ color: '#991b1b' }}>
+        <div className="rounded-lg p-4" style={{ background: 'var(--color-danger-bg)', border: '1px solid var(--color-danger-border)' }}>
+          <p className="font-mono text-sm font-semibold mb-3" style={{ color: 'var(--color-danger-strong)' }}>
             ⚠️ 确认删除所有数据？此操作不可撤销！
           </p>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setStep('password')}
-              className="font-mono text-sm px-5 py-2 rounded-md text-white transition-colors"
-              style={{ background: '#c00', borderRadius: '6px' }}
+              className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors"
+              style={{ background: 'var(--color-danger)', borderRadius: '6px' }}
             >
               确认删除
             </button>
             <button
               onClick={cancel}
-              className="font-mono text-sm px-5 py-2 rounded-md bg-white transition-colors hover:bg-neutral-50"
-              style={{ border: '1px solid #e5e5e5', borderRadius: '6px' }}
+              className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-surface-strong)] transition-colors hover:bg-[var(--color-surface-hover)]"
+              style={{ border: '1px solid var(--color-border)', borderRadius: '6px' }}
             >
               取消
             </button>
@@ -462,8 +462,8 @@ function DeleteDataSection() {
       )}
 
       {step === 'password' && (
-        <div className="rounded-lg p-4" style={{ background: '#fff5f5', border: '1px solid #fecaca' }}>
-          <p className="font-mono text-sm font-semibold mb-3" style={{ color: '#991b1b' }}>
+        <div className="rounded-lg p-4" style={{ background: 'var(--color-danger-bg)', border: '1px solid var(--color-danger-border)' }}>
+          <p className="font-mono text-sm font-semibold mb-3" style={{ color: 'var(--color-danger-strong)' }}>
             🔒 请输入账号密码以确认删除
           </p>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -472,23 +472,23 @@ function DeleteDataSection() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="输入密码"
-              className="font-mono text-sm px-3 py-2 bg-white w-full sm:w-64"
-              style={{ border: '1px solid #e5e5e5', borderRadius: '6px', outline: 'none' }}
+              className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)] w-full sm:w-64"
+              style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
               onKeyDown={e => e.key === 'Enter' && handleDelete()}
               autoFocus
             />
             <button
               onClick={handleDelete}
               disabled={deleting}
-              className="font-mono text-sm px-5 py-2 rounded-md text-white transition-colors disabled:opacity-50"
-              style={{ background: '#c00', borderRadius: '6px' }}
+              className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
+              style={{ background: 'var(--color-danger)', borderRadius: '6px' }}
             >
               {deleting ? '删除中...' : '确认删除'}
             </button>
             <button
               onClick={cancel}
-              className="font-mono text-sm px-5 py-2 rounded-md bg-white transition-colors hover:bg-neutral-50"
-              style={{ border: '1px solid #e5e5e5', borderRadius: '6px' }}
+              className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-surface-strong)] transition-colors hover:bg-[var(--color-surface-hover)]"
+              style={{ border: '1px solid var(--color-border)', borderRadius: '6px' }}
             >
               取消
             </button>
@@ -497,7 +497,7 @@ function DeleteDataSection() {
       )}
 
       {msg && (
-        <p className="font-mono text-sm mt-3" style={{ color: isError ? '#c00' : '#555' }}>
+        <p className="font-mono text-sm mt-3" style={{ color: isError ? 'var(--color-danger-text)' : 'var(--color-ink-muted)' }}>
           {msg}
         </p>
       )}
@@ -512,12 +512,12 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
     <div
       className="rounded-lg p-5 sm:p-6"
       style={{
-        background: 'var(--surface-strong)',
-        border: '1px solid var(--line)',
+        background: 'var(--color-surface-strong)',
+        border: '1px solid var(--color-border)',
         borderRadius: '8px',
       }}
     >
-      <h2 className="font-mono text-xs uppercase tracking-[0.2em] mb-4" style={{ color: '#333' }}>
+      <h2 className="font-mono text-xs uppercase tracking-[0.2em] mb-4" style={{ color: 'var(--color-ink-secondary)' }}>
         {title}
       </h2>
       {children}
@@ -540,7 +540,7 @@ function InputField({
 }) {
   return (
     <div>
-      <label className="block font-mono text-xs mb-1" style={{ color: '#666' }}>
+      <label className="block font-mono text-xs mb-1" style={{ color: 'var(--color-ink-muted)' }}>
         {label}
       </label>
       <input
@@ -548,8 +548,8 @@ function InputField({
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="font-mono text-sm w-full px-3 py-2 bg-white"
-        style={{ border: '1px solid #e5e5e5', borderRadius: '6px', outline: 'none' }}
+        className="font-mono text-sm w-full px-3 py-2 bg-[var(--color-surface-strong)]"
+        style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
       />
     </div>
   )
@@ -558,7 +558,7 @@ function InputField({
 function LoadingScreen() {
   return (
     <main className="max-w-5xl mx-auto px-4 py-16 text-center">
-      <p className="font-mono text-sm" style={{ color: '#666' }}>
+      <p className="font-mono text-sm" style={{ color: 'var(--color-ink-muted)' }}>
         加载中...
       </p>
     </main>

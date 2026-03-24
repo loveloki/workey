@@ -20,9 +20,9 @@ function TodosPage() {
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[#333]">§ 待办</p>
+          <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">§ 待办</p>
           <h1
-            className="text-3xl font-normal tracking-tight text-black sm:text-4xl"
+            className="text-3xl font-normal tracking-tight text-[var(--color-ink)] sm:text-4xl"
             style={{ fontFamily: 'Georgia, serif' }}
           >
             TODO 清单
@@ -52,8 +52,8 @@ function KanbanLink() {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-2 font-mono text-sm px-4 py-2 rounded-md transition-colors hover:bg-[#f0f0f0]"
-      style={{ border: '1px solid #e5e5e5', borderRadius: '6px', color: '#666', textDecoration: 'none' }}
+      className="flex items-center gap-2 font-mono text-sm px-4 py-2 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
+      style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)', textDecoration: 'none' }}
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="7" height="7" />
@@ -128,7 +128,7 @@ function TodoList() {
       <form
         onSubmit={handleAdd}
         className="rounded-lg p-4 mb-4"
-        style={{ background: 'var(--surface-strong)', border: '1px solid var(--line)', borderRadius: '8px' }}
+        style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: '8px' }}
       >
         <div className="flex flex-col gap-3">
           <div className="flex gap-3">
@@ -138,14 +138,14 @@ function TodoList() {
               value={newContent}
               onChange={e => setNewContent(e.target.value)}
               placeholder="输入待办内容..."
-              className="font-mono text-sm flex-1 px-3 py-2 bg-white"
-              style={{ border: '1px solid #e5e5e5', borderRadius: '6px', outline: 'none' }}
+              className="font-mono text-sm flex-1 px-3 py-2 bg-[var(--color-surface-strong)]"
+              style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
             />
             <button
               type="submit"
               disabled={adding || (!newContent.trim() && !newUrl.trim())}
-              className="font-mono text-sm px-5 py-2 rounded-md text-white transition-colors disabled:opacity-50 shrink-0"
-              style={{ background: '#000', borderRadius: '6px' }}
+              className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 shrink-0"
+              style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
             >
               {adding ? '添加中...' : '+ 添加'}
             </button>
@@ -155,38 +155,38 @@ function TodoList() {
             value={newUrl}
             onChange={e => setNewUrl(e.target.value)}
             placeholder="相关链接（可选）"
-            className="font-mono text-sm px-3 py-2 bg-white"
-            style={{ border: '1px solid #e5e5e5', borderRadius: '6px', outline: 'none' }}
+            className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)]"
+            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
           />
         </div>
       </form>
 
       {/* Filter toggle */}
       <div className="flex items-center gap-3 mb-4">
-        <label className="flex items-center gap-2 font-mono text-xs cursor-pointer" style={{ color: '#666' }}>
+        <label className="flex items-center gap-2 font-mono text-xs cursor-pointer" style={{ color: 'var(--color-ink-muted)' }}>
           <input
             type="checkbox"
             checked={showAll}
             onChange={e => setShowAll(e.target.checked)}
-            className="accent-black"
+            className="accent-[var(--color-ink)]"
           />
           显示已完成
         </label>
-        <span className="font-mono text-xs" style={{ color: '#999' }}>
+        <span className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>
           {items.length} 条待办
         </span>
       </div>
 
       {/* List */}
       {loading ? (
-        <p className="font-mono text-sm text-center py-8" style={{ color: '#666' }}>加载中...</p>
+        <p className="font-mono text-sm text-center py-8" style={{ color: 'var(--color-ink-muted)' }}>加载中...</p>
       ) : items.length === 0 ? (
         <div
           className="rounded-lg py-12 text-center"
-          style={{ border: '1px dashed var(--line)' }}
+          style={{ border: '1px dashed var(--color-border)' }}
         >
-          <p className="font-mono text-sm" style={{ color: '#999' }}>暂无待办事项</p>
-          <p className="text-sm mt-1" style={{ fontFamily: 'Georgia, serif', color: '#bbb' }}>在上方输入内容快速添加</p>
+          <p className="font-mono text-sm" style={{ color: 'var(--color-ink-faint)' }}>暂无待办事项</p>
+          <p className="text-sm mt-1" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-faint)' }}>在上方输入内容快速添加</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -262,8 +262,8 @@ function TodoItem({
       <div
         className="rounded-lg px-4 py-3"
         style={{
-          background: 'var(--surface-strong)',
-          border: '2px solid #000',
+          background: 'var(--color-surface-strong)',
+          border: '2px solid var(--color-ink)',
           borderRadius: '8px',
         }}
       >
@@ -275,8 +275,8 @@ function TodoItem({
             onChange={e => setEditContent(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="待办内容..."
-            className="font-mono text-sm w-full px-3 py-2 bg-white"
-            style={{ border: '1px solid #e5e5e5', borderRadius: '6px', outline: 'none' }}
+            className="font-mono text-sm w-full px-3 py-2 bg-[var(--color-surface-strong)]"
+            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
           />
           <input
             type="url"
@@ -284,26 +284,26 @@ function TodoItem({
             onChange={e => setEditUrl(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="相关链接（可选）"
-            className="font-mono text-sm w-full px-3 py-2 bg-white"
-            style={{ border: '1px solid #e5e5e5', borderRadius: '6px', outline: 'none' }}
+            className="font-mono text-sm w-full px-3 py-2 bg-[var(--color-surface-strong)]"
+            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
           />
           <div className="flex items-center gap-2 mt-1">
             <button
               onClick={saveEdit}
               disabled={saving || (!editContent.trim() && !editUrl.trim())}
-              className="font-mono text-xs px-4 py-1.5 rounded-md text-white transition-colors disabled:opacity-50"
-              style={{ background: '#000', borderRadius: '6px' }}
+              className="font-mono text-xs px-4 py-1.5 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
+              style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
             >
               {saving ? '保存中...' : '保存'}
             </button>
             <button
               onClick={cancelEdit}
-              className="font-mono text-xs px-4 py-1.5 rounded-md transition-colors hover:bg-[#f0f0f0]"
-              style={{ border: '1px solid #e5e5e5', borderRadius: '6px', color: '#666' }}
+              className="font-mono text-xs px-4 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
+              style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
             >
               取消
             </button>
-            <span className="font-mono text-xs" style={{ color: '#bbb' }}>Enter 保存 · Esc 取消</span>
+            <span className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>Enter 保存 · Esc 取消</span>
           </div>
         </div>
       </div>
@@ -314,8 +314,8 @@ function TodoItem({
     <div
       className="flex items-start gap-3 rounded-lg px-4 py-3 group transition-colors"
       style={{
-        background: 'var(--surface-strong)',
-        border: '1px solid var(--line)',
+        background: 'var(--color-surface-strong)',
+        border: '1px solid var(--color-border)',
         borderRadius: '8px',
         opacity: todo.done ? 0.6 : 1,
       }}
@@ -325,12 +325,12 @@ function TodoItem({
         onClick={onToggle}
         className="mt-0.5 w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors"
         style={{
-          borderColor: todo.done ? '#000' : '#ccc',
-          background: todo.done ? '#000' : 'transparent',
+          borderColor: todo.done ? 'var(--color-solid)' : 'var(--color-border-strong)',
+          background: todo.done ? 'var(--color-solid)' : 'transparent',
         }}
       >
         {todo.done && (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-solid-text)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12" />
           </svg>
         )}
@@ -341,12 +341,12 @@ function TodoItem({
         <p
           className="font-mono text-sm"
           style={{
-            color: 'var(--sea-ink)',
+            color: 'var(--color-ink)',
             textDecoration: todo.done ? 'line-through' : 'none',
             wordBreak: 'break-word',
           }}
         >
-          {todo.content || <span style={{ color: '#999' }}>(无内容)</span>}
+          {todo.content || <span style={{ color: 'var(--color-ink-faint)' }}>(无内容)</span>}
         </p>
         {todo.url && (
           <a
@@ -354,7 +354,7 @@ function TodoItem({
             target="_blank"
             rel="noopener noreferrer"
             className="font-mono text-xs mt-1 inline-block truncate max-w-full"
-            style={{ color: '#666', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+            style={{ color: 'var(--color-ink-muted)', textDecoration: 'underline', textUnderlineOffset: '2px' }}
             onClick={e => e.stopPropagation()}
           >
             {todo.url}
@@ -365,8 +365,8 @@ function TodoItem({
       {/* Edit */}
       <button
         onClick={startEdit}
-        className="opacity-0 group-hover:opacity-100 transition-opacity font-mono text-xs px-2 py-1 rounded hover:bg-[#f0f0f0] shrink-0"
-        style={{ color: '#666' }}
+        className="opacity-0 group-hover:opacity-100 transition-opacity font-mono text-xs px-2 py-1 rounded hover:bg-[var(--color-surface-hover)] shrink-0"
+        style={{ color: 'var(--color-ink-muted)' }}
         title="编辑"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -378,8 +378,8 @@ function TodoItem({
       {/* Delete */}
       <button
         onClick={onDelete}
-        className="opacity-0 group-hover:opacity-100 transition-opacity font-mono text-xs px-2 py-1 rounded hover:bg-red-50 shrink-0"
-        style={{ color: '#c00' }}
+        className="opacity-0 group-hover:opacity-100 transition-opacity font-mono text-xs px-2 py-1 rounded hover:bg-[var(--color-danger-bg)] shrink-0"
+        style={{ color: 'var(--color-danger-text)' }}
         title="删除"
       >
         ✕
@@ -391,7 +391,7 @@ function TodoItem({
 function LoadingScreen() {
   return (
     <main className="flex min-h-[60vh] items-center justify-center px-4">
-      <p className="font-mono text-sm text-[#666]">加载中...</p>
+      <p className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
     </main>
   )
 }

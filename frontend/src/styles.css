@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* ── exe.dev Design System ─────────────────────────────────── */
+/* ── exe.dev Design System (Radix Colors) ──────────────────── */
 
 @theme {
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
@@ -10,27 +10,166 @@
     "Liberation Mono", monospace;
 }
 
+/*
+ * Radix Sand scale (light)
+ * 1: hsl(50, 20%, 99%)    2: hsl(60, 14%, 97%)   3: hsl(55, 11%, 93%)
+ * 4: hsl(53, 10%, 89%)    5: hsl(51, 9%, 85%)    6: hsl(50, 8%, 80%)
+ * 7: hsl(48, 7%, 73%)     8: hsl(48, 6%, 61%)    9: hsl(50, 4%, 49%)
+ * 10: hsl(47, 4%, 45%)   11: hsl(50, 4%, 32%)   12: hsl(50, 6%, 10%)
+ *
+ * Radix Sand scale (dark)
+ * 1: hsl(60, 3%, 6%)      2: hsl(60, 3%, 9%)     3: hsl(50, 4%, 12%)
+ * 4: hsl(47, 4%, 15%)     5: hsl(46, 5%, 17%)    6: hsl(47, 5%, 21%)
+ * 7: hsl(47, 5%, 27%)     8: hsl(46, 5%, 37%)    9: hsl(50, 4%, 49%)
+ * 10: hsl(52, 4%, 55%)   11: hsl(50, 5%, 71%)   12: hsl(56, 7%, 93%)
+ *
+ * Radix Red (light):  9: hsl(358, 75%, 59%)  11: hsl(358, 65%, 40%)  12: hsl(355, 49%, 15%)
+ * Radix Red (dark):   9: hsl(358, 75%, 59%)  11: hsl(358, 75%, 71%)  12: hsl(351, 89%, 96%)
+ *
+ * Radix Indigo (light):  9: hsl(226, 70%, 55.5%)  11: hsl(226, 50%, 37%)
+ * Radix Indigo (dark):   9: hsl(226, 70%, 55.5%)  11: hsl(226, 75%, 74%)
+ */
+
 /* ── Light-mode variables (default) ───────────────────────── */
 
 :root {
-  /* Typography colors */
-  --color-ink: #000;
-  --color-ink-strong: #111;
-  --color-ink-secondary: #333;
-  --color-ink-muted: #666;
-  --color-ink-faint: #9ca3af;
+  /* Typography colors — Radix Sand light */
+  --color-ink: hsl(50, 6%, 10%);          /* sand-12 */
+  --color-ink-strong: hsl(50, 6%, 10%);   /* sand-12 */
+  --color-ink-secondary: hsl(50, 4%, 32%); /* sand-11 */
+  --color-ink-muted: hsl(47, 4%, 45%);    /* sand-10 */
+  --color-ink-faint: hsl(50, 4%, 49%);    /* sand-9 */
 
-  /* Surfaces */
-  --color-bg: #fffff8;
-  --color-surface: rgba(255, 255, 248, 0.95);
-  --color-surface-strong: #ffffff;
-  --color-header-bg: #ffffff;
+  /* Surfaces — Radix Sand light */
+  --color-bg: hsl(50, 20%, 99%);          /* sand-1 */
+  --color-surface: hsl(60, 14%, 97%);     /* sand-2 */
+  --color-surface-strong: hsl(50, 20%, 99%); /* sand-1 */
+  --color-header-bg: hsl(50, 20%, 99%);   /* sand-1 */
 
-  /* Lines & borders */
-  --color-border: #e5e5e5;
-  --color-border-subtle: rgba(0, 0, 0, 0.06);
+  /* Lines & borders — Radix Sand light */
+  --color-border: hsl(53, 10%, 89%);      /* sand-4 (was previously sand-6, now more subtle) */
+  --color-border-subtle: hsl(55, 11%, 93%); /* sand-3 */
+  --color-border-strong: hsl(50, 8%, 80%); /* sand-6 */
+  --color-border-focus: hsl(48, 7%, 73%); /* sand-7 */
 
-  /* Semantic mappings — kept for inline var() refs in .tsx */
+  /* Interactive */
+  --color-surface-hover: hsl(55, 11%, 93%); /* sand-3 */
+  --color-surface-active: hsl(53, 10%, 89%); /* sand-4 */
+  --color-surface-selected: hsl(51, 9%, 85%); /* sand-5 */
+
+  /* Solid backgrounds */
+  --color-solid: hsl(50, 6%, 10%);        /* sand-12 (for primary btns) */
+  --color-solid-hover: hsl(50, 4%, 32%);  /* sand-11 */
+  --color-solid-text: hsl(50, 20%, 99%);  /* sand-1 (text on solid) */
+
+  /* Danger — Radix Red light */
+  --color-danger: hsl(358, 75%, 59%);     /* red-9 */
+  --color-danger-text: hsl(358, 65%, 40%); /* red-11 */
+  --color-danger-bg: hsl(360, 100%, 97%); /* red-2 */
+  --color-danger-border: hsl(359, 90%, 90%); /* red-6 */
+  --color-danger-strong: hsl(355, 49%, 15%); /* red-12 */
+
+  /* Semantic mappings */
+  --sea-ink: var(--color-ink);
+  --sea-ink-soft: var(--color-ink-muted);
+  --line: var(--color-border);
+  --surface: var(--color-surface);
+  --surface-strong: var(--color-surface-strong);
+  --header-bg: var(--color-header-bg);
+  --kicker: var(--color-ink-secondary);
+  --chip-bg: var(--color-surface);
+  --chip-line: var(--color-border);
+  --lagoon: var(--color-ink);
+  --lagoon-deep: var(--color-ink-strong);
+  --palm: var(--color-ink-muted);
+  --bg-base: var(--color-bg);
+  --link-bg-hover: var(--color-surface-hover);
+}
+
+/* ── Dark mode ────────────────────────────────────────────── */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-ink: hsl(56, 7%, 93%);          /* sand-dark-12 */
+    --color-ink-strong: hsl(56, 7%, 93%);   /* sand-dark-12 */
+    --color-ink-secondary: hsl(50, 5%, 71%); /* sand-dark-11 */
+    --color-ink-muted: hsl(52, 4%, 55%);    /* sand-dark-10 */
+    --color-ink-faint: hsl(50, 4%, 49%);    /* sand-dark-9 */
+
+    --color-bg: hsl(60, 3%, 6%);            /* sand-dark-1 */
+    --color-surface: hsl(60, 3%, 9%);       /* sand-dark-2 */
+    --color-surface-strong: hsl(50, 4%, 12%); /* sand-dark-3 */
+    --color-header-bg: hsl(60, 3%, 6%);     /* sand-dark-1 */
+
+    --color-border: hsl(47, 4%, 15%);       /* sand-dark-4 */
+    --color-border-subtle: hsl(50, 4%, 12%); /* sand-dark-3 */
+    --color-border-strong: hsl(47, 5%, 21%); /* sand-dark-6 */
+    --color-border-focus: hsl(47, 5%, 27%); /* sand-dark-7 */
+
+    --color-surface-hover: hsl(50, 4%, 12%); /* sand-dark-3 */
+    --color-surface-active: hsl(47, 4%, 15%); /* sand-dark-4 */
+    --color-surface-selected: hsl(46, 5%, 17%); /* sand-dark-5 */
+
+    --color-solid: hsl(56, 7%, 93%);        /* sand-dark-12 (primary btn) */
+    --color-solid-hover: hsl(50, 5%, 71%);  /* sand-dark-11 */
+    --color-solid-text: hsl(60, 3%, 6%);    /* sand-dark-1 (text on solid) */
+
+    /* Danger — Radix Red dark */
+    --color-danger: hsl(358, 75%, 59%);     /* red-dark-9 */
+    --color-danger-text: hsl(358, 75%, 71%); /* red-dark-11 */
+    --color-danger-bg: hsl(357, 37%, 12%);  /* red-dark-2 */
+    --color-danger-border: hsl(356, 32%, 24%); /* red-dark-6 */
+    --color-danger-strong: hsl(351, 89%, 96%); /* red-dark-12 */
+
+    --sea-ink: var(--color-ink);
+    --sea-ink-soft: var(--color-ink-muted);
+    --line: var(--color-border);
+    --surface: var(--color-surface);
+    --surface-strong: var(--color-surface-strong);
+    --header-bg: var(--color-header-bg);
+    --kicker: var(--color-ink-secondary);
+    --chip-bg: var(--color-surface-strong);
+    --chip-line: var(--color-border);
+    --lagoon: var(--color-ink);
+    --lagoon-deep: var(--color-ink-strong);
+    --palm: var(--color-ink-muted);
+    --bg-base: var(--color-bg);
+    --link-bg-hover: var(--color-surface-hover);
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-ink: hsl(56, 7%, 93%);          /* sand-dark-12 */
+  --color-ink-strong: hsl(56, 7%, 93%);   /* sand-dark-12 */
+  --color-ink-secondary: hsl(50, 5%, 71%); /* sand-dark-11 */
+  --color-ink-muted: hsl(52, 4%, 55%);    /* sand-dark-10 */
+  --color-ink-faint: hsl(50, 4%, 49%);    /* sand-dark-9 */
+
+  --color-bg: hsl(60, 3%, 6%);            /* sand-dark-1 */
+  --color-surface: hsl(60, 3%, 9%);       /* sand-dark-2 */
+  --color-surface-strong: hsl(50, 4%, 12%); /* sand-dark-3 */
+  --color-header-bg: hsl(60, 3%, 6%);     /* sand-dark-1 */
+
+  --color-border: hsl(47, 4%, 15%);       /* sand-dark-4 */
+  --color-border-subtle: hsl(50, 4%, 12%); /* sand-dark-3 */
+  --color-border-strong: hsl(47, 5%, 21%); /* sand-dark-6 */
+  --color-border-focus: hsl(47, 5%, 27%); /* sand-dark-7 */
+
+  --color-surface-hover: hsl(50, 4%, 12%); /* sand-dark-3 */
+  --color-surface-active: hsl(47, 4%, 15%); /* sand-dark-4 */
+  --color-surface-selected: hsl(46, 5%, 17%); /* sand-dark-5 */
+
+  --color-solid: hsl(56, 7%, 93%);        /* sand-dark-12 (primary btn) */
+  --color-solid-hover: hsl(50, 5%, 71%);  /* sand-dark-11 */
+  --color-solid-text: hsl(60, 3%, 6%);    /* sand-dark-1 (text on solid) */
+
+  /* Danger — Radix Red dark */
+  --color-danger: hsl(358, 75%, 59%);     /* red-dark-9 */
+  --color-danger-text: hsl(358, 75%, 71%); /* red-dark-11 */
+  --color-danger-bg: hsl(357, 37%, 12%);  /* red-dark-2 */
+  --color-danger-border: hsl(356, 32%, 24%); /* red-dark-6 */
+  --color-danger-strong: hsl(351, 89%, 96%); /* red-dark-12 */
+
   --sea-ink: var(--color-ink);
   --sea-ink-soft: var(--color-ink-muted);
   --line: var(--color-border);
@@ -40,77 +179,11 @@
   --kicker: var(--color-ink-secondary);
   --chip-bg: var(--color-surface-strong);
   --chip-line: var(--color-border);
-  --lagoon: #000;
-  --lagoon-deep: #000;
-  --palm: #555;
+  --lagoon: var(--color-ink);
+  --lagoon-deep: var(--color-ink-strong);
+  --palm: var(--color-ink-muted);
   --bg-base: var(--color-bg);
-  --link-bg-hover: rgba(0, 0, 0, 0.04);
-}
-
-/* ── Dark mode ────────────────────────────────────────────── */
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --color-ink: #e5e5e5;
-    --color-ink-strong: #f5f5f5;
-    --color-ink-secondary: #d4d4d4;
-    --color-ink-muted: #a3a3a3;
-    --color-ink-faint: #6b7280;
-
-    --color-bg: #09090b;
-    --color-surface: rgba(20, 20, 22, 0.95);
-    --color-surface-strong: #141416;
-    --color-header-bg: #09090b;
-
-    --color-border: #333;
-    --color-border-subtle: rgba(255, 255, 255, 0.08);
-
-    --sea-ink: var(--color-ink);
-    --sea-ink-soft: var(--color-ink-muted);
-    --line: var(--color-border);
-    --surface: var(--color-surface);
-    --surface-strong: var(--color-surface-strong);
-    --header-bg: var(--color-header-bg);
-    --kicker: var(--color-ink-secondary);
-    --chip-bg: #2a2a2a;
-    --chip-line: #333;
-    --lagoon: #e5e5e5;
-    --lagoon-deep: #d4d4d4;
-    --palm: #a3a3a3;
-    --bg-base: var(--color-bg);
-    --link-bg-hover: rgba(255, 255, 255, 0.06);
-  }
-}
-
-:root[data-theme="dark"] {
-  --color-ink: #e5e5e5;
-  --color-ink-strong: #f5f5f5;
-  --color-ink-secondary: #d4d4d4;
-  --color-ink-muted: #a3a3a3;
-  --color-ink-faint: #6b7280;
-
-  --color-bg: #09090b;
-  --color-surface: rgba(20, 20, 22, 0.95);
-  --color-surface-strong: #141416;
-  --color-header-bg: #09090b;
-
-  --color-border: #333;
-  --color-border-subtle: rgba(255, 255, 255, 0.08);
-
-  --sea-ink: var(--color-ink);
-  --sea-ink-soft: var(--color-ink-muted);
-  --line: var(--color-border);
-  --surface: var(--color-surface);
-  --surface-strong: var(--color-surface-strong);
-  --header-bg: var(--color-header-bg);
-  --kicker: var(--color-ink-secondary);
-  --chip-bg: #2a2a2a;
-  --chip-line: #333;
-  --lagoon: #e5e5e5;
-  --lagoon-deep: #d4d4d4;
-  --palm: #a3a3a3;
-  --bg-base: var(--color-bg);
-  --link-bg-hover: rgba(255, 255, 255, 0.06);
+  --link-bg-hover: var(--color-surface-hover);
 }
 
 /* ── Reset & base ─────────────────────────────────────────── */
@@ -134,8 +207,8 @@ body {
   background-color: var(--color-bg);
   background-image: repeating-linear-gradient(
     0deg,
-    rgba(0, 0, 0, 0.035) 0px,
-    rgba(0, 0, 0, 0.035) 2px,
+    var(--color-border-subtle) 0px,
+    var(--color-border-subtle) 2px,
     transparent 2px,
     transparent 4px
   );
@@ -143,18 +216,6 @@ body {
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-@media (prefers-color-scheme: dark) {
-  body {
-    background-image: repeating-linear-gradient(
-      0deg,
-      rgba(255, 255, 255, 0.025) 0px,
-      rgba(255, 255, 255, 0.025) 2px,
-      transparent 2px,
-      transparent 4px
-    );
-  }
 }
 
 /* ── Links ────────────────────────────────────────────────── */
@@ -247,7 +308,7 @@ pre code {
   text-decoration: none;
   font-family: var(--font-mono);
   font-size: 14px;
-  color: #414141;
+  color: var(--color-ink-muted);
 }
 
 .nav-link::after {
@@ -276,16 +337,6 @@ pre code {
 @media (max-width: 640px) {
   .nav-link::after {
     bottom: -4px;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  .nav-link {
-    color: #a3a3a3;
-  }
-  .nav-link:hover,
-  .nav-link.is-active {
-    color: #e5e5e5;
   }
 }
 
@@ -382,27 +433,16 @@ a {
   padding: 8px 16px;
   font-family: var(--font-mono);
   font-size: 14px;
-  color: #fff;
-  background: #000;
-  border: 1px solid #000;
+  color: var(--color-solid-text);
+  background: var(--color-solid);
+  border: 1px solid var(--color-solid);
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 150ms ease;
 }
 
 .btn-primary:hover {
-  background: #222;
-}
-
-@media (prefers-color-scheme: dark) {
-  .btn-primary {
-    color: #000;
-    background: #e5e5e5;
-    border-color: #e5e5e5;
-  }
-  .btn-primary:hover {
-    background: #d4d4d4;
-  }
+  background: var(--color-solid-hover);
 }
 
 /* ── Utility: btn-pill (auth CTA) ─────────────────────────── */
@@ -415,27 +455,16 @@ a {
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
-  background: #000;
-  border: 1px solid #000;
+  color: var(--color-solid-text);
+  background: var(--color-solid);
+  border: 1px solid var(--color-solid);
   border-radius: 999px;
   cursor: pointer;
   transition: background-color 150ms ease;
 }
 
 .btn-pill:hover {
-  background: #222;
-}
-
-@media (prefers-color-scheme: dark) {
-  .btn-pill {
-    color: #000;
-    background: #e5e5e5;
-    border-color: #e5e5e5;
-  }
-  .btn-pill:hover {
-    background: #d4d4d4;
-  }
+  background: var(--color-solid-hover);
 }
 
 /* ── Utility: card ────────────────────────────────────────── */
@@ -480,7 +509,7 @@ select {
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: var(--color-ink-muted);
+  border-color: var(--color-border-focus);
 }
 
 /* ── Markdown body styles ─────────────────────────────────── */
@@ -523,13 +552,13 @@ select:focus {
 .markdown-body code {
   font-family: var(--font-mono);
   font-size: 0.9em;
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--color-surface-hover);
   padding: 0.15em 0.4em;
   border-radius: 3px;
 }
 
 .markdown-body pre {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 0.8em 1em;
@@ -572,7 +601,7 @@ select:focus {
 }
 
 .markdown-body th {
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--color-surface-hover);
   font-weight: 600;
 }
 

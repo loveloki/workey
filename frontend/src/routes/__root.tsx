@@ -24,12 +24,12 @@ function Header() {
   const navigate = useNavigate()
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b" style={{ borderColor: '#e5e5e5' }}>
+    <header className="sticky top-0 z-50 border-b" style={{ background: 'var(--color-surface-strong)', borderColor: 'var(--color-border)' }}>
       <nav className="max-w-5xl mx-auto flex items-center justify-between px-4 py-3">
         {/* Left: Logo */}
         <Link
           to="/"
-          className="font-mono text-lg font-bold text-black no-underline"
+          className="font-mono text-lg font-bold no-underline text-[var(--color-ink)]"
         >
           Workey
         </Link>
@@ -40,49 +40,49 @@ function Header() {
             <Link
               to="/clock"
               className="font-mono text-sm no-underline transition-colors"
-              style={{ color: '#414141' }}
-              activeProps={{ className: 'font-mono text-sm no-underline font-medium !text-black' }}
+              style={{ color: 'var(--color-ink-muted)' }}
+              activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
             >
               打卡
             </Link>
             <Link
               to="/"
               className="font-mono text-sm no-underline transition-colors"
-              style={{ color: '#414141' }}
+              style={{ color: 'var(--color-ink-muted)' }}
               activeOptions={{ exact: true }}
-              activeProps={{ className: 'font-mono text-sm no-underline font-medium !text-black' }}
+              activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
             >
               今日
             </Link>
             <Link
               to="/history"
               className="font-mono text-sm no-underline transition-colors"
-              style={{ color: '#414141' }}
-              activeProps={{ className: 'font-mono text-sm no-underline font-medium !text-black' }}
+              style={{ color: 'var(--color-ink-muted)' }}
+              activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
             >
               历史
             </Link>
             <Link
               to="/todos"
               className="font-mono text-sm no-underline transition-colors"
-              style={{ color: '#414141' }}
-              activeProps={{ className: 'font-mono text-sm no-underline font-medium !text-black' }}
+              style={{ color: 'var(--color-ink-muted)' }}
+              activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
             >
               待办
             </Link>
             <Link
               to="/trends"
               className="font-mono text-sm no-underline transition-colors"
-              style={{ color: '#414141' }}
-              activeProps={{ className: 'font-mono text-sm no-underline font-medium !text-black' }}
+              style={{ color: 'var(--color-ink-muted)' }}
+              activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
             >
               趋势
             </Link>
             <Link
               to="/settings"
               className="font-mono text-sm no-underline transition-colors"
-              style={{ color: '#414141' }}
-              activeProps={{ className: 'font-mono text-sm no-underline font-medium !text-black' }}
+              style={{ color: 'var(--color-ink-muted)' }}
+              activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
             >
               设置
             </Link>
@@ -93,13 +93,13 @@ function Header() {
         <div className="flex items-center gap-3">
           {user && (
             <>
-              <span className="hidden sm:inline font-mono text-sm text-neutral-600">
+              <span className="hidden sm:inline font-mono text-sm text-[var(--color-ink-muted)]">
                 {user.username}
               </span>
               <button
                 onClick={() => { logout(); navigate({ to: '/login' }) }}
-                className="font-mono text-sm px-4 py-2 rounded-md bg-white transition-colors hover:bg-neutral-50"
-                style={{ border: '1px solid #e5e5e5', borderRadius: '6px' }}
+                className="font-mono text-sm px-4 py-2 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
+                style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: '6px' }}
               >
                 退出
               </button>
@@ -114,7 +114,7 @@ function Header() {
 function Footer() {
   return (
     <footer className="py-8 text-center">
-      <p className="font-mono text-xs" style={{ color: '#9ca3af' }}>
+      <p className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>
         Workey · 工作记录
       </p>
     </footer>

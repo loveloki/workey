@@ -77,8 +77,8 @@ function TrendsPage() {
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
       <div className="mb-6">
-        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[#333]">数据趋势</p>
-        <h1 className="text-3xl font-normal tracking-tight text-black" style={{ fontFamily: 'Georgia, serif' }}>
+        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em]" style={{ color: 'var(--color-ink-secondary)' }}>数据趋势</p>
+        <h1 className="text-3xl font-normal tracking-tight" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink)' }}>
           上下班时间
         </h1>
       </div>
@@ -90,9 +90,14 @@ function TrendsPage() {
             onClick={() => setPreset(p.key)}
             className={`rounded-md border px-4 py-2 font-mono text-sm ${
               preset === p.key
-                ? 'border-[#d0d0d0] bg-[#f5f5f5] font-medium text-black'
-                : 'border-[#e5e5e5] bg-white text-[#414141] hover:bg-[#f5f5f5]'
+                ? 'font-medium'
+                : 'hover:bg-[var(--color-surface-hover)]'
             }`}
+            style={
+              preset === p.key
+                ? { borderColor: 'var(--color-border-strong)', background: 'var(--color-surface-hover)', color: 'var(--color-ink)' }
+                : { borderColor: 'var(--color-border)', background: 'var(--color-surface-strong)', color: 'var(--color-ink-muted)' }
+            }
           >
             {p.label}
           </button>
@@ -105,18 +110,27 @@ function TrendsPage() {
             type="date"
             value={customStart}
             onChange={e => setCustomStart(e.target.value)}
-            className="rounded-lg border border-black/10 bg-[#fffdf5] px-4 py-3.5 font-mono text-sm text-black focus:border-black focus:outline-none"
+            className="rounded-lg border px-4 py-3.5 font-mono text-sm focus:outline-none"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-ink)' }}
+            onFocus={e => e.currentTarget.style.borderColor = 'var(--color-border-focus)'}
+            onBlur={e => e.currentTarget.style.borderColor = 'var(--color-border)'}
           />
-          <span className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>至</span>
+          <span className="text-sm" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>至</span>
           <input
             type="date"
             value={customEnd}
             onChange={e => setCustomEnd(e.target.value)}
-            className="rounded-lg border border-black/10 bg-[#fffdf5] px-4 py-3.5 font-mono text-sm text-black focus:border-black focus:outline-none"
+            className="rounded-lg border px-4 py-3.5 font-mono text-sm focus:outline-none"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-ink)' }}
+            onFocus={e => e.currentTarget.style.borderColor = 'var(--color-border-focus)'}
+            onBlur={e => e.currentTarget.style.borderColor = 'var(--color-border)'}
           />
           <button
             onClick={handleCustomSearch}
-            className="rounded-md bg-black px-5 py-2.5 font-mono text-sm text-white hover:bg-[#222]"
+            className="rounded-md px-5 py-2.5 font-mono text-sm"
+            style={{ background: 'var(--color-solid)', color: 'var(--color-solid-text)' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--color-solid-hover)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'var(--color-solid)'}
           >
             查询
           </button>
@@ -125,14 +139,14 @@ function TrendsPage() {
 
       {/* Chart area: always mounted after first load so it transitions smoothly */}
       {hasLoaded ? (
-        <div className="rounded-lg border border-[#e5e5e5] bg-white p-6">
+        <div className="rounded-lg border p-6" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-strong)' }}>
           <TrendChart data={data} loading={fetching} />
         </div>
       ) : fetching ? (
-        <p className="font-mono text-sm text-[#666]">加载中...</p>
+        <p className="font-mono text-sm" style={{ color: 'var(--color-ink-muted)' }}>加载中...</p>
       ) : (
-        <div className="rounded-lg border border-[#e5e5e5] bg-white p-8 text-center">
-          <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>暂无打卡数据</p>
+        <div className="rounded-lg border p-8 text-center" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-strong)' }}>
+          <p className="text-sm" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>暂无打卡数据</p>
         </div>
       )}
 
@@ -165,9 +179,9 @@ function avgTime(minutes: number[]): string {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-[#e5e5e5] bg-white p-5 text-center">
-      <p className="mb-1 font-mono text-xs uppercase tracking-[0.3em] text-[#666]">{label}</p>
-      <p className="font-mono text-2xl font-bold text-black">{value}</p>
+    <div className="rounded-lg border p-5 text-center" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-strong)' }}>
+      <p className="mb-1 font-mono text-xs uppercase tracking-[0.3em]" style={{ color: 'var(--color-ink-muted)' }}>{label}</p>
+      <p className="font-mono text-2xl font-bold" style={{ color: 'var(--color-ink)' }}>{value}</p>
     </div>
   )
 }
@@ -189,11 +203,11 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
   const { sorted, clockIns, clockOuts, allMinutes } = chartData
 
   if (loading && data.length === 0) {
-    return <p className="font-mono text-sm text-[#666]">加载中...</p>
+    return <p className="font-mono text-sm" style={{ color: 'var(--color-ink-muted)' }}>加载中...</p>
   }
 
   if (allMinutes.length === 0) {
-    return <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>暂无打卡数据</p>
+    return <p className="text-sm" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>暂无打卡数据</p>
   }
 
   const minY = Math.floor(Math.min(...allMinutes) / 60) * 60 - 30
@@ -231,11 +245,11 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
     <div>
       <div className="mb-3 flex items-center gap-4 font-mono text-xs">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-4 rounded-sm bg-black" />
+          <span className="inline-block h-2 w-4 rounded-sm" style={{ background: 'var(--color-ink)' }} />
           上班时间
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-4 rounded-sm bg-[#666]" />
+          <span className="inline-block h-2 w-4 rounded-sm bg-[var(--color-ink-muted)]" />
           下班时间
         </span>
       </div>
@@ -244,9 +258,9 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
         {yTicks.map(m => (
           <g key={m}>
             <line x1={PAD.left} y1={yScale(m)} x2={W - PAD.right} y2={yScale(m)}
-              stroke="#e5e5e5" strokeDasharray="4" />
+              stroke="var(--color-border)" strokeDasharray="4" />
             <text x={PAD.left - 8} y={yScale(m) + 4} textAnchor="end"
-              fill="#666" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, monospace">
+              fill="var(--color-ink-muted)" fontSize="11" fontFamily="ui-monospace, SFMono-Regular, monospace">
               {minutesToTime(m)}
             </text>
           </g>
@@ -258,7 +272,7 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
           const label = d.date.substring(5) // MM-DD
           return (
             <text key={d.date} x={xScale(i)} y={H - PAD.bottom + 20} textAnchor="middle"
-              fill="#666" fontSize="10" fontFamily="ui-monospace, SFMono-Regular, monospace"
+              fill="var(--color-ink-muted)" fontSize="10" fontFamily="ui-monospace, SFMono-Regular, monospace"
               transform={`rotate(-35, ${xScale(i)}, ${H - PAD.bottom + 20})`}>
               {label}
             </text>
@@ -266,21 +280,21 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
         })}
 
         {/* Clock-in line */}
-        <path d={makePath(clockIns)} fill="none" stroke="#000" strokeWidth="2.5"
+        <path d={makePath(clockIns)} fill="none" stroke="var(--color-ink)" strokeWidth="2.5"
           strokeLinecap="round" strokeLinejoin="round" />
 
         {/* Clock-out line */}
-        <path d={makePath(clockOuts)} fill="none" stroke="#666" strokeWidth="2.5"
+        <path d={makePath(clockOuts)} fill="none" stroke="var(--color-ink-muted)" strokeWidth="2.5"
           strokeLinecap="round" strokeLinejoin="round" />
 
         {/* Dots */}
         {clockIns.map((p, i) => p.minutes !== null ? (
           <circle key={`in-${i}`} cx={xScale(i)} cy={yScale(p.minutes)} r="3.5"
-            fill="#000" stroke="white" strokeWidth="1.5" />
+            fill="var(--color-ink)" stroke="var(--color-surface-strong)" strokeWidth="1.5" />
         ) : null)}
         {clockOuts.map((p, i) => p.minutes !== null ? (
           <circle key={`out-${i}`} cx={xScale(i)} cy={yScale(p.minutes)} r="3.5"
-            fill="#666" stroke="white" strokeWidth="1.5" />
+            fill="var(--color-ink-muted)" stroke="var(--color-surface-strong)" strokeWidth="1.5" />
         ) : null)}
 
         {/* Hover targets with tooltips */}

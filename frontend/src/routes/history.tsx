@@ -86,8 +86,8 @@ function HistoryPage() {
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
       <div className="mb-6">
-        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[#333]">历史记录</p>
-        <h1 className="text-3xl font-normal tracking-tight text-black" style={{ fontFamily: 'Georgia, serif' }}>
+        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">历史记录</p>
+        <h1 className="text-3xl font-normal tracking-tight text-[var(--color-ink)]" style={{ fontFamily: 'Georgia, serif' }}>
           工作回顾
         </h1>
       </div>
@@ -100,8 +100,8 @@ function HistoryPage() {
             onClick={() => setPreset(p.key)}
             className={`rounded-md border px-4 py-2 font-mono text-sm ${
               preset === p.key
-                ? 'border-[#d0d0d0] bg-[#f5f5f5] font-medium text-black'
-                : 'border-[#e5e5e5] bg-white text-[#414141] hover:bg-[#f5f5f5]'
+                ? 'border-[var(--color-border-strong)] bg-[var(--color-surface-hover)] font-medium text-[var(--color-ink)]'
+                : 'border-[var(--color-border)] bg-[var(--color-surface-strong)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]'
             }`}
           >
             {p.label}
@@ -116,18 +116,18 @@ function HistoryPage() {
             type="date"
             value={customStart}
             onChange={e => setCustomStart(e.target.value)}
-            className="rounded-lg border border-black/10 bg-[#fffdf5] px-4 py-3.5 font-mono text-sm text-black focus:border-black focus:outline-none"
+            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3.5 font-mono text-sm text-[var(--color-ink)] focus:border-[var(--color-border-focus)] focus:outline-none"
           />
-          <span className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>至</span>
+          <span className="text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>至</span>
           <input
             type="date"
             value={customEnd}
             onChange={e => setCustomEnd(e.target.value)}
-            className="rounded-lg border border-black/10 bg-[#fffdf5] px-4 py-3.5 font-mono text-sm text-black focus:border-black focus:outline-none"
+            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3.5 font-mono text-sm text-[var(--color-ink)] focus:border-[var(--color-border-focus)] focus:outline-none"
           />
           <button
             onClick={handleCustomSearch}
-            className="rounded-md bg-black px-5 py-2.5 font-mono text-sm text-white hover:bg-[#222]"
+            className="rounded-md bg-[var(--color-solid)] px-5 py-2.5 font-mono text-sm text-[var(--color-solid-text)] hover:bg-[var(--color-solid-hover)]"
           >
             查询
           </button>
@@ -136,10 +136,10 @@ function HistoryPage() {
 
       {/* Results */}
       {fetching ? (
-        <p className="font-mono text-sm text-[#666]">加载中...</p>
+        <p className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
       ) : sortedDates.length === 0 ? (
-        <div className="rounded-lg border border-[#e5e5e5] bg-white p-8 text-center">
-          <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>暂无记录</p>
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-8 text-center">
+          <p className="text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>暂无记录</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -148,32 +148,32 @@ function HistoryPage() {
             return (
               <div
                 key={date}
-                className="rounded-lg border border-[#e5e5e5] bg-white p-5"
+                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-5"
               >
                 <div className="mb-2 flex items-center justify-between">
-                  <h3 className="font-mono text-sm font-semibold text-black">
+                  <h3 className="font-mono text-sm font-semibold text-[var(--color-ink)]">
                     {formatDateDisplay(date)}
                   </h3>
                   {entry.attendance && (
-                    <div className="flex items-center gap-3 font-mono text-xs text-[#666]">
+                    <div className="flex items-center gap-3 font-mono text-xs text-[var(--color-ink-muted)]">
                       <span>上班 {formatTime(entry.attendance.clock_in)}</span>
                       <span>下班 {formatTime(entry.attendance.clock_out)}</span>
                     </div>
                   )}
                 </div>
                 {entry.log ? (
-                  <div className="markdown-body text-sm text-[#333]" style={{ fontFamily: 'Georgia, serif' }}>
+                  <div className="markdown-body text-sm text-[var(--color-ink-secondary)]" style={{ fontFamily: 'Georgia, serif' }}>
                     <MarkdownContent content={entry.log.content} />
                   </div>
                 ) : (
-                  <p className="m-0 text-sm italic text-[#9ca3af]" style={{ fontFamily: 'Georgia, serif' }}>
+                  <p className="m-0 text-sm italic text-[var(--color-ink-faint)]" style={{ fontFamily: 'Georgia, serif' }}>
                     未记录工作内容
                   </p>
                 )}
                 {entry.lesson && entry.lesson.content && (
-                  <div className="mt-3 border-t border-dashed border-[#e5e5e5] pt-3">
-                    <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[#999]">💡 经验教训</p>
-                    <div className="markdown-body text-sm text-[#555]" style={{ fontFamily: 'Georgia, serif' }}>
+                  <div className="mt-3 border-t border-dashed border-[var(--color-border)] pt-3">
+                    <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">💡 经验教训</p>
+                    <div className="markdown-body text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>
                       <MarkdownContent content={entry.lesson.content} />
                     </div>
                   </div>

@@ -39,9 +39,9 @@ function Dashboard() {
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
       <div className="mb-6">
-        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[#333]">今日工作</p>
+        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">今日工作</p>
         <h1
-          className="text-3xl font-normal tracking-tight text-black sm:text-4xl"
+          className="text-3xl font-normal tracking-tight text-[var(--color-ink)] sm:text-4xl"
           style={{ fontFamily: 'Georgia, serif' }}
         >
           {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
@@ -52,22 +52,22 @@ function Dashboard() {
       {todayData && (
         <div
           className="mb-6 flex items-center gap-6 rounded-lg px-5 py-3"
-          style={{ background: 'var(--surface-strong)', border: '1px solid var(--line)' }}
+          style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)' }}
         >
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs uppercase tracking-wide text-[#666]">上班</span>
-            <span className="font-mono text-sm font-bold text-black">{formatTime(todayData.clock_in)}</span>
+            <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">上班</span>
+            <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_in)}</span>
           </div>
-          <div className="h-4 w-px bg-[#e5e5e5]" />
+          <div className="h-4 w-px" style={{ background: 'var(--color-border)' }} />
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs uppercase tracking-wide text-[#666]">下班</span>
-            <span className="font-mono text-sm font-bold text-black">{formatTime(todayData.clock_out)}</span>
+            <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">下班</span>
+            <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_out)}</span>
           </div>
           <div className="flex-1" />
           <button
             onClick={() => navigate({ to: '/clock' })}
-            className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[#f0f0f0]"
-            style={{ border: '1px solid #e5e5e5', borderRadius: '6px', color: '#666' }}
+            className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
+            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
           >
             打卡 →
           </button>
@@ -115,11 +115,14 @@ function WorkLogCard() {
   }
 
   return (
-    <div className="rounded-lg border border-[#e5e5e5] bg-white p-6">
-      <p className="mb-4 font-mono text-sm uppercase tracking-[0.3em] text-[#333]">§ 工作内容 §</p>
+    <div
+      className="rounded-lg p-6"
+      style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)' }}
+    >
+      <p className="mb-4 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">§ 工作内容 §</p>
 
       {loading ? (
-        <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
+        <p className="text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
       ) : (
         <>
           <div className="mb-4">
@@ -134,11 +137,12 @@ function WorkLogCard() {
             <button
               onClick={save}
               disabled={saving}
-              className="rounded-md bg-black px-5 py-2.5 font-mono text-sm text-white hover:bg-[#222] disabled:opacity-50"
+              className="rounded-md px-5 py-2.5 font-mono text-sm hover:bg-[var(--color-solid-hover)] disabled:opacity-50"
+              style={{ background: 'var(--color-solid)', color: 'var(--color-solid-text)' }}
             >
               {saving ? '保存中...' : '保存'}
             </button>
-            {saved && <span className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>✓ 已保存</span>}
+            {saved && <span className="text-sm" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>✓ 已保存</span>}
           </div>
         </>
       )}
@@ -171,11 +175,14 @@ function LessonCard() {
   }
 
   return (
-    <div className="rounded-lg border border-[#e5e5e5] bg-white p-6">
-      <p className="mb-4 font-mono text-sm uppercase tracking-[0.3em] text-[#333]">§ 经验教训 §</p>
+    <div
+      className="rounded-lg p-6"
+      style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)' }}
+    >
+      <p className="mb-4 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">§ 经验教训 §</p>
 
       {loading ? (
-        <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
+        <p className="text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
       ) : (
         <>
           <div className="mb-4">
@@ -190,11 +197,12 @@ function LessonCard() {
             <button
               onClick={save}
               disabled={saving}
-              className="rounded-md bg-black px-5 py-2.5 font-mono text-sm text-white hover:bg-[#222] disabled:opacity-50"
+              className="rounded-md px-5 py-2.5 font-mono text-sm hover:bg-[var(--color-solid-hover)] disabled:opacity-50"
+              style={{ background: 'var(--color-solid)', color: 'var(--color-solid-text)' }}
             >
               {saving ? '保存中...' : '保存'}
             </button>
-            {saved && <span className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>✓ 已保存</span>}
+            {saved && <span className="text-sm" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>✓ 已保存</span>}
           </div>
         </>
       )}
@@ -225,41 +233,44 @@ function CompletedTodosCard() {
   }, [])
 
   return (
-    <div className="rounded-lg border border-[#e5e5e5] bg-white p-6">
+    <div
+      className="rounded-lg p-6"
+      style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)' }}
+    >
       <div className="flex items-center justify-between mb-4">
-        <p className="font-mono text-sm uppercase tracking-[0.3em] text-[#333]">§ 今日已完成待办 §</p>
+        <p className="font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">§ 今日已完成待办 §</p>
         <button
           onClick={() => navigate({ to: '/todos' })}
-          className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[#f0f0f0]"
-          style={{ border: '1px solid #e5e5e5', borderRadius: '6px', color: '#666' }}
+          className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
+          style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
         >
           查看全部 →
         </button>
       </div>
 
       {loading ? (
-        <p className="text-sm text-[#666]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
+        <p className="text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
       ) : items.length === 0 ? (
-        <p className="text-sm text-[#999]" style={{ fontFamily: 'Georgia, serif' }}>今天还没有完成的待办事项</p>
+        <p className="text-sm text-[var(--color-ink-faint)]" style={{ fontFamily: 'Georgia, serif' }}>今天还没有完成的待办事项</p>
       ) : (
         <div className="space-y-2">
           {items.map(todo => (
             <div
               key={todo.id}
               onClick={() => navigate({ to: '/todos' })}
-              className="flex items-center gap-3 rounded-lg px-4 py-3 cursor-pointer transition-colors hover:bg-[#fafafa]"
+              className="flex items-center gap-3 rounded-lg px-4 py-3 cursor-pointer transition-colors hover:bg-[var(--color-surface-hover)]"
               style={{
-                background: 'var(--surface-strong)',
-                border: '1px solid var(--line)',
+                background: 'var(--color-surface-strong)',
+                border: '1px solid var(--color-border)',
                 borderRadius: '8px',
               }}
             >
               {/* Checkmark icon */}
               <div
                 className="w-5 h-5 rounded flex items-center justify-center shrink-0"
-                style={{ background: '#000', border: '1px solid #000' }}
+                style={{ background: 'var(--color-solid)', border: '1px solid var(--color-solid)' }}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-solid-text)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               </div>
@@ -268,14 +279,14 @@ function CompletedTodosCard() {
               <div className="flex-1 min-w-0">
                 <p
                   className="font-mono text-sm"
-                  style={{ color: '#666', textDecoration: 'line-through', wordBreak: 'break-word' }}
+                  style={{ color: 'var(--color-ink-muted)', textDecoration: 'line-through', wordBreak: 'break-word' }}
                 >
-                  {todo.content || <span style={{ color: '#999' }}>(无内容)</span>}
+                  {todo.content || <span style={{ color: 'var(--color-ink-faint)' }}>(无内容)</span>}
                 </p>
                 {todo.url && (
                   <span
                     className="font-mono text-xs mt-1 inline-block truncate max-w-full"
-                    style={{ color: '#999' }}
+                    style={{ color: 'var(--color-ink-faint)' }}
                   >
                     {todo.url}
                   </span>
@@ -283,7 +294,7 @@ function CompletedTodosCard() {
               </div>
 
               {/* Arrow */}
-              <span className="text-xs shrink-0" style={{ color: '#ccc' }}>→</span>
+              <span className="text-xs shrink-0" style={{ color: 'var(--color-border-strong)' }}>→</span>
             </div>
           ))}
         </div>
@@ -295,7 +306,7 @@ function CompletedTodosCard() {
 function LoadingScreen() {
   return (
     <main className="flex min-h-[60vh] items-center justify-center px-4">
-      <p className="font-mono text-sm text-[#666]">加载中...</p>
+      <p className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
     </main>
   )
 }

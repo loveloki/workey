@@ -108,7 +108,7 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: Markd
         <ToolbarBtn title="代码" onClick={() => wrapSelection('`', '`')}>&lt;/&gt;</ToolbarBtn>
         <ToolbarBtn title="链接" onClick={() => wrapSelection('[', '](url)')}>🔗</ToolbarBtn>
         <ToolbarBtn title="列表" onClick={() => insertAtCursor('\n- ')}>•</ToolbarBtn>
-        <div className="w-px h-5 bg-[#e5e5e5] mx-1" />
+        <div className="w-px h-5 bg-[var(--color-border)] mx-1" />
         <ToolbarBtn
           title="上传图片"
           onClick={() => fileInputRef.current?.click()}
@@ -128,10 +128,10 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: Markd
           onClick={() => setPreview(!preview)}
           className="font-mono text-xs px-3 py-1 rounded transition-colors"
           style={{
-            border: '1px solid #e5e5e5',
+            border: '1px solid var(--color-border)',
             borderRadius: '4px',
-            background: preview ? '#f0f0f0' : 'white',
-            color: '#333',
+            background: preview ? 'var(--color-surface-hover)' : 'var(--color-surface-strong)',
+            color: 'var(--color-ink-secondary)',
           }}
         >
           {preview ? '编辑' : '预览'}
@@ -141,13 +141,13 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: Markd
       {/* Editor / Preview */}
       {preview ? (
         <div
-          className="markdown-body rounded-lg border border-black/10 bg-[#fffdf5] p-4 min-h-[160px]"
+          className="markdown-body rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 min-h-[160px]"
           style={{ fontFamily: 'Georgia, serif' }}
         >
           {value ? (
             <MarkdownContent content={value} />
           ) : (
-            <p className="text-[#9ca3af] italic">无内容</p>
+            <p className="text-[var(--color-ink-faint)] italic">无内容</p>
           )}
         </div>
       ) : (
@@ -159,16 +159,16 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: Markd
           onDrop={handleDrop}
           onDragOver={e => e.preventDefault()}
           placeholder={placeholder}
-          className="w-full rounded-lg border border-black/10 bg-[#fffdf5] p-4 text-base text-[#333] placeholder:text-[#9ca3af] focus:border-black focus:outline-none resize-y"
+          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-base text-[var(--color-ink-secondary)] placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-border-focus)] focus:outline-none resize-y"
           style={{ fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace', fontSize: '14px', lineHeight: '1.6' }}
           rows={rows}
         />
       )}
 
       {uploading && (
-        <p className="mt-1 font-mono text-xs text-[#666]">上传中...</p>
+        <p className="mt-1 font-mono text-xs text-[var(--color-ink-muted)]">上传中...</p>
       )}
-      <p className="mt-1 font-mono text-xs text-[#9ca3af]">
+      <p className="mt-1 font-mono text-xs text-[var(--color-ink-faint)]">
         支持 Markdown · 可粘贴或拖拽图片
       </p>
     </div>
@@ -192,7 +192,7 @@ export function MarkdownContent({ content }: { content: string }) {
         ),
         a: ({ href, children, ...props }) => (
           <a href={href} target="_blank" rel="noopener noreferrer" {...props}
-            style={{ color: '#333', textDecoration: 'underline' }}>
+            style={{ color: 'var(--color-ink-secondary)', textDecoration: 'underline' }}>
             {children}
           </a>
         ),
@@ -220,8 +220,8 @@ function ToolbarBtn({
       onClick={onClick}
       title={title}
       disabled={disabled}
-      className="font-mono text-sm w-8 h-8 flex items-center justify-center rounded transition-colors hover:bg-[#f0f0f0] disabled:opacity-40"
-      style={{ border: '1px solid #e5e5e5', borderRadius: '4px', background: 'white' }}
+      className="font-mono text-sm w-8 h-8 flex items-center justify-center rounded transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-40"
+      style={{ border: '1px solid var(--color-border)', borderRadius: '4px', background: 'var(--color-surface-strong)' }}
     >
       {children}
     </button>
