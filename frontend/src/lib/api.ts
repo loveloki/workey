@@ -128,9 +128,9 @@ export interface Todo {
 
 // Settings
 export const settings = {
-  get: () => request<{ timezone: string; kanban_url: string }>('/api/settings'),
-  save: (data: { timezone?: string; kanban_url?: string }) =>
-    request<{ timezone: string; kanban_url: string }>('/api/settings', {
+  get: () => request<{ timezone: string; kanban_url: string; theme: string }>('/api/settings'),
+  save: (data: { timezone?: string; kanban_url?: string; theme?: string }) =>
+    request<{ timezone: string; kanban_url: string; theme: string }>('/api/settings', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

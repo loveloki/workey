@@ -1,5 +1,6 @@
 import { createRootRoute, Outlet, Link, useNavigate } from '@tanstack/react-router'
 import { AuthProvider, useAuth } from '../lib/auth-context'
+import { ThemeProvider } from '../lib/theme-context'
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -7,15 +8,17 @@ export const Route = createRootRoute({
 
 function RootLayout() {
   return (
-    <AuthProvider>
-      <div className="min-h-screen flex flex-col">
-        <Header />
-        <main className="flex-1">
-          <Outlet />
-        </main>
-        <Footer />
-      </div>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <div className="min-h-screen flex flex-col">
+          <Header />
+          <main className="flex-1">
+            <Outlet />
+          </main>
+          <Footer />
+        </div>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }
 

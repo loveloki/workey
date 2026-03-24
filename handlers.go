@@ -627,7 +627,16 @@ func handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonOK(w, map[string]string{"timezone": timezone, "kanban_url": kanbanURL})
+	var theme string
+	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'theme'", userID).Scan(&theme)
+	if err == sql.ErrNoRows {
+		theme = "light"
+	} else if err != nil {
+		jsonError(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	jsonOK(w, map[string]string{"timezone": timezone, "kanban_url": kanbanURL, "theme": theme})
 }
 
 func handlePostSettings(w http.ResponseWriter, r *http.Request) {
@@ -636,6 +645,7 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Timezone  string `json:"timezone"`
 		KanbanURL string `json:"kanban_url"`
+		Theme     string `json:"theme"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "Invalid request body", http.StatusBadRequest)
@@ -664,6 +674,17 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.Theme != "" {
+		_, err := db.Exec(
+			"INSERT INTO user_settings (user_id, key, value) VALUES (?, 'theme', ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
+			userID, req.Theme,
+		)
+		if err != nil {
+			jsonError(w, "Failed to save settings", http.StatusInternalServerError)
+			return
+		}
+	}
+
 	// Read current values for response
 	var timezone string
 	err := db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'timezone'", userID).Scan(&timezone)
@@ -677,7 +698,13 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		kanbanURL = "https://www.fizzy.do/"
 	}
 
-	jsonOK(w, map[string]string{"timezone": timezone, "kanban_url": kanbanURL})
+	var theme string
+	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'theme'", userID).Scan(&theme)
+	if err != nil {
+		theme = "light"
+	}
+
+	jsonOK(w, map[string]string{"timezone": timezone, "kanban_url": kanbanURL, "theme": theme})
 }
 
 // --- Todo handlers ---
