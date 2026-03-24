@@ -314,7 +314,7 @@ function CompletedTodosSection() {
               <div className="flex-1 min-w-0">
                 <p
                   className="text-sm"
-                  style={{ color: 'var(--color-ink-muted)', textDecoration: 'line-through', fontFamily: 'Georgia, serif', wordBreak: 'break-word' }}
+                  style={{ color: 'var(--color-ink-muted)', fontFamily: 'Georgia, serif', wordBreak: 'break-word' }}
                 >
                   {todo.content || <span style={{ color: 'var(--color-ink-faint)' }}>(无内容)</span>}
                 </p>
