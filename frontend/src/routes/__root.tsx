@@ -23,9 +23,23 @@ function RootLayout() {
   )
 }
 
+const primaryLinks = [
+  { to: '/' as const, label: '今日', exact: true },
+  { to: '/todos' as const, label: '待办' },
+]
+
 const secondaryLinks = [
   { to: '/clock' as const, label: '打卡' },
   { to: '/history' as const, label: '历史' },
+  { to: '/trends' as const, label: '趋势' },
+  { to: '/settings' as const, label: '设置' },
+]
+
+const allLinks = [
+  { to: '/clock' as const, label: '打卡' },
+  { to: '/' as const, label: '今日', exact: true },
+  { to: '/history' as const, label: '历史' },
+  { to: '/todos' as const, label: '待办' },
   { to: '/trends' as const, label: '趋势' },
   { to: '/settings' as const, label: '设置' },
 ]
@@ -67,26 +81,39 @@ function Header() {
           Workey
         </Link>
 
-        {/* Middle: Nav links */}
+        {/* Middle: Nav links — desktop: all visible */}
         {user && (
-          <div className="flex items-center gap-4 sm:gap-6 whitespace-nowrap">
-            <Link
-              to="/"
-              className="font-mono text-sm no-underline transition-colors"
-              style={{ color: 'var(--color-ink-muted)' }}
-              activeOptions={{ exact: true }}
-              activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
-            >
-              今日
-            </Link>
-            <Link
-              to="/todos"
-              className="font-mono text-sm no-underline transition-colors"
-              style={{ color: 'var(--color-ink-muted)' }}
-              activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
-            >
-              待办
-            </Link>
+          <div className="hidden sm:flex items-center gap-6">
+            {allLinks.map(link => (
+              <Link
+                key={link.to}
+                to={link.to}
+                className="font-mono text-sm no-underline transition-colors"
+                style={{ color: 'var(--color-ink-muted)' }}
+                {...(link.exact ? { activeOptions: { exact: true } } : {})}
+                activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {/* Middle: Nav links — mobile: primary + dropdown */}
+        {user && (
+          <div className="flex sm:hidden items-center gap-4 whitespace-nowrap">
+            {primaryLinks.map(link => (
+              <Link
+                key={link.to}
+                to={link.to}
+                className="font-mono text-sm no-underline transition-colors"
+                style={{ color: 'var(--color-ink-muted)' }}
+                {...(link.exact ? { activeOptions: { exact: true } } : {})}
+                activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
+              >
+                {link.label}
+              </Link>
+            ))}
 
             {/* More menu */}
             <div className="relative" ref={menuRef}>
