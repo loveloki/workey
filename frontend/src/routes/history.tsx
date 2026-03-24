@@ -21,7 +21,7 @@ function CopyButton({ getText, className = '' }: { getText: () => Promise<string
   return (
     <button
       onClick={handleCopy}
-      className={`font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] ${className}`}
+      className={`font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] shrink-0 whitespace-nowrap ${className}`}
       style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
       title="复制为 Markdown"
     >
@@ -158,7 +158,7 @@ function HistoryPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex items-start justify-between gap-3">
         <div>
           <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">历史记录</p>
           <h1 className="text-3xl font-normal tracking-tight text-[var(--color-ink)]" style={{ fontFamily: 'Georgia, serif' }}>
@@ -168,7 +168,7 @@ function HistoryPage() {
         {sortedDates.length > 0 && (
           <button
             onClick={downloadAll}
-            className="mt-2 flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
+            className="mt-2 flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] shrink-0 whitespace-nowrap"
             style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -176,7 +176,7 @@ function HistoryPage() {
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-            下载 .md
+            <span className="hidden sm:inline">下载</span> .md
           </button>
         )}
       </div>
@@ -239,10 +239,13 @@ function HistoryPage() {
                 key={date}
                 className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-5"
               >
-                <div className="mb-2 flex items-center justify-between">
-                  <h3 className="font-mono text-sm font-semibold text-[var(--color-ink)]">
-                    {formatDateDisplay(date)}
-                  </h3>
+                <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center justify-between sm:justify-start">
+                    <h3 className="font-mono text-sm font-semibold text-[var(--color-ink)]">
+                      {formatDateDisplay(date)}
+                    </h3>
+                    <CopyButton getText={() => getDayMarkdown(date)} className="sm:hidden" />
+                  </div>
                   <div className="flex items-center gap-3">
                     {entry.attendance && (
                       <div className="flex items-center gap-3 font-mono text-xs text-[var(--color-ink-muted)]">
@@ -250,7 +253,7 @@ function HistoryPage() {
                         <span>下班 {formatTime(entry.attendance.clock_out)}</span>
                       </div>
                     )}
-                    <CopyButton getText={() => getDayMarkdown(date)} />
+                    <CopyButton getText={() => getDayMarkdown(date)} className="hidden sm:flex" />
                   </div>
                 </div>
                 {entry.log ? (
@@ -264,7 +267,7 @@ function HistoryPage() {
                 )}
                 {entry.todos.length > 0 && (
                   <div className="mt-3 border-t border-dashed border-[var(--color-border)] pt-3">
-                    <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">✅ 已完成待办</p>
+                    <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">§ 已完成待办 §</p>
                     <div className="space-y-1">
                       {entry.todos.map(todo => (
                         <div key={todo.id} className="flex items-start gap-2 px-1">
@@ -279,7 +282,7 @@ function HistoryPage() {
                           <div className="flex-1 min-w-0">
                             <span
                               className="text-sm"
-                              style={{ color: 'var(--color-ink-muted)', textDecoration: 'line-through', fontFamily: 'Georgia, serif' }}
+                              style={{ color: 'var(--color-ink-muted)', fontFamily: 'Georgia, serif' }}
                             >
                               {todo.content}
                             </span>
@@ -302,7 +305,7 @@ function HistoryPage() {
                 )}
                 {entry.lesson && entry.lesson.content && (
                   <div className="mt-3 border-t border-dashed border-[var(--color-border)] pt-3">
-                    <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">💡 经验教训</p>
+                    <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">§ 经验教训 §</p>
                     <div className="markdown-body text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>
                       <MarkdownContent content={entry.lesson.content} />
                     </div>
