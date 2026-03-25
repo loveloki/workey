@@ -2,6 +2,7 @@ import { createRootRoute, Outlet, Link, useNavigate, useRouterState } from '@tan
 import { useState, useRef, useEffect } from 'react'
 import { AuthProvider, useAuth } from '../lib/auth-context'
 import { ThemeProvider } from '../lib/theme-context'
+import { PWAReloadPrompt } from '../lib/pwa-reload-prompt'
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -17,6 +18,7 @@ function RootLayout() {
             <Outlet />
           </main>
           <Footer />
+          <PWAReloadPrompt />
         </div>
       </AuthProvider>
     </ThemeProvider>
