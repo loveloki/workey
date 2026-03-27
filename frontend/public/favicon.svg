@@ -1,1 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#4fb8b2"/><text x="16" y="22" text-anchor="middle" fill="white" font-size="18" font-family="sans-serif" font-weight="bold">W</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5ec4be"/>
+      <stop offset="100%" stop-color="#45a9a3"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#bg)"/>
+  <text x="16" y="23" text-anchor="middle" fill="rgba(0,0,0,0.12)" font-size="19" font-family="system-ui,-apple-system,sans-serif" font-weight="bold">W</text>
+  <text x="16" y="22.5" text-anchor="middle" fill="white" font-size="19" font-family="system-ui,-apple-system,sans-serif" font-weight="bold">W</text>
+</svg>

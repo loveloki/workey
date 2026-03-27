@@ -198,6 +198,11 @@ body,
   min-height: 100%;
 }
 
+/* Prevent pinch-zoom and double-tap-zoom on mobile (PWA) */
+html {
+  touch-action: manipulation;
+}
+
 body {
   margin: 0;
   color: var(--color-ink);
