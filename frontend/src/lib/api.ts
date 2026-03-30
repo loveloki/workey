@@ -100,6 +100,8 @@ export async function uploadImage(file: File): Promise<{ url: string; filename: 
 export const todos = {
   list: (all = false) =>
     request<{ todos: Todo[] }>(`/api/todos${all ? '?all=1' : ''}`),
+  createdToday: () =>
+    request<{ todos: Todo[] }>('/api/todos/created-today'),
   completedToday: () =>
     request<{ todos: Todo[] }>('/api/todos/completed-today'),
   completedRange: (start: string, end: string) =>

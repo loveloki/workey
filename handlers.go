@@ -724,6 +724,36 @@ func handleTodos(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func handleCreatedTodayTodos(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+	todayStr := today()
+
+	rows, err := db.Query(
+		"SELECT id, user_id, content, url, done, created_at, updated_at FROM todos WHERE user_id = ? AND date(created_at) = ? ORDER BY created_at DESC",
+		userID, todayStr,
+	)
+	if err != nil {
+		jsonError(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	todos := []Todo{}
+	for rows.Next() {
+		var t Todo
+		var done int
+		rows.Scan(&t.ID, &t.UserID, &t.Content, &t.URL, &done, &t.CreatedAt, &t.UpdatedAt)
+		t.Done = done != 0
+		todos = append(todos, t)
+	}
+	jsonOK(w, map[string]interface{}{"todos": todos})
+}
+
 func handleCompletedTodayTodos(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
