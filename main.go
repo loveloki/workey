@@ -46,6 +46,7 @@ func main() {
 	db.Exec("PRAGMA foreign_keys=ON")
 
 	initDB()
+	initPasskeyDB()
 	jwtSecret = getOrCreateJWTSecret()
 
 	mux := http.NewServeMux()
@@ -85,6 +86,9 @@ func main() {
 	mux.HandleFunc("/api/todos/completed-today", corsMiddleware(authMiddleware(handleCompletedTodayTodos)))
 	mux.HandleFunc("/api/todos/completed-range", corsMiddleware(authMiddleware(handleCompletedRangeTodos)))
 	mux.HandleFunc("/api/todos", corsMiddleware(authMiddleware(handleTodos)))
+
+	// Passkey routes
+	passkeyRoutes(mux)
 
 	// Upload route
 	mux.HandleFunc("/api/upload", corsMiddleware(authMiddleware(handleUpload)))

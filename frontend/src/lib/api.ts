@@ -130,6 +130,103 @@ export interface Todo {
   updated_at: string
 }
 
+// Passkeys
+export const passkeys = {
+  list: () =>
+    request<{ passkeys: Passkey[] }>('/api/passkeys'),
+  delete: (id: number) =>
+    request<{ message: string }>(`/api/passkeys?id=${id}`, { method: 'DELETE' }),
+  registerBegin: () =>
+    request<PasskeyCreationOptions>('/api/passkeys/register/begin', { method: 'POST' }),
+  registerFinish: (name: string, credential: PublicKeyCredential) =>
+    request<{ passkey: Passkey }>('/api/passkeys/register/finish', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        id: bufferToBase64url((credential.rawId)),
+        rawId: bufferToBase64url(credential.rawId),
+        type: credential.type,
+        response: {
+          attestationObject: bufferToBase64url(
+            (credential.response as AuthenticatorAttestationResponse).attestationObject
+          ),
+          clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
+        },
+      }),
+    }),
+  authBegin: (username: string) =>
+    request<PasskeyRequestOptions>('/api/passkeys/auth/begin', {
+      method: 'POST',
+      body: JSON.stringify({ username }),
+    }),
+  authFinish: (username: string, credential: PublicKeyCredential) =>
+    request<{ token: string; user: { id: number; username: string } }>('/api/passkeys/auth/finish', {
+      method: 'POST',
+      body: JSON.stringify({
+        username,
+        id: bufferToBase64url(credential.rawId),
+        rawId: bufferToBase64url(credential.rawId),
+        type: credential.type,
+        response: {
+          authenticatorData: bufferToBase64url(
+            (credential.response as AuthenticatorAssertionResponse).authenticatorData
+          ),
+          clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
+          signature: bufferToBase64url(
+            (credential.response as AuthenticatorAssertionResponse).signature
+          ),
+        },
+      }),
+    }),
+}
+
+export interface Passkey {
+  id: number
+  name: string
+  created_at: string
+  last_used_at: string | null
+}
+
+export interface PasskeyCreationOptions {
+  challenge: string
+  rp: { name: string; id: string }
+  user: { id: string; name: string; displayName: string }
+  pubKeyCredParams: { type: string; alg: number }[]
+  authenticatorSelection: {
+    authenticatorAttachment?: string
+    residentKey?: string
+    userVerification?: string
+  }
+  timeout: number
+  attestation: string
+  excludeCredentials: { type: string; id: string }[]
+}
+
+export interface PasskeyRequestOptions {
+  challenge: string
+  rpId: string
+  allowCredentials: { type: string; id: string }[]
+  timeout: number
+  userVerification: string
+}
+
+// Base64url helpers
+function bufferToBase64url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let str = ''
+  for (const b of bytes) str += String.fromCharCode(b)
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+export function base64urlToBuffer(base64url: string): ArrayBuffer {
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
+  const pad = base64.length % 4 === 0 ? '' : '='.repeat(4 - (base64.length % 4))
+  const binary = atob(base64 + pad)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes.buffer
+}
+
 // Settings
 export const settings = {
   get: () => request<{ timezone: string; kanban_url: string; theme: string }>('/api/settings'),
