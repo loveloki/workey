@@ -362,7 +362,8 @@ function PasskeySection() {
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '从未使用'
-    const d = new Date(dateStr + 'Z')
+    const d = new Date(dateStr.replace(' ', 'T') + 'Z')
+    if (isNaN(d.getTime())) return dateStr
     return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })
   }
 
