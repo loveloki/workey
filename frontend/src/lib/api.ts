@@ -181,30 +181,33 @@ export const passkeys = {
         },
       }),
     }),
-  authBegin: (username: string) =>
+  authBegin: (username?: string) =>
     request<PasskeyRequestOptions>('/api/passkeys/auth/begin', {
       method: 'POST',
-      body: JSON.stringify({ username }),
+      body: JSON.stringify(username ? { username } : {}),
     }),
-  authFinish: (username: string, credential: PublicKeyCredential) =>
-    request<{ token: string; user: { id: number; username: string } }>('/api/passkeys/auth/finish', {
+  authFinish: (challengeId: string, credential: PublicKeyCredential, username?: string) => {
+    const response = credential.response as AuthenticatorAssertionResponse
+    const body: Record<string, any> = {
+      challengeId,
+      id: bufferToBase64url(credential.rawId),
+      rawId: bufferToBase64url(credential.rawId),
+      type: credential.type,
+      response: {
+        authenticatorData: bufferToBase64url(response.authenticatorData),
+        clientDataJSON: bufferToBase64url(response.clientDataJSON),
+        signature: bufferToBase64url(response.signature),
+        userHandle: response.userHandle ? bufferToBase64url(response.userHandle) : undefined,
+      },
+    }
+    if (username) {
+      body.username = username
+    }
+    return request<{ token: string; user: { id: number; username: string } }>('/api/passkeys/auth/finish', {
       method: 'POST',
-      body: JSON.stringify({
-        username,
-        id: bufferToBase64url(credential.rawId),
-        rawId: bufferToBase64url(credential.rawId),
-        type: credential.type,
-        response: {
-          authenticatorData: bufferToBase64url(
-            (credential.response as AuthenticatorAssertionResponse).authenticatorData
-          ),
-          clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
-          signature: bufferToBase64url(
-            (credential.response as AuthenticatorAssertionResponse).signature
-          ),
-        },
-      }),
-    }),
+      body: JSON.stringify(body),
+    })
+  },
 }
 
 export interface Passkey {
@@ -231,6 +234,7 @@ export interface PasskeyCreationOptions {
 
 export interface PasskeyRequestOptions {
   challenge: string
+  challengeId: string
   rpId: string
   allowCredentials: { type: string; id: string }[]
   timeout: number
