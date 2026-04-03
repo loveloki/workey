@@ -1493,6 +1493,41 @@ func handleDataDelete(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// --- History date range ---
+
+func handleHistoryDateRange(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+
+	var earliest, latest sql.NullString
+	err := db.QueryRow(`
+		SELECT MIN(d), MAX(d) FROM (
+			SELECT date AS d FROM attendance WHERE user_id = ?
+			UNION ALL
+			SELECT date AS d FROM work_logs WHERE user_id = ?
+			UNION ALL
+			SELECT date AS d FROM lessons WHERE user_id = ?
+			UNION ALL
+			SELECT date(updated_at) AS d FROM todos WHERE user_id = ? AND done = 1
+		)
+	`, userID, userID, userID, userID).Scan(&earliest, &latest)
+	if err != nil {
+		jsonError(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	if !earliest.Valid {
+		jsonOK(w, map[string]interface{}{"earliest": nil, "latest": nil})
+		return
+	}
+
+	jsonOK(w, map[string]interface{}{"earliest": earliest.String, "latest": latest.String})
+}
+
 // --- Image Upload ---
 
 func handleUpload(w http.ResponseWriter, r *http.Request) {

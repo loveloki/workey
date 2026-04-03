@@ -254,6 +254,12 @@ export function base64urlToBuffer(base64url: string): ArrayBuffer {
   return bytes.buffer
 }
 
+// History
+export const history = {
+  dateRange: () =>
+    request<{ earliest: string | null; latest: string | null }>('/api/history/date-range'),
+}
+
 // Settings
 export const settings = {
   get: () => request<{ timezone: string; kanban_url: string; theme: string }>('/api/settings'),

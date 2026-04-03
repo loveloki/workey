@@ -67,3 +67,34 @@ export function formatDateFull(dateStr: string): string {
   const w = weekdays[date.getDay()]
   return `${y}年${m}月${d}日 ${w}`
 }
+
+// --- Iteration utilities ---
+// Iteration 1 starts on 2019-09-02 (Monday). Each iteration is 2 weeks (14 days).
+// An iteration spans from Monday of week 1 to Friday of week 2 (12 calendar days).
+const ITER_EPOCH = new Date('2019-09-02T00:00:00') // Monday
+
+export function getIterationNumber(date: Date): number {
+  const diffMs = date.getTime() - ITER_EPOCH.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  return Math.floor(diffDays / 14) + 1
+}
+
+export function getIterationRange(iterNum: number): { start: string; end: string; label: string } {
+  const startDate = new Date(ITER_EPOCH)
+  startDate.setDate(startDate.getDate() + (iterNum - 1) * 14)
+  const endDate = new Date(startDate)
+  endDate.setDate(endDate.getDate() + 11) // Monday + 11 = Friday of week 2
+  const sm = startDate.getMonth() + 1
+  const sd = startDate.getDate()
+  const em = endDate.getMonth() + 1
+  const ed = endDate.getDate()
+  return {
+    start: formatDate(startDate),
+    end: formatDate(endDate),
+    label: `Iter${iterNum} (${sm}.${sd}–${em}.${ed})`,
+  }
+}
+
+export function getCurrentIteration(): number {
+  return getIterationNumber(new Date())
+}

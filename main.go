@@ -90,6 +90,9 @@ func main() {
 	// Checklist routes
 	mux.HandleFunc("/api/checklists", corsMiddleware(authMiddleware(handleChecklists)))
 
+	// History date range
+	mux.HandleFunc("/api/history/date-range", corsMiddleware(authMiddleware(handleHistoryDateRange)))
+
 	// Passkey routes
 	passkeyRoutes(mux)
 

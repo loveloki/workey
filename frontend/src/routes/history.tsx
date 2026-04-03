@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
-import { useState, useEffect } from 'react'
-import { workLogs as workLogsApi, attendance as attendanceApi, lessons as lessonsApi, todos as todosApi, type Todo } from '../lib/api'
-import { getDateRange, formatDateDisplay, formatTime, type RangePreset } from '../lib/date-utils'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { workLogs as workLogsApi, attendance as attendanceApi, lessons as lessonsApi, todos as todosApi, history as historyApi, type Todo } from '../lib/api'
+import { getDateRange, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration } from '../lib/date-utils'
 import { MarkdownContent } from '../lib/markdown-editor'
 import { formatDayMarkdown } from '../lib/report-utils'
 
@@ -41,7 +41,7 @@ function CopyButton({ getText, className = '' }: { getText: () => Promise<string
 function HistoryPage() {
   const { user, loading } = useAuth()
   const navigate = useNavigate()
-  const [preset, setPreset] = useState<RangePreset | 'custom'>('week')
+  const [preset, setPreset] = useState<RangePreset | 'custom' | 'iteration'>('week')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
   const [logs, setLogs] = useState<any[]>([])
@@ -49,16 +49,39 @@ function HistoryPage() {
   const [lessonsList, setLessonsList] = useState<any[]>([])
   const [completedTodos, setCompletedTodos] = useState<Todo[]>([])
   const [fetching, setFetching] = useState(false)
+  // Iteration state
+  const [selectedIter, setSelectedIter] = useState<number>(getCurrentIteration())
+  const [minIter, setMinIter] = useState<number | null>(null)
+  const [maxIter, setMaxIter] = useState<number>(getCurrentIteration())
+  const iterScrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: '/login' })
   }, [loading, user, navigate])
 
+  // Load history date range to determine available iterations
   useEffect(() => {
-    if (!user || preset === 'custom') return
+    if (!user) return
+    historyApi.dateRange().then(res => {
+      if (res.earliest) {
+        const earliestDate = new Date(res.earliest + 'T00:00:00')
+        setMinIter(getIterationNumber(earliestDate))
+      }
+    }).catch(console.error)
+  }, [user])
+
+  useEffect(() => {
+    if (!user || preset === 'custom' || preset === 'iteration') return
     const range = getDateRange(preset as RangePreset)
     fetchData(range.start, range.end)
   }, [preset, user])
+
+  // Fetch data when iteration changes
+  useEffect(() => {
+    if (!user || preset !== 'iteration') return
+    const range = getIterationRange(selectedIter)
+    fetchData(range.start, range.end)
+  }, [selectedIter, preset, user])
 
   const fetchData = async (start: string, end: string) => {
     setFetching(true)
@@ -85,9 +108,10 @@ function HistoryPage() {
     }
   }
 
-  const presets: { key: RangePreset | 'custom'; label: string }[] = [
+  const presets: { key: RangePreset | 'custom' | 'iteration'; label: string }[] = [
     { key: 'week', label: '本周' },
     { key: 'month', label: '本月' },
+    { key: 'iteration', label: 'Iteration' },
     { key: 'quarter', label: '本季度' },
     { key: 'half-year', label: '半年' },
     { key: 'year', label: '全年' },
@@ -197,6 +221,35 @@ function HistoryPage() {
           </button>
         ))}
       </div>
+
+      {/* Iteration selector */}
+      {preset === 'iteration' && minIter !== null && (
+        <div className="mb-4">
+          <div
+            ref={iterScrollRef}
+            className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin"
+            style={{ scrollbarWidth: 'thin' }}
+          >
+            {Array.from({ length: maxIter - minIter + 1 }, (_, i) => maxIter - i)
+              .map(iterNum => {
+                const range = getIterationRange(iterNum)
+                return (
+                  <button
+                    key={iterNum}
+                    onClick={() => setSelectedIter(iterNum)}
+                    className={`rounded-md border px-3 py-1.5 font-mono text-xs whitespace-nowrap shrink-0 transition-colors ${
+                      selectedIter === iterNum
+                        ? 'border-[var(--color-border-strong)] bg-[var(--color-surface-hover)] font-medium text-[var(--color-ink)]'
+                        : 'border-[var(--color-border)] bg-[var(--color-surface-strong)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]'
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                )
+              })}
+          </div>
+        </div>
+      )}
 
       {/* Custom date range */}
       {preset === 'custom' && (
