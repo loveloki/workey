@@ -431,9 +431,15 @@ function ChecklistUse({
   })()
 
   const [checked, setChecked] = useState<boolean[]>(() => parsedItems.map(() => false))
+  const [notes, setNotes] = useState<string[]>(() => parsedItems.map(() => ''))
+  const [editingNote, setEditingNote] = useState<number | null>(null)
 
   const toggle = (idx: number) => {
     setChecked(prev => prev.map((v, i) => i === idx ? !v : v))
+  }
+
+  const updateNote = (idx: number, val: string) => {
+    setNotes(prev => prev.map((v, i) => i === idx ? val : v))
   }
 
   const checkedCount = checked.filter(Boolean).length
@@ -475,7 +481,7 @@ function ChecklistUse({
           </div>
           {checkedCount > 0 && !allDone && (
             <button
-              onClick={() => setChecked(parsedItems.map(() => false))}
+              onClick={() => { setChecked(parsedItems.map(() => false)); setNotes(parsedItems.map(() => '')); setEditingNote(null) }}
               className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
               style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
             >
@@ -501,38 +507,76 @@ function ChecklistUse({
         {/* Items */}
         <div className="space-y-1">
           {parsedItems.map((item, idx) => (
-            <label
-              key={idx}
-              className="flex items-start gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-colors hover:bg-[var(--color-surface-hover)]"
-              style={{
-                opacity: checked[idx] ? 0.6 : 1,
-              }}
-            >
-              <button
-                onClick={() => toggle(idx)}
-                className="mt-0.5 w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors"
-                style={{
-                  borderColor: checked[idx] ? '#22c55e' : 'var(--color-border-strong, var(--color-border))',
-                  background: checked[idx] ? '#22c55e' : 'transparent',
-                }}
-              >
-                {checked[idx] && (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                )}
-              </button>
-              <span
-                className="font-mono text-sm"
-                style={{
-                  color: 'var(--color-ink)',
-                  textDecoration: checked[idx] ? 'line-through' : 'none',
-                  wordBreak: 'break-word',
-                }}
-              >
-                {item}
-              </span>
-            </label>
+            <div key={idx} className="rounded-md transition-colors hover:bg-[var(--color-surface-hover)]" style={{ opacity: checked[idx] ? 0.6 : 1 }}>
+              <div className="flex items-start gap-3 px-3 py-2.5 cursor-pointer">
+                <button
+                  onClick={() => toggle(idx)}
+                  className="mt-0.5 w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors"
+                  style={{
+                    borderColor: checked[idx] ? '#22c55e' : 'var(--color-border-strong, var(--color-border))',
+                    background: checked[idx] ? '#22c55e' : 'transparent',
+                  }}
+                >
+                  {checked[idx] && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </button>
+                <span
+                  className="font-mono text-sm flex-1"
+                  style={{
+                    color: 'var(--color-ink)',
+                    textDecoration: checked[idx] ? 'line-through' : 'none',
+                    wordBreak: 'break-word',
+                  }}
+                  onClick={() => toggle(idx)}
+                >
+                  {item}
+                </span>
+                <button
+                  onClick={() => setEditingNote(editingNote === idx ? null : idx)}
+                  className="shrink-0 font-mono text-xs px-1.5 py-0.5 rounded transition-colors hover:bg-[var(--color-surface-hover)]"
+                  style={{ color: notes[idx] ? 'var(--color-ink)' : 'var(--color-ink-faint)' }}
+                  title="添加备注"
+                >
+                  {notes[idx] ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9" /><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9" /><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              {/* Note area */}
+              {editingNote === idx && (
+                <div className="pl-11 pr-3 pb-2.5">
+                  <textarea
+                    value={notes[idx]}
+                    onChange={e => updateNote(idx, e.target.value)}
+                    placeholder="输入备注..."
+                    rows={2}
+                    autoFocus
+                    className="font-mono text-xs w-full px-2.5 py-1.5 bg-[var(--color-surface-strong)] resize-none"
+                    style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none', color: 'var(--color-ink-secondary)' }}
+                    onKeyDown={e => { if (e.key === 'Escape') setEditingNote(null) }}
+                  />
+                </div>
+              )}
+              {editingNote !== idx && notes[idx] && (
+                <div
+                  className="pl-11 pr-3 pb-2.5 cursor-pointer"
+                  onClick={() => setEditingNote(idx)}
+                >
+                  <p className="font-mono text-xs whitespace-pre-wrap" style={{ color: 'var(--color-ink-muted)', wordBreak: 'break-word' }}>
+                    📝 {notes[idx]}
+                  </p>
+                </div>
+              )}
+            </div>
           ))}
         </div>
 
