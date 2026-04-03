@@ -87,6 +87,9 @@ func main() {
 	mux.HandleFunc("/api/todos/completed-range", corsMiddleware(authMiddleware(handleCompletedRangeTodos)))
 	mux.HandleFunc("/api/todos", corsMiddleware(authMiddleware(handleTodos)))
 
+	// Checklist routes
+	mux.HandleFunc("/api/checklists", corsMiddleware(authMiddleware(handleChecklists)))
+
 	// Passkey routes
 	passkeyRoutes(mux)
 
@@ -151,6 +154,14 @@ func initDB() {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(user_id, date)
+		)`,
+		`CREATE TABLE IF NOT EXISTS checklists (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL REFERENCES users(id),
+			title TEXT NOT NULL DEFAULT '',
+			items TEXT NOT NULL DEFAULT '[]',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS todos (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -32,6 +32,7 @@ const primaryLinks = [
 
 const secondaryLinks = [
   { to: '/clock' as const, label: '打卡' },
+  { to: '/checklists' as const, label: '清单' },
   { to: '/history' as const, label: '历史' },
   { to: '/trends' as const, label: '趋势' },
   { to: '/settings' as const, label: '设置' },
@@ -42,6 +43,7 @@ const allLinks = [
   { to: '/' as const, label: '今日', exact: true },
   { to: '/history' as const, label: '历史' },
   { to: '/todos' as const, label: '待办' },
+  { to: '/checklists' as const, label: '清单' },
   { to: '/trends' as const, label: '趋势' },
   { to: '/settings' as const, label: '设置' },
 ]

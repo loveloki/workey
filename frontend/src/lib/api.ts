@@ -130,6 +130,33 @@ export interface Todo {
   updated_at: string
 }
 
+// Checklists
+export interface Checklist {
+  id: number
+  user_id: number
+  title: string
+  items: string // JSON array of strings
+  created_at: string
+  updated_at: string
+}
+
+export const checklists = {
+  list: () =>
+    request<{ checklists: Checklist[] }>('/api/checklists'),
+  create: (title: string, items: string[]) =>
+    request<{ checklist: Checklist }>('/api/checklists', {
+      method: 'POST',
+      body: JSON.stringify({ title, items }),
+    }),
+  update: (id: number, data: { title?: string; items?: string[] }) =>
+    request<{ checklist: Checklist }>(`/api/checklists?id=${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: number) =>
+    request<{ message: string }>(`/api/checklists?id=${id}`, { method: 'DELETE' }),
+}
+
 // Passkeys
 export const passkeys = {
   list: () =>
