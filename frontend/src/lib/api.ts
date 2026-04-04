@@ -181,31 +181,26 @@ export const passkeys = {
         },
       }),
     }),
-  authBegin: (username?: string) =>
+  authBegin: () =>
     request<PasskeyRequestOptions>('/api/passkeys/auth/begin', {
       method: 'POST',
-      body: JSON.stringify(username ? { username } : {}),
     }),
-  authFinish: (challengeId: string, credential: PublicKeyCredential, username?: string) => {
+  authFinish: (challengeId: string, credential: PublicKeyCredential) => {
     const response = credential.response as AuthenticatorAssertionResponse
-    const body: Record<string, any> = {
-      challengeId,
-      id: bufferToBase64url(credential.rawId),
-      rawId: bufferToBase64url(credential.rawId),
-      type: credential.type,
-      response: {
-        authenticatorData: bufferToBase64url(response.authenticatorData),
-        clientDataJSON: bufferToBase64url(response.clientDataJSON),
-        signature: bufferToBase64url(response.signature),
-        userHandle: response.userHandle ? bufferToBase64url(response.userHandle) : undefined,
-      },
-    }
-    if (username) {
-      body.username = username
-    }
     return request<{ token: string; user: { id: number; username: string } }>('/api/passkeys/auth/finish', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        challengeId,
+        id: bufferToBase64url(credential.rawId),
+        rawId: bufferToBase64url(credential.rawId),
+        type: credential.type,
+        response: {
+          authenticatorData: bufferToBase64url(response.authenticatorData),
+          clientDataJSON: bufferToBase64url(response.clientDataJSON),
+          signature: bufferToBase64url(response.signature),
+          userHandle: response.userHandle ? bufferToBase64url(response.userHandle) : undefined,
+        },
+      }),
     })
   },
 }
@@ -236,7 +231,6 @@ export interface PasskeyRequestOptions {
   challenge: string
   challengeId: string
   rpId: string
-  allowCredentials: { type: string; id: string }[]
   timeout: number
   userVerification: string
 }

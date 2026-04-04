@@ -42,26 +42,15 @@ function LoginPage() {
     setError('')
     setPasskeyLoading(true)
     try {
-      const trimmedUsername = username.trim() || undefined
-      const options = await passkeys.authBegin(trimmedUsername)
-
-      const publicKeyOptions: PublicKeyCredentialRequestOptions = {
-        challenge: base64urlToBuffer(options.challenge),
-        rpId: options.rpId,
-        timeout: options.timeout,
-        userVerification: (options.userVerification || 'preferred') as UserVerificationRequirement,
-      }
-
-      // Only set allowCredentials if non-empty (empty = discoverable credential flow)
-      if (options.allowCredentials && options.allowCredentials.length > 0) {
-        publicKeyOptions.allowCredentials = options.allowCredentials.map((c) => ({
-          type: 'public-key' as const,
-          id: base64urlToBuffer(c.id),
-        }))
-      }
+      const options = await passkeys.authBegin()
 
       const credential = (await navigator.credentials.get({
-        publicKey: publicKeyOptions,
+        publicKey: {
+          challenge: base64urlToBuffer(options.challenge),
+          rpId: options.rpId,
+          timeout: options.timeout,
+          userVerification: (options.userVerification || 'preferred') as UserVerificationRequirement,
+        },
       })) as PublicKeyCredential | null
 
       if (!credential) {
@@ -70,7 +59,7 @@ function LoginPage() {
         return
       }
 
-      const result = await passkeys.authFinish(options.challengeId, credential, trimmedUsername)
+      const result = await passkeys.authFinish(options.challengeId, credential)
       loginWithToken(result.token, result.user)
       navigate({ to: '/' })
     } catch (e: any) {

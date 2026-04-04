@@ -459,13 +459,6 @@ func handlePasskeyAuthBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		Username string `json:"username"`
-	}
-	// Body may be empty for discoverable credential flow
-	json.NewDecoder(r.Body).Decode(&req)
-	req.Username = strings.TrimSpace(req.Username)
-
 	challenge, err := generateChallenge()
 	if err != nil {
 		jsonError(w, "Failed to generate challenge", http.StatusInternalServerError)
@@ -482,55 +475,13 @@ func handlePasskeyAuthBegin(w http.ResponseWriter, r *http.Request) {
 
 	rpID := getRPID(r)
 
-	response := map[string]interface{}{
+	jsonOK(w, map[string]interface{}{
 		"challenge":        base64URLEncode(challenge),
 		"challengeId":      challengeID,
 		"rpId":             rpID,
 		"timeout":          60000,
 		"userVerification": "preferred",
-	}
-
-	if req.Username != "" {
-		// Username provided: look up user's passkeys for allowCredentials
-		var userID int64
-		err := db.QueryRow("SELECT id FROM users WHERE username = ?", req.Username).Scan(&userID)
-		if err == sql.ErrNoRows {
-			jsonError(w, "User not found", http.StatusNotFound)
-			return
-		} else if err != nil {
-			jsonError(w, "Internal error", http.StatusInternalServerError)
-			return
-		}
-
-		rows, err := db.Query("SELECT credential_id FROM passkeys WHERE user_id = ?", userID)
-		if err != nil {
-			jsonError(w, "Internal error", http.StatusInternalServerError)
-			return
-		}
-		defer rows.Close()
-
-		allowCredentials := []map[string]interface{}{}
-		for rows.Next() {
-			var credID []byte
-			rows.Scan(&credID)
-			allowCredentials = append(allowCredentials, map[string]interface{}{
-				"type": "public-key",
-				"id":   base64URLEncode(credID),
-			})
-		}
-
-		if len(allowCredentials) == 0 {
-			jsonError(w, "No passkeys registered for this user", http.StatusNotFound)
-			return
-		}
-
-		response["allowCredentials"] = allowCredentials
-	} else {
-		// Discoverable credential flow: empty allowCredentials
-		response["allowCredentials"] = []map[string]interface{}{}
-	}
-
-	jsonOK(w, response)
+	})
 }
 
 // --- Auth Finish ---
@@ -542,9 +493,7 @@ func handlePasskeyAuthFinish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Username    string `json:"username"`
 		ChallengeID string `json:"challengeId"`
-		UserHandle  string `json:"userHandle"`
 		ID          string `json:"id"`
 		RawID       string `json:"rawId"`
 		Type        string `json:"type"`
@@ -565,7 +514,6 @@ func handlePasskeyAuthFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.Username = strings.TrimSpace(req.Username)
 	req.ChallengeID = strings.TrimSpace(req.ChallengeID)
 
 	if req.ChallengeID == "" {
@@ -627,69 +575,35 @@ func handlePasskeyAuthFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve userHandle: prefer response.userHandle (set by authenticator for discoverable credentials),
-	// fall back to top-level userHandle field
-	userHandleB64 := req.Response.UserHandle
-	if userHandleB64 == "" {
-		userHandleB64 = req.UserHandle
-	}
-
+	// Look up passkey by credential_id
 	var userID int64
 	var passkeyID int64
 	var pubKeyStored []byte
 	var storedSignCount int64
 
-	if req.Username != "" {
-		// Username-based flow: look up user by username, then passkey by user_id + credential_id
-		err = db.QueryRow("SELECT id FROM users WHERE username = ?", req.Username).Scan(&userID)
-		if err != nil {
-			jsonError(w, "User not found", http.StatusNotFound)
-			return
-		}
+	err = db.QueryRow(
+		"SELECT id, user_id, public_key, sign_count FROM passkeys WHERE credential_id = ?",
+		credentialID,
+	).Scan(&passkeyID, &userID, &pubKeyStored, &storedSignCount)
+	if err == sql.ErrNoRows {
+		jsonError(w, "Passkey not found", http.StatusUnauthorized)
+		return
+	} else if err != nil {
+		jsonError(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
 
-		err = db.QueryRow(
-			"SELECT id, public_key, sign_count FROM passkeys WHERE user_id = ? AND credential_id = ?",
-			userID, credentialID,
-		).Scan(&passkeyID, &pubKeyStored, &storedSignCount)
-		if err == sql.ErrNoRows {
-			jsonError(w, "Passkey not found", http.StatusUnauthorized)
-			return
-		} else if err != nil {
-			jsonError(w, "Internal error", http.StatusInternalServerError)
+	// Verify userHandle if provided by authenticator (security check)
+	if req.Response.UserHandle != "" {
+		userHandleBytes, decErr := base64URLDecode(req.Response.UserHandle)
+		if decErr != nil {
+			jsonError(w, "Invalid userHandle encoding", http.StatusBadRequest)
 			return
 		}
-	} else {
-		// Discoverable credential flow: look up passkey by credential_id alone
-		var passkeyUserID int64
-		err = db.QueryRow(
-			"SELECT id, user_id, public_key, sign_count FROM passkeys WHERE credential_id = ?",
-			credentialID,
-		).Scan(&passkeyID, &passkeyUserID, &pubKeyStored, &storedSignCount)
-		if err == sql.ErrNoRows {
-			jsonError(w, "Passkey not found", http.StatusUnauthorized)
-			return
-		} else if err != nil {
-			jsonError(w, "Internal error", http.StatusInternalServerError)
+		if string(userHandleBytes) != fmt.Sprintf("%d", userID) {
+			jsonError(w, "User handle mismatch", http.StatusUnauthorized)
 			return
 		}
-
-		// Verify userHandle matches if provided (security check)
-		if userHandleB64 != "" {
-			userHandleBytes, err := base64URLDecode(userHandleB64)
-			if err != nil {
-				jsonError(w, "Invalid userHandle encoding", http.StatusBadRequest)
-				return
-			}
-			// userHandle was set to the string of the user ID during registration
-			userHandleStr := string(userHandleBytes)
-			expectedUserHandle := fmt.Sprintf("%d", passkeyUserID)
-			if userHandleStr != expectedUserHandle {
-				jsonError(w, "User handle mismatch", http.StatusUnauthorized)
-				return
-			}
-		}
-
-		userID = passkeyUserID
 	}
 
 	// Decode authenticator data
