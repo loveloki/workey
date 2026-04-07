@@ -187,6 +187,8 @@ function StatCard({ label, value }: { label: string; value: string }) {
 }
 
 function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: boolean }) {
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+
   // Compute chart data from props
   const chartData = useMemo(() => {
     const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date))
@@ -201,6 +203,16 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
   }, [data])
 
   const { sorted, clockIns, clockOuts, allMinutes } = chartData
+
+  // Clear selection when data changes and selected date is no longer in range
+  useEffect(() => {
+    if (selectedDate && !sorted.find(d => d.date === selectedDate)) {
+      setSelectedDate(null)
+    }
+  }, [sorted, selectedDate])
+
+  // Find the selected index
+  const selectedIdx = selectedDate !== null ? sorted.findIndex(d => d.date === selectedDate) : -1
 
   if (loading && data.length === 0) {
     return <p className="font-mono text-sm" style={{ color: 'var(--color-ink-muted)' }}>加载中...</p>
@@ -241,17 +253,47 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
   const maxXLabels = 15
   const step = Math.max(1, Math.ceil(sorted.length / maxXLabels))
 
+  // Compute date range for the date picker
+  const dateMin = sorted.length > 0 ? sorted[0].date : ''
+  const dateMax = sorted.length > 0 ? sorted[sorted.length - 1].date : ''
+
   return (
     <div>
-      <div className="mb-3 flex items-center gap-4 font-mono text-xs">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-4 rounded-sm" style={{ background: 'var(--color-ink)' }} />
-          上班时间
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-4 rounded-sm bg-[var(--color-ink-muted)]" />
-          下班时间
-        </span>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-4 font-mono text-xs">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2 w-4 rounded-sm" style={{ background: 'var(--color-ink)' }} />
+            上班时间
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2 w-4 rounded-sm bg-[var(--color-ink-muted)]" />
+            下班时间
+          </span>
+        </div>
+        <div className="flex items-center gap-2 font-mono text-xs">
+          <label style={{ color: 'var(--color-ink-secondary)' }}>标记日期</label>
+          <input
+            type="date"
+            value={selectedDate || ''}
+            min={dateMin}
+            max={dateMax}
+            onChange={e => setSelectedDate(e.target.value || null)}
+            className="rounded border px-2 py-1 font-mono text-xs focus:outline-none"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-ink)' }}
+            onFocus={e => e.currentTarget.style.borderColor = 'var(--color-border-focus)'}
+            onBlur={e => e.currentTarget.style.borderColor = 'var(--color-border)'}
+          />
+          {selectedDate && (
+            <button
+              onClick={() => setSelectedDate(null)}
+              className="rounded px-1.5 py-0.5 text-xs"
+              style={{ color: 'var(--color-ink-muted)' }}
+              title="清除选择"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: '350px', opacity: loading ? 0.5 : 1, transition: 'opacity 0.2s' }}>
         {/* Grid lines */}
@@ -279,6 +321,15 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
           )
         })}
 
+        {/* Selected date vertical line */}
+        {selectedIdx >= 0 && (
+          <line
+            x1={xScale(selectedIdx)} y1={PAD.top}
+            x2={xScale(selectedIdx)} y2={PAD.top + plotH}
+            stroke="var(--color-accent, #e67e22)" strokeWidth="1.5" strokeDasharray="6 3" opacity={0.7}
+          />
+        )}
+
         {/* Clock-in line */}
         <path d={makePath(clockIns)} fill="none" stroke="var(--color-ink)" strokeWidth="2.5"
           strokeLinecap="round" strokeLinejoin="round" />
@@ -297,14 +348,76 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
             fill="var(--color-ink-muted)" stroke="var(--color-surface-strong)" strokeWidth="1.5" />
         ) : null)}
 
-        {/* Hover targets with tooltips */}
+        {/* Selected date annotations */}
+        {selectedIdx >= 0 && (() => {
+          const inMin = clockIns[selectedIdx]?.minutes
+          const outMin = clockOuts[selectedIdx]?.minutes
+          const cx = xScale(selectedIdx)
+          // Determine label side: if point is in right half, put labels on the left
+          const isRightHalf = cx > PAD.left + plotW / 2
+          const labelAnchor = isRightHalf ? 'end' as const : 'start' as const
+          const labelDx = isRightHalf ? -12 : 12
+
+          return (
+            <g>
+              {/* Highlighted dots — larger, with accent ring */}
+              {inMin !== null && (
+                <>
+                  <circle cx={cx} cy={yScale(inMin)} r="6"
+                    fill="var(--color-ink)" stroke="var(--color-accent, #e67e22)" strokeWidth="2.5" />
+                  {/* Label: clock-in time */}
+                  <rect
+                    x={isRightHalf ? cx + labelDx - 72 : cx + labelDx - 4}
+                    y={yScale(inMin) - 11}
+                    width={76} height={20} rx={4}
+                    fill="var(--color-ink)" opacity={0.9}
+                  />
+                  <text
+                    x={isRightHalf ? cx + labelDx - 36 : cx + labelDx + 34}
+                    y={yScale(inMin) + 3}
+                    textAnchor="middle"
+                    fill="var(--color-solid-text, #fff)" fontSize="11" fontWeight="600"
+                    fontFamily="ui-monospace, SFMono-Regular, monospace"
+                  >
+                    上班 {minutesToTime(inMin)}
+                  </text>
+                </>
+              )}
+              {outMin !== null && (
+                <>
+                  <circle cx={cx} cy={yScale(outMin)} r="6"
+                    fill="var(--color-ink-muted)" stroke="var(--color-accent, #e67e22)" strokeWidth="2.5" />
+                  {/* Label: clock-out time */}
+                  <rect
+                    x={isRightHalf ? cx + labelDx - 72 : cx + labelDx - 4}
+                    y={yScale(outMin) - 11}
+                    width={76} height={20} rx={4}
+                    fill="var(--color-ink-muted)" opacity={0.9}
+                  />
+                  <text
+                    x={isRightHalf ? cx + labelDx - 36 : cx + labelDx + 34}
+                    y={yScale(outMin) + 3}
+                    textAnchor="middle"
+                    fill="var(--color-solid-text, #fff)" fontSize="11" fontWeight="600"
+                    fontFamily="ui-monospace, SFMono-Regular, monospace"
+                  >
+                    下班 {minutesToTime(outMin)}
+                  </text>
+                </>
+              )}
+            </g>
+          )
+        })()}
+
+        {/* Hover targets — also allow click to select */}
         {sorted.map((d, i) => {
           const inMin = timeToMinutes(d.clock_in)
           const outMin = timeToMinutes(d.clock_out)
           const tooltip = `${d.date}\n上班: ${inMin !== null ? minutesToTime(inMin) : '--:--'}\n下班: ${outMin !== null ? minutesToTime(outMin) : '--:--'}`
           return (
             <rect key={`hover-${i}`} x={xScale(i) - 15} y={PAD.top} width={30} height={plotH}
-              fill="transparent" className="cursor-pointer">
+              fill="transparent" className="cursor-pointer"
+              onClick={() => setSelectedDate(prev => prev === d.date ? null : d.date)}>
               <title>{tooltip}</title>
             </rect>
           )
