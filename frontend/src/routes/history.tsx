@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { workLogs as workLogsApi, attendance as attendanceApi, lessons as lessonsApi, todos as todosApi, history as historyApi, type Todo } from '../lib/api'
 import { getDateRange, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration, makeIterationConfig, type IterationConfig } from '../lib/date-utils'
 import { settings as settingsApi } from '../lib/api'
@@ -39,6 +39,112 @@ function CopyButton({ getText, className = '' }: { getText: () => Promise<string
   )
 }
 
+const WINDOW_RADIUS = 3 // show ±3 iterations around selected
+
+function IterationSelector({
+  selectedIter,
+  minIter,
+  maxIter,
+  iterConfig,
+  onSelect,
+}: {
+  selectedIter: number
+  minIter: number
+  maxIter: number
+  iterConfig: IterationConfig
+  onSelect: (n: number) => void
+}) {
+  const [jumpValue, setJumpValue] = useState('')
+
+  const clamp = (n: number) => Math.max(minIter, Math.min(maxIter, n))
+
+  // Window range
+  const winStart = Math.max(minIter, selectedIter - WINDOW_RADIUS)
+  const winEnd = Math.min(maxIter, selectedIter + WINDOW_RADIUS)
+  const windowIters: number[] = []
+  for (let i = winEnd; i >= winStart; i--) windowIters.push(i)
+
+  const handleJump = () => {
+    const n = parseInt(jumpValue, 10)
+    if (!isNaN(n) && n >= minIter && n <= maxIter) {
+      onSelect(n)
+      setJumpValue('')
+    }
+  }
+
+  const currentRange = getIterationRange(selectedIter, iterConfig)
+
+  const navBtn = (label: string, target: number, disabled: boolean) => (
+    <button
+      onClick={() => onSelect(target)}
+      disabled={disabled}
+      className="rounded-md border px-2 py-1.5 font-mono text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--color-surface-hover)]"
+      style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+      title={label}
+    >
+      {label}
+    </button>
+  )
+
+  return (
+    <div className="mb-4 space-y-2">
+      {/* Row 1: nav arrows + window buttons — scrollable on narrow screens */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin' }}>
+        {navBtn('«', minIter, selectedIter === minIter)}
+        {navBtn('‹', clamp(selectedIter - 1), selectedIter === minIter)}
+
+        {windowIters.map(iterNum => {
+          const range = getIterationRange(iterNum, iterConfig)
+          return (
+            <button
+              key={iterNum}
+              onClick={() => onSelect(iterNum)}
+              className={`rounded-md border px-3 py-1.5 font-mono text-xs whitespace-nowrap shrink-0 transition-colors ${
+                selectedIter === iterNum
+                  ? 'border-[var(--color-border-strong)] bg-[var(--color-surface-hover)] font-medium text-[var(--color-ink)]'
+                  : 'border-[var(--color-border)] bg-[var(--color-surface-strong)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]'
+              }`}
+            >
+              {range.label}
+            </button>
+          )
+        })}
+
+        {navBtn('›', clamp(selectedIter + 1), selectedIter === maxIter)}
+        {navBtn('»', maxIter, selectedIter === maxIter)}
+      </div>
+
+      {/* Row 2: jump input + date range hint */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono text-xs" style={{ color: 'var(--color-ink-muted)' }}>跳转到</span>
+          <input
+            type="number"
+            min={minIter}
+            max={maxIter}
+            value={jumpValue}
+            onChange={e => setJumpValue(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleJump()}
+            placeholder={`${minIter}–${maxIter}`}
+            className="font-mono text-xs px-2 py-1 w-20 bg-[var(--color-surface-strong)] text-center"
+            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none', color: 'var(--color-ink)' }}
+          />
+          <button
+            onClick={handleJump}
+            className="font-mono text-xs px-2.5 py-1 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
+            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+          >
+            Go
+          </button>
+        </div>
+        <span className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>
+          {currentRange.start} ~ {currentRange.end}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function HistoryPage() {
   const { user, loading } = useAuth()
   const navigate = useNavigate()
@@ -56,7 +162,6 @@ function HistoryPage() {
   const [selectedIter, setSelectedIter] = useState<number | null>(null)
   const [minIter, setMinIter] = useState<number | null>(null)
   const [maxIter, setMaxIter] = useState<number | null>(null)
-  const iterScrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: '/login' })
@@ -237,33 +342,15 @@ function HistoryPage() {
         ))}
       </div>
 
-      {/* Iteration selector */}
-      {preset === 'iteration' && minIter !== null && maxIter !== null && iterConfig && (
-        <div className="mb-4">
-          <div
-            ref={iterScrollRef}
-            className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin"
-            style={{ scrollbarWidth: 'thin' }}
-          >
-            {Array.from({ length: maxIter - minIter + 1 }, (_, i) => maxIter - i)
-              .map(iterNum => {
-                const range = getIterationRange(iterNum, iterConfig)
-                return (
-                  <button
-                    key={iterNum}
-                    onClick={() => setSelectedIter(iterNum)}
-                    className={`rounded-md border px-3 py-1.5 font-mono text-xs whitespace-nowrap shrink-0 transition-colors ${
-                      selectedIter === iterNum
-                        ? 'border-[var(--color-border-strong)] bg-[var(--color-surface-hover)] font-medium text-[var(--color-ink)]'
-                        : 'border-[var(--color-border)] bg-[var(--color-surface-strong)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]'
-                    }`}
-                  >
-                    {range.label}
-                  </button>
-                )
-              })}
-          </div>
-        </div>
+      {/* Iteration selector — windowed buttons + jump input */}
+      {preset === 'iteration' && minIter !== null && maxIter !== null && iterConfig && selectedIter !== null && (
+        <IterationSelector
+          selectedIter={selectedIter}
+          minIter={minIter}
+          maxIter={maxIter}
+          iterConfig={iterConfig}
+          onSelect={setSelectedIter}
+        />
       )}
 
       {/* Custom date range */}
