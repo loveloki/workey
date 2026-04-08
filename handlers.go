@@ -636,16 +636,36 @@ func handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonOK(w, map[string]string{"timezone": timezone, "kanban_url": kanbanURL, "theme": theme})
+	var iterationStartDate string
+	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'iteration_start_date'", userID).Scan(&iterationStartDate)
+	if err == sql.ErrNoRows {
+		iterationStartDate = "2019-09-02"
+	} else if err != nil {
+		jsonError(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	var iterationDurationDays string
+	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'iteration_duration_days'", userID).Scan(&iterationDurationDays)
+	if err == sql.ErrNoRows {
+		iterationDurationDays = "14"
+	} else if err != nil {
+		jsonError(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	jsonOK(w, map[string]string{"timezone": timezone, "kanban_url": kanbanURL, "theme": theme, "iteration_start_date": iterationStartDate, "iteration_duration_days": iterationDurationDays})
 }
 
 func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
 
 	var req struct {
-		Timezone  string `json:"timezone"`
-		KanbanURL string `json:"kanban_url"`
-		Theme     string `json:"theme"`
+		Timezone              string `json:"timezone"`
+		KanbanURL             string `json:"kanban_url"`
+		Theme                 string `json:"theme"`
+		IterationStartDate    string `json:"iteration_start_date"`
+		IterationDurationDays string `json:"iteration_duration_days"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "Invalid request body", http.StatusBadRequest)
@@ -685,6 +705,28 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.IterationStartDate != "" {
+		_, err := db.Exec(
+			"INSERT INTO user_settings (user_id, key, value) VALUES (?, 'iteration_start_date', ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
+			userID, req.IterationStartDate,
+		)
+		if err != nil {
+			jsonError(w, "Failed to save settings", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.IterationDurationDays != "" {
+		_, err := db.Exec(
+			"INSERT INTO user_settings (user_id, key, value) VALUES (?, 'iteration_duration_days', ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
+			userID, req.IterationDurationDays,
+		)
+		if err != nil {
+			jsonError(w, "Failed to save settings", http.StatusInternalServerError)
+			return
+		}
+	}
+
 	// Read current values for response
 	var timezone string
 	err := db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'timezone'", userID).Scan(&timezone)
@@ -704,7 +746,19 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		theme = "light"
 	}
 
-	jsonOK(w, map[string]string{"timezone": timezone, "kanban_url": kanbanURL, "theme": theme})
+	var iterationStartDate string
+	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'iteration_start_date'", userID).Scan(&iterationStartDate)
+	if err != nil {
+		iterationStartDate = "2019-09-02"
+	}
+
+	var iterationDurationDays string
+	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'iteration_duration_days'", userID).Scan(&iterationDurationDays)
+	if err != nil {
+		iterationDurationDays = "14"
+	}
+
+	jsonOK(w, map[string]string{"timezone": timezone, "kanban_url": kanbanURL, "theme": theme, "iteration_start_date": iterationStartDate, "iteration_duration_days": iterationDurationDays})
 }
 
 // --- Todo handlers ---

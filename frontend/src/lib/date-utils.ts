@@ -69,21 +69,39 @@ export function formatDateFull(dateStr: string): string {
 }
 
 // --- Iteration utilities ---
-// Iteration 1 starts on 2019-09-02 (Monday). Each iteration is 2 weeks (14 days).
-// An iteration spans from Monday of week 1 to Friday of week 2 (12 calendar days).
-const ITER_EPOCH = new Date('2019-09-02T00:00:00') // Monday
+// Configurable iteration settings: start date and duration in days.
+// Defaults: epoch = 2019-09-02, duration = 14 days.
 
-export function getIterationNumber(date: Date): number {
-  const diffMs = date.getTime() - ITER_EPOCH.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-  return Math.floor(diffDays / 14) + 1
+export interface IterationConfig {
+  epoch: Date      // first iteration starts on this date
+  duration: number // days per iteration
 }
 
-export function getIterationRange(iterNum: number): { start: string; end: string; label: string } {
-  const startDate = new Date(ITER_EPOCH)
-  startDate.setDate(startDate.getDate() + (iterNum - 1) * 14)
+const DEFAULT_ITER_CONFIG: IterationConfig = {
+  epoch: new Date('2019-09-02T00:00:00'),
+  duration: 14,
+}
+
+export function makeIterationConfig(startDate?: string, durationDays?: string): IterationConfig {
+  const epoch = startDate ? new Date(startDate + 'T00:00:00') : DEFAULT_ITER_CONFIG.epoch
+  const duration = durationDays ? parseInt(durationDays, 10) : DEFAULT_ITER_CONFIG.duration
+  return {
+    epoch: isNaN(epoch.getTime()) ? DEFAULT_ITER_CONFIG.epoch : epoch,
+    duration: isNaN(duration) || duration < 1 ? DEFAULT_ITER_CONFIG.duration : duration,
+  }
+}
+
+export function getIterationNumber(date: Date, config: IterationConfig = DEFAULT_ITER_CONFIG): number {
+  const diffMs = date.getTime() - config.epoch.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  return Math.floor(diffDays / config.duration) + 1
+}
+
+export function getIterationRange(iterNum: number, config: IterationConfig = DEFAULT_ITER_CONFIG): { start: string; end: string; label: string } {
+  const startDate = new Date(config.epoch)
+  startDate.setDate(startDate.getDate() + (iterNum - 1) * config.duration)
   const endDate = new Date(startDate)
-  endDate.setDate(endDate.getDate() + 11) // Monday + 11 = Friday of week 2
+  endDate.setDate(endDate.getDate() + config.duration - 1)
   const sm = startDate.getMonth() + 1
   const sd = startDate.getDate()
   const em = endDate.getMonth() + 1
@@ -95,6 +113,6 @@ export function getIterationRange(iterNum: number): { start: string; end: string
   }
 }
 
-export function getCurrentIteration(): number {
-  return getIterationNumber(new Date())
+export function getCurrentIteration(config: IterationConfig = DEFAULT_ITER_CONFIG): number {
+  return getIterationNumber(new Date(), config)
 }

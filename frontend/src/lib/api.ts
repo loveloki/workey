@@ -260,9 +260,9 @@ export const history = {
 
 // Settings
 export const settings = {
-  get: () => request<{ timezone: string; kanban_url: string; theme: string }>('/api/settings'),
-  save: (data: { timezone?: string; kanban_url?: string; theme?: string }) =>
-    request<{ timezone: string; kanban_url: string; theme: string }>('/api/settings', {
+  get: () => request<{ timezone: string; kanban_url: string; theme: string; iteration_start_date: string; iteration_duration_days: string }>('/api/settings'),
+  save: (data: { timezone?: string; kanban_url?: string; theme?: string; iteration_start_date?: string; iteration_duration_days?: string }) =>
+    request<{ timezone: string; kanban_url: string; theme: string; iteration_start_date: string; iteration_duration_days: string }>('/api/settings', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

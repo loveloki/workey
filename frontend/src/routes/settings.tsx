@@ -32,6 +32,7 @@ function SettingsPage() {
       <div className="grid gap-6">
         <ThemeSection />
         <TimezoneSection />
+        <IterationSection />
         <KanbanUrlSection />
         <PasskeySection />
         <PasswordSection />
@@ -194,6 +195,103 @@ function TimezoneSection() {
               {msg}
             </span>
           )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/* ── Iteration ───────────────────────────────────────── */
+
+function IterationSection() {
+  const [startDate, setStartDate] = useState('2019-09-02')
+  const [durationDays, setDurationDays] = useState('14')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    settings.get().then(data => {
+      setStartDate(data.iteration_start_date || '2019-09-02')
+      setDurationDays(data.iteration_duration_days || '14')
+      setLoaded(true)
+    })
+  }, [])
+
+  const save = async () => {
+    // Validate
+    const d = new Date(startDate + 'T00:00:00')
+    if (isNaN(d.getTime())) {
+      setMsg('起始日期格式无效')
+      return
+    }
+    const days = parseInt(durationDays, 10)
+    if (isNaN(days) || days < 1) {
+      setMsg('天数必须为正整数')
+      return
+    }
+
+    setSaving(true)
+    setMsg('')
+    try {
+      await settings.save({ iteration_start_date: startDate, iteration_duration_days: String(days) })
+      setMsg('已保存')
+      setTimeout(() => setMsg(''), 2000)
+    } catch (e: any) {
+      setMsg(e.message || '保存失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card title="Iteration 设置">
+      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
+        设置 Iteration 的起始日期与每个周期的天数，影响历史记录中 Iteration 视图的日期范围。
+      </p>
+      {loaded && (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <label className="font-mono text-xs whitespace-nowrap" style={{ color: 'var(--color-ink-muted)', minWidth: '80px' }}>
+              起始日期
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+              className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)] w-full sm:w-auto"
+              style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
+            />
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <label className="font-mono text-xs whitespace-nowrap" style={{ color: 'var(--color-ink-muted)', minWidth: '80px' }}>
+              周期天数
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={durationDays}
+              onChange={e => setDurationDays(e.target.value)}
+              className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)] w-24"
+              style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
+            />
+            <span className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>天</span>
+          </div>
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
+              style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
+            >
+              {saving ? '保存中...' : '保存'}
+            </button>
+            {msg && (
+              <span className="font-mono text-sm" style={{ color: msg === '已保存' ? 'var(--color-ink-muted)' : 'var(--color-danger-text)' }}>
+                {msg}
+              </span>
+            )}
+          </div>
         </div>
       )}
     </Card>
