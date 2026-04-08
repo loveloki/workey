@@ -58,11 +58,11 @@ function IterationSelector({
 
   const clamp = (n: number) => Math.max(minIter, Math.min(maxIter, n))
 
-  // Window range
+  // Window range — ascending order (older on left, newer on right)
   const winStart = Math.max(minIter, selectedIter - WINDOW_RADIUS)
   const winEnd = Math.min(maxIter, selectedIter + WINDOW_RADIUS)
   const windowIters: number[] = []
-  for (let i = winEnd; i >= winStart; i--) windowIters.push(i)
+  for (let i = winStart; i <= winEnd; i++) windowIters.push(i)
 
   const handleJump = () => {
     const n = parseInt(jumpValue, 10)

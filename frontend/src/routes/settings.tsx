@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect, useRef } from 'react'
 import { settings, passkeys as passkeysApi, base64urlToBuffer, type Passkey } from '../lib/api'
+import { makeIterationConfig, getCurrentIteration, getIterationRange } from '../lib/date-utils'
 import { useTheme, type Theme } from '../lib/theme-context'
 
 export const Route = createFileRoute('/settings')({ component: SettingsPage })
@@ -292,9 +293,47 @@ function IterationSection() {
               </span>
             )}
           </div>
+
+          {/* Live preview */}
+          <IterationPreview startDate={startDate} durationDays={durationDays} />
         </div>
       )}
     </Card>
+  )
+}
+
+function IterationPreview({ startDate, durationDays }: { startDate: string; durationDays: string }) {
+  const cfg = makeIterationConfig(startDate, durationDays)
+  const current = getCurrentIteration(cfg)
+
+  // Show current ±2 iterations
+  const iters = [current - 2, current - 1, current, current + 1, current + 2]
+    .filter(n => n >= 1)
+
+  return (
+    <div className="mt-4 pt-4" style={{ borderTop: '1px dashed var(--color-border)' }}>
+      <p className="font-mono text-xs uppercase tracking-[0.15em] mb-2" style={{ color: 'var(--color-ink-faint)' }}>预览</p>
+      <div className="flex flex-wrap gap-1.5">
+        {iters.map(n => {
+          const r = getIterationRange(n, cfg)
+          const isCurrent = n === current
+          return (
+            <span
+              key={n}
+              className="font-mono text-xs px-2.5 py-1 rounded-md"
+              style={{
+                background: isCurrent ? 'var(--color-solid)' : 'var(--color-surface)',
+                color: isCurrent ? 'var(--color-solid-text)' : 'var(--color-ink-muted)',
+                border: isCurrent ? 'none' : '1px solid var(--color-border)',
+                borderRadius: '6px',
+              }}
+            >
+              {r.label}{isCurrent ? ' ← 当前' : ''}
+            </span>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
