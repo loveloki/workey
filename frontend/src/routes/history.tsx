@@ -58,11 +58,11 @@ function IterationSelector({
 
   const clamp = (n: number) => Math.max(minIter, Math.min(maxIter, n))
 
-  // Window range — ascending order (older on left, newer on right)
+  // Window range — descending order (newest on left, oldest on right)
   const winStart = Math.max(minIter, selectedIter - WINDOW_RADIUS)
   const winEnd = Math.min(maxIter, selectedIter + WINDOW_RADIUS)
   const windowIters: number[] = []
-  for (let i = winStart; i <= winEnd; i++) windowIters.push(i)
+  for (let i = winEnd; i >= winStart; i--) windowIters.push(i)
 
   const handleJump = () => {
     const n = parseInt(jumpValue, 10)
@@ -90,8 +90,8 @@ function IterationSelector({
     <div className="mb-4 space-y-2">
       {/* Row 1: nav arrows + window buttons — scrollable on narrow screens */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin' }}>
-        {navBtn('«', minIter, selectedIter === minIter)}
-        {navBtn('‹', clamp(selectedIter - 1), selectedIter === minIter)}
+        {navBtn('«', maxIter, selectedIter === maxIter)}
+        {navBtn('‹', clamp(selectedIter + 1), selectedIter === maxIter)}
 
         {windowIters.map(iterNum => {
           const range = getIterationRange(iterNum, iterConfig)
@@ -110,8 +110,8 @@ function IterationSelector({
           )
         })}
 
-        {navBtn('›', clamp(selectedIter + 1), selectedIter === maxIter)}
-        {navBtn('»', maxIter, selectedIter === maxIter)}
+        {navBtn('›', clamp(selectedIter - 1), selectedIter === minIter)}
+        {navBtn('»', minIter, selectedIter === minIter)}
       </div>
 
       {/* Row 2: jump input + date range hint */}
