@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect } from 'react'
-import { workLogs as workLogsApi, attendance as attendanceApi, lessons as lessonsApi, todos as todosApi, history as historyApi, type Todo } from '../lib/api'
-import { getDateRange, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration, makeIterationConfig, type IterationConfig } from '../lib/date-utils'
+import { workLogs as workLogsApi, attendance as attendanceApi, lessons as lessonsApi, todos as todosApi, history as historyApi, iterationOverrides as overridesApi, type Todo } from '../lib/api'
+import { getDateRange, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration, makeIterationConfig, type IterationConfig, type IterationOverrideMap } from '../lib/date-utils'
 import { settings as settingsApi } from '../lib/api'
 import { MarkdownContent } from '../lib/markdown-editor'
 import { formatDayMarkdown } from '../lib/report-utils'
@@ -46,12 +46,14 @@ function IterationSelector({
   minIter,
   maxIter,
   iterConfig,
+  iterOverrides,
   onSelect,
 }: {
   selectedIter: number
   minIter: number
   maxIter: number
   iterConfig: IterationConfig
+  iterOverrides: IterationOverrideMap
   onSelect: (n: number) => void
 }) {
   const [jumpValue, setJumpValue] = useState('')
@@ -72,7 +74,7 @@ function IterationSelector({
     }
   }
 
-  const currentRange = getIterationRange(selectedIter, iterConfig)
+  const currentRange = getIterationRange(selectedIter, iterConfig, iterOverrides)
 
   const navBtn = (label: string, target: number, disabled: boolean) => (
     <button
@@ -94,7 +96,7 @@ function IterationSelector({
         {navBtn('‹', clamp(selectedIter + 1), selectedIter === maxIter)}
 
         {windowIters.map(iterNum => {
-          const range = getIterationRange(iterNum, iterConfig)
+          const range = getIterationRange(iterNum, iterConfig, iterOverrides)
           return (
             <button
               key={iterNum}
@@ -158,6 +160,7 @@ function HistoryPage() {
   const [fetching, setFetching] = useState(false)
   // Iteration config from settings
   const [iterConfig, setIterConfig] = useState<IterationConfig | null>(null)
+  const [iterOverrides, setIterOverrides] = useState<IterationOverrideMap>({})
   // Iteration state
   const [selectedIter, setSelectedIter] = useState<number | null>(null)
   const [minIter, setMinIter] = useState<number | null>(null)
@@ -167,15 +170,20 @@ function HistoryPage() {
     if (!loading && !user) navigate({ to: '/login' })
   }, [loading, user, navigate])
 
-  // Load iteration config from settings
+  // Load iteration config + overrides from settings
   useEffect(() => {
     if (!user) return
-    settingsApi.get().then(data => {
+    Promise.all([settingsApi.get(), overridesApi.list()]).then(([data, ovRes]) => {
       const cfg = makeIterationConfig(data.iteration_start_date, data.iteration_duration_days)
       setIterConfig(cfg)
-      const cur = getCurrentIteration(cfg)
+      const ovMap: IterationOverrideMap = {}
+      for (const o of ovRes.overrides) {
+        ovMap[o.iteration_number] = { start: o.start_date, end: o.end_date }
+      }
+      setIterOverrides(ovMap)
+      const cur = getCurrentIteration(cfg, ovMap)
       setSelectedIter(cur)
-      setMaxIter(cur)
+      setMaxIter(cur + 2)
     }).catch(console.error)
   }, [user])
 
@@ -185,10 +193,10 @@ function HistoryPage() {
     historyApi.dateRange().then(res => {
       if (res.earliest) {
         const earliestDate = new Date(res.earliest + 'T00:00:00')
-        setMinIter(getIterationNumber(earliestDate, iterConfig))
+        setMinIter(getIterationNumber(earliestDate, iterConfig, iterOverrides))
       }
     }).catch(console.error)
-  }, [user, iterConfig])
+  }, [user, iterConfig, iterOverrides])
 
   useEffect(() => {
     if (!user || preset === 'custom' || preset === 'iteration') return
@@ -199,9 +207,9 @@ function HistoryPage() {
   // Fetch data when iteration changes
   useEffect(() => {
     if (!user || preset !== 'iteration' || !iterConfig || selectedIter === null) return
-    const range = getIterationRange(selectedIter, iterConfig)
+    const range = getIterationRange(selectedIter, iterConfig, iterOverrides)
     fetchData(range.start, range.end)
-  }, [selectedIter, preset, user, iterConfig])
+  }, [selectedIter, preset, user, iterConfig, iterOverrides])
 
   const fetchData = async (start: string, end: string) => {
     setFetching(true)
@@ -349,6 +357,7 @@ function HistoryPage() {
           minIter={minIter}
           maxIter={maxIter}
           iterConfig={iterConfig}
+          iterOverrides={iterOverrides}
           onSelect={setSelectedIter}
         />
       )}
