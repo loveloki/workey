@@ -1340,10 +1340,14 @@ func handleDeleteIterationOverride(w http.ResponseWriter, r *http.Request) {
 // --- Export/Import Data ---
 
 type ExportData struct {
-	Attendance []Attendance `json:"attendance"`
-	WorkLogs   []WorkLog    `json:"work_logs"`
-	Lessons    []Lesson     `json:"lessons"`
-	ExportedAt string       `json:"exported_at"`
+	Attendance         []Attendance        `json:"attendance"`
+	WorkLogs           []WorkLog           `json:"work_logs"`
+	Lessons            []Lesson            `json:"lessons"`
+	Todos              []Todo              `json:"todos"`
+	Checklists         []Checklist         `json:"checklists"`
+	UserSettings       map[string]string   `json:"user_settings"`
+	IterationOverrides []IterationOverride `json:"iteration_overrides"`
+	ExportedAt         string              `json:"exported_at"`
 }
 
 // uploadPathRe matches /uploads/filename references in markdown content
@@ -1405,11 +1409,76 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 	}
 	rows.Close()
 
+	todosList := []Todo{}
+	rows, err = db.Query(
+		"SELECT id, user_id, content, url, done, created_at, updated_at FROM todos WHERE user_id = ? ORDER BY id",
+		userID,
+	)
+	if err != nil {
+		jsonError(w, "Failed to export todos", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var t Todo
+		rows.Scan(&t.ID, &t.UserID, &t.Content, &t.URL, &t.Done, &t.CreatedAt, &t.UpdatedAt)
+		todosList = append(todosList, t)
+	}
+	rows.Close()
+
+	checklistsList := []Checklist{}
+	rows, err = db.Query(
+		"SELECT id, user_id, title, items, created_at, updated_at FROM checklists WHERE user_id = ? ORDER BY id",
+		userID,
+	)
+	if err != nil {
+		jsonError(w, "Failed to export checklists", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var c Checklist
+		rows.Scan(&c.ID, &c.UserID, &c.Title, &c.Items, &c.CreatedAt, &c.UpdatedAt)
+		checklistsList = append(checklistsList, c)
+	}
+	rows.Close()
+
+	userSettings := map[string]string{}
+	rows, err = db.Query("SELECT key, value FROM user_settings WHERE user_id = ?", userID)
+	if err != nil {
+		jsonError(w, "Failed to export user settings", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var k, v string
+		rows.Scan(&k, &v)
+		userSettings[k] = v
+	}
+	rows.Close()
+
+	overridesList := []IterationOverride{}
+	rows, err = db.Query(
+		"SELECT id, user_id, iteration_number, start_date, end_date, created_at, updated_at FROM iteration_overrides WHERE user_id = ? ORDER BY iteration_number",
+		userID,
+	)
+	if err != nil {
+		jsonError(w, "Failed to export iteration overrides", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var o IterationOverride
+		rows.Scan(&o.ID, &o.UserID, &o.IterationNumber, &o.StartDate, &o.EndDate, &o.CreatedAt, &o.UpdatedAt)
+		overridesList = append(overridesList, o)
+	}
+	rows.Close()
+
 	exportData := ExportData{
-		Attendance: attendances,
-		WorkLogs:   workLogsList,
-		Lessons:    lessonsList,
-		ExportedAt: time.Now().Format(time.RFC3339),
+		Attendance:         attendances,
+		WorkLogs:           workLogsList,
+		Lessons:            lessonsList,
+		Todos:              todosList,
+		Checklists:         checklistsList,
+		UserSettings:       userSettings,
+		IterationOverrides: overridesList,
+		ExportedAt:         time.Now().Format(time.RFC3339),
 	}
 
 	// Collect referenced image filenames from work log and lesson content
@@ -1421,6 +1490,16 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, l := range lessonsList {
 		for _, m := range uploadPathRe.FindAllStringSubmatch(l.Content, -1) {
+			imageFiles[m[1]] = true
+		}
+	}
+	for _, t := range todosList {
+		for _, m := range uploadPathRe.FindAllStringSubmatch(t.Content, -1) {
+			imageFiles[m[1]] = true
+		}
+	}
+	for _, c := range checklistsList {
+		for _, m := range uploadPathRe.FindAllStringSubmatch(c.Items, -1) {
 			imageFiles[m[1]] = true
 		}
 	}
