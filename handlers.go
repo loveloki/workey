@@ -3,16 +3,11 @@ package main
 import (
 	"archive/zip"
 	"bytes"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -1732,4 +1727,3 @@ func handleHistoryDateRange(w http.ResponseWriter, r *http.Request) {
 
 	jsonOK(w, map[string]interface{}{"earliest": earliest.String, "latest": latest.String})
 }
-
