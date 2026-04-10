@@ -59,7 +59,7 @@ func createJWT(userID int64) (string, error) {
 	claims := jwtClaims{
 		Sub: userID,
 		Iat: time.Now().Unix(),
-		Exp: time.Now().Add(90 * 24 * time.Hour).Unix(), // 90 days
+		Exp: time.Now().Add(72 * time.Hour).Unix(),
 	}
 
 	hJSON, _ := json.Marshal(header)
@@ -74,10 +74,10 @@ func createJWT(userID int64) (string, error) {
 	return unsigned + "." + sig, nil
 }
 
-func validateJWT(token string) (int64, error) {
+func validateJWT(token string) (int64, int64, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		return 0, errors.New("invalid token format")
+		return 0, 0, errors.New("invalid token format")
 	}
 
 	// Verify signature
@@ -87,25 +87,25 @@ func validateJWT(token string) (int64, error) {
 	expectedSig := base64URLEncode(mac.Sum(nil))
 
 	if !hmac.Equal([]byte(parts[2]), []byte(expectedSig)) {
-		return 0, errors.New("invalid signature")
+		return 0, 0, errors.New("invalid signature")
 	}
 
 	// Decode claims
 	claimsJSON, err := base64URLDecode(parts[1])
 	if err != nil {
-		return 0, fmt.Errorf("invalid claims: %w", err)
+		return 0, 0, fmt.Errorf("invalid claims: %w", err)
 	}
 
 	var claims jwtClaims
 	if err := json.Unmarshal(claimsJSON, &claims); err != nil {
-		return 0, fmt.Errorf("invalid claims JSON: %w", err)
+		return 0, 0, fmt.Errorf("invalid claims JSON: %w", err)
 	}
 
 	if time.Now().Unix() > claims.Exp {
-		return 0, errors.New("token expired")
+		return 0, 0, errors.New("token expired")
 	}
 
-	return claims.Sub, nil
+	return claims.Sub, claims.Exp, nil
 }
 
 // --- Random string ---

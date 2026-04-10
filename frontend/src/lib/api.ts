@@ -27,6 +27,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
   
+  const newToken = res.headers.get('X-New-Token')
+  if (newToken) {
+    setToken(newToken)
+  }
+
   if (res.status === 401) {
     const err = new Error('Unauthorized')
     ;(err as any).status = 401

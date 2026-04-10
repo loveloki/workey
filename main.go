@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -242,6 +243,7 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Expose-Headers", "X-New-Token")
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -260,11 +262,19 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		token := strings.TrimPrefix(auth, "Bearer ")
-		userID, err := validateJWT(token)
+		userID, exp, err := validateJWT(token)
 		if err != nil {
 			jsonError(w, "Invalid or expired token", http.StatusUnauthorized)
 			return
 		}
+
+		// Auto-refresh token if it expires in less than 24 hours
+		if exp-time.Now().Unix() < 24*3600 {
+			if newToken, err := createJWT(userID); err == nil {
+				w.Header().Set("X-New-Token", newToken)
+			}
+		}
+
 		// Store user ID in header for simplicity (avoid context complexity)
 		r.Header.Set("X-User-ID", fmt.Sprintf("%d", userID))
 		next(w, r)
