@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { workLogs as workLogsApi, attendance as attendanceApi, lessons as lessonsApi, todos as todosApi, history as historyApi, iterationOverrides as overridesApi, type Todo } from '../lib/api'
 import { getDateRange, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration, makeIterationConfig, type IterationConfig, type IterationOverrideMap } from '../lib/date-utils'
 import { settings as settingsApi } from '../lib/api'
-import { MarkdownContent } from '../lib/markdown-editor'
+import { MarkdownContent, MarkdownEditor } from '../lib/markdown-editor'
 import { formatDayMarkdown } from '../lib/report-utils'
 
 export const Route = createFileRoute('/history')({
@@ -398,88 +398,169 @@ function HistoryPage() {
         <div className="space-y-3">
           {sortedDates.map(date => {
             const entry = dateMap.get(date)!
-            return (
-              <div
-                key={date}
-                className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-5"
-              >
-                <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center justify-between sm:justify-start">
-                    <h3 className="font-mono text-sm font-semibold text-[var(--color-ink)]">
-                      {formatDateDisplay(date)}
-                    </h3>
-                    <CopyButton getText={() => getDayMarkdown(date)} className="sm:hidden" />
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {entry.attendance && (
-                      <div className="flex items-center gap-3 font-mono text-xs text-[var(--color-ink-muted)]">
-                        <span>上班 {formatTime(entry.attendance.clock_in)}</span>
-                        <span>下班 {formatTime(entry.attendance.clock_out)}</span>
-                      </div>
-                    )}
-                    <CopyButton getText={() => getDayMarkdown(date)} className="hidden sm:flex" />
-                  </div>
-                </div>
-                {entry.log ? (
-                  <div className="markdown-body text-sm text-[var(--color-ink-secondary)]" style={{ fontFamily: 'Georgia, serif' }}>
-                    <MarkdownContent content={entry.log.content} />
-                  </div>
-                ) : (
-                  <p className="m-0 text-sm italic text-[var(--color-ink-faint)]" style={{ fontFamily: 'Georgia, serif' }}>
-                    未记录工作内容
-                  </p>
-                )}
-                {entry.todos.length > 0 && (
-                  <div className="mt-3 border-t border-dashed border-[var(--color-border)] pt-3">
-                    <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">§ 已完成待办 §</p>
-                    <div className="space-y-1">
-                      {entry.todos.map(todo => (
-                        <div key={todo.id} className="flex items-start gap-2 px-1">
-                          <div
-                            className="w-3.5 h-3.5 mt-0.5 rounded flex items-center justify-center shrink-0"
-                            style={{ background: 'var(--color-solid)' }}
-                          >
-                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--color-solid-text)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <span
-                              className="text-sm"
-                              style={{ color: 'var(--color-ink-muted)', fontFamily: 'Georgia, serif' }}
-                            >
-                              {todo.content}
-                            </span>
-                            {todo.url && (
-                              <a
-                                href={todo.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-mono text-xs ml-2"
-                                style={{ color: 'var(--color-ink-faint)', textDecoration: 'underline', textUnderlineOffset: '2px' }}
-                              >
-                                ⇗
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {entry.lesson && entry.lesson.content && (
-                  <div className="mt-3 border-t border-dashed border-[var(--color-border)] pt-3">
-                    <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">§ 经验教训 §</p>
-                    <div className="markdown-body text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>
-                      <MarkdownContent content={entry.lesson.content} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
+            return <HistoryEntry key={date} date={date} entry={entry} getDayMarkdown={getDayMarkdown} onRefresh={() => handleCustomSearch()} preset={preset} fetchData={fetchData} currentRange={preset === 'custom' ? {start: customStart, end: customEnd} : preset === 'iteration' && iterConfig && selectedIter !== null ? getIterationRange(selectedIter, iterConfig, iterOverrides) : getDateRange(preset as RangePreset)} />
           })}
         </div>
       )}
     </main>
+  )
+}
+
+function HistoryEntry({ date, entry, getDayMarkdown, onRefresh, preset, fetchData, currentRange }: { date: string, entry: any, getDayMarkdown: (d: string) => string, onRefresh: () => void, preset: string, fetchData: (s: string, e: string) => void, currentRange: { start: string, end: string } }) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [logContent, setLogContent] = useState('')
+  const [lessonContent, setLessonContent] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const handleEdit = () => {
+    setLogContent(entry.log?.content || '')
+    setLessonContent(entry.lesson?.content || '')
+    setIsEditing(true)
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await Promise.all([
+        workLogsApi.save(date, logContent),
+        lessonsApi.save(date, lessonContent)
+      ])
+      setIsEditing(false)
+      fetchData(currentRange.start, currentRange.end)
+    } catch (e: any) {
+      alert('保存失败: ' + (e.message || '未知错误'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-5">
+      <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <h3 className="font-mono text-sm font-semibold text-[var(--color-ink)]">
+            {formatDateDisplay(date)}
+          </h3>
+          <CopyButton getText={() => getDayMarkdown(date)} className="sm:hidden" />
+          {!isEditing && (
+            <button
+              onClick={handleEdit}
+              className="font-mono text-xs px-2 py-1 rounded transition-colors hover:bg-[var(--color-surface-hover)] text-[var(--color-ink-muted)]"
+              style={{ border: '1px solid var(--color-border)' }}
+            >
+              编辑
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {entry.attendance && (
+            <div className="flex items-center gap-3 font-mono text-xs text-[var(--color-ink-muted)]">
+              <span>上班 {formatTime(entry.attendance.clock_in)}</span>
+              <span>下班 {formatTime(entry.attendance.clock_out)}</span>
+            </div>
+          )}
+          <CopyButton getText={() => getDayMarkdown(date)} className="hidden sm:flex" />
+        </div>
+      </div>
+
+      {isEditing ? (
+        <div className="space-y-4 mt-4">
+          <div>
+            <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">工作内容</p>
+            <MarkdownEditor
+              value={logContent}
+              onChange={setLogContent}
+              placeholder="记录工作内容..."
+              rows={8}
+            />
+          </div>
+          <div>
+            <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">经验教训</p>
+            <MarkdownEditor
+              value={lessonContent}
+              onChange={setLessonContent}
+              placeholder="记录经验教训、反思与收获..."
+              rows={4}
+            />
+          </div>
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="rounded-md bg-[var(--color-solid)] px-5 py-2 font-mono text-sm text-[var(--color-solid-text)] hover:bg-[var(--color-solid-hover)] disabled:opacity-50"
+            >
+              {saving ? '保存中...' : '保存修改'}
+            </button>
+            <button
+              onClick={() => setIsEditing(false)}
+              disabled={saving}
+              className="rounded-md border border-[var(--color-border)] px-5 py-2 font-mono text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {entry.log ? (
+            <div className="markdown-body text-sm text-[var(--color-ink-secondary)] mt-2" style={{ fontFamily: 'Georgia, serif' }}>
+              <MarkdownContent content={entry.log.content} />
+            </div>
+          ) : (
+            <p className="m-0 mt-2 text-sm italic text-[var(--color-ink-faint)]" style={{ fontFamily: 'Georgia, serif' }}>
+              未记录工作内容
+            </p>
+          )}
+
+          {entry.todos.length > 0 && (
+            <div className="mt-3 border-t border-dashed border-[var(--color-border)] pt-3">
+              <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">§ 已完成待办 §</p>
+              <div className="space-y-1">
+                {entry.todos.map((todo: any) => (
+                  <div key={todo.id} className="flex items-start gap-2 px-1">
+                    <div
+                      className="w-3.5 h-3.5 mt-0.5 rounded flex items-center justify-center shrink-0"
+                      style={{ background: 'var(--color-solid)' }}
+                    >
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--color-solid-text)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span
+                        className="text-sm"
+                        style={{ color: 'var(--color-ink-muted)', fontFamily: 'Georgia, serif' }}
+                      >
+                        {todo.content}
+                      </span>
+                      {todo.url && (
+                        <a
+                          href={todo.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-xs ml-2"
+                          style={{ color: 'var(--color-ink-faint)', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+                        >
+                          ⇗
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {entry.lesson && entry.lesson.content && (
+            <div className="mt-3 border-t border-dashed border-[var(--color-border)] pt-3">
+              <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">§ 经验教训 §</p>
+              <div className="markdown-body text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>
+                <MarkdownContent content={entry.lesson.content} />
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   )
 }
