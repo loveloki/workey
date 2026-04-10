@@ -104,21 +104,6 @@ export const lessons = {
     request<{ lessons: any[] }>(`/api/lessons/range?start=${start}&end=${end}`),
 }
 
-// Upload
-export async function uploadImage(file: File): Promise<{ url: string; filename: string; markdown: string }> {
-  const token = getToken()
-  const form = new FormData()
-  form.append('file', file)
-  const res = await fetch('/api/upload', {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: form,
-  })
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Upload failed')
-  return data
-}
-
 // Todos
 export const todos = {
   list: (all = false) =>
@@ -335,7 +320,7 @@ export const settings = {
       method: 'DELETE',
       body: JSON.stringify({ password }),
     }),
-  importData: async (file: File): Promise<{ message: string; attendance_count: number; work_log_count: number; image_count: number }> => {
+  importData: async (file: File): Promise<{ message: string; attendance_count: number; work_log_count: number }> => {
     const token = getToken()
     const form = new FormData()
     form.append('file', file)

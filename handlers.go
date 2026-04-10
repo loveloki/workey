@@ -1350,9 +1350,6 @@ type ExportData struct {
 	ExportedAt         string              `json:"exported_at"`
 }
 
-// uploadPathRe matches /uploads/filename references in markdown content
-var uploadPathRe = regexp.MustCompile(`/uploads/([^\s\)"]+)`)
-
 func handleDataExport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -1481,29 +1478,6 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		ExportedAt:         time.Now().Format(time.RFC3339),
 	}
 
-	// Collect referenced image filenames from work log and lesson content
-	imageFiles := map[string]bool{}
-	for _, wl := range workLogsList {
-		for _, m := range uploadPathRe.FindAllStringSubmatch(wl.Content, -1) {
-			imageFiles[m[1]] = true
-		}
-	}
-	for _, l := range lessonsList {
-		for _, m := range uploadPathRe.FindAllStringSubmatch(l.Content, -1) {
-			imageFiles[m[1]] = true
-		}
-	}
-	for _, t := range todosList {
-		for _, m := range uploadPathRe.FindAllStringSubmatch(t.Content, -1) {
-			imageFiles[m[1]] = true
-		}
-	}
-	for _, c := range checklistsList {
-		for _, m := range uploadPathRe.FindAllStringSubmatch(c.Items, -1) {
-			imageFiles[m[1]] = true
-		}
-	}
-
 	// Build zip in memory
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
@@ -1512,20 +1486,6 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 	jsonBytes, _ := json.MarshalIndent(exportData, "", "  ")
 	fw, _ := zw.Create("data.json")
 	fw.Write(jsonBytes)
-
-	// Write image files
-	uploadsDir := filepath.Join(dataDir, "uploads")
-	for filename := range imageFiles {
-		// Sanitize: only allow base filename, no path traversal
-		base := filepath.Base(filename)
-		srcPath := filepath.Join(uploadsDir, base)
-		fileData, err := os.ReadFile(srcPath)
-		if err != nil {
-			continue // skip missing files
-		}
-		fw, _ := zw.Create("uploads/" + base)
-		fw.Write(fileData)
-	}
 
 	zw.Close()
 
@@ -1574,7 +1534,6 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		Lessons    []Lesson     `json:"lessons"`
 	}
 	foundJSON := false
-	imageCount := 0
 
 	for _, f := range zr.File {
 		if f.Name == "data.json" {
@@ -1596,35 +1555,6 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 	if !foundJSON {
 		jsonError(w, "data.json not found in zip", http.StatusBadRequest)
 		return
-	}
-
-	// Extract image files from uploads/ directory
-	uploadsDir := filepath.Join(dataDir, "uploads")
-	os.MkdirAll(uploadsDir, 0755)
-
-	for _, f := range zr.File {
-		if !strings.HasPrefix(f.Name, "uploads/") || f.FileInfo().IsDir() {
-			continue
-		}
-		baseName := filepath.Base(f.Name)
-		// Sanitize: only allow safe filenames
-		if baseName == "" || strings.Contains(baseName, "..") {
-			continue
-		}
-		rc, err := f.Open()
-		if err != nil {
-			continue
-		}
-		dstPath := filepath.Join(uploadsDir, baseName)
-		dst, err := os.Create(dstPath)
-		if err != nil {
-			rc.Close()
-			continue
-		}
-		io.Copy(dst, rc)
-		dst.Close()
-		rc.Close()
-		imageCount++
 	}
 
 	// Upsert attendance and work logs
@@ -1712,7 +1642,6 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		"attendance_count": attendanceCount,
 		"work_log_count":   workLogCount,
 		"lesson_count":     lessonCount,
-		"image_count":      imageCount,
 	})
 }
 
@@ -1804,62 +1733,3 @@ func handleHistoryDateRange(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]interface{}{"earliest": earliest.String, "latest": latest.String})
 }
 
-// --- Image Upload ---
-
-func handleUpload(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// 10MB max
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		jsonError(w, "File too large (max 10MB)", http.StatusBadRequest)
-		return
-	}
-
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		jsonError(w, "No file provided", http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-
-	// Validate file type
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	allowed := map[string]bool{
-		".jpg": true, ".jpeg": true, ".png": true,
-		".gif": true, ".webp": true, ".svg": true,
-	}
-	if !allowed[ext] {
-		jsonError(w, "Only image files are allowed (jpg, png, gif, webp, svg)", http.StatusBadRequest)
-		return
-	}
-
-	// Generate unique filename: timestamp + random hex
-	b := make([]byte, 8)
-	rand.Read(b)
-	filename := fmt.Sprintf("%d-%s%s", time.Now().UnixMilli(), hex.EncodeToString(b), ext)
-
-	uploadsDir := filepath.Join(dataDir, "uploads")
-	dstPath := filepath.Join(uploadsDir, filename)
-
-	dst, err := os.Create(dstPath)
-	if err != nil {
-		jsonError(w, "Failed to save file", http.StatusInternalServerError)
-		return
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
-		jsonError(w, "Failed to save file", http.StatusInternalServerError)
-		return
-	}
-
-	url := "/uploads/" + filename
-	jsonOK(w, map[string]string{
-		"url":      url,
-		"filename": filename,
-		"markdown": fmt.Sprintf("![%s](%s)", header.Filename, url),
-	})
-}

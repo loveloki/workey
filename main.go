@@ -100,9 +100,6 @@ func main() {
 	// Passkey routes
 	passkeyRoutes(mux)
 
-	// Upload route
-	mux.HandleFunc("/api/upload", corsMiddleware(authMiddleware(handleUpload)))
-
 	// Serve uploaded files
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(filepath.Join(dataDir, "uploads")))))
 

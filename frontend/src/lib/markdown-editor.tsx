@@ -1,7 +1,6 @@
-import { useState, useRef, useCallback, type ChangeEvent, type DragEvent, type ClipboardEvent } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { uploadImage } from './api'
 
 interface MarkdownEditorProps {
   value: string
@@ -12,9 +11,7 @@ interface MarkdownEditorProps {
 
 export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: MarkdownEditorProps) {
   const [preview, setPreview] = useState(false)
-  const [uploading, setUploading] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const insertAtCursor = useCallback((text: string) => {
     const ta = textareaRef.current
@@ -32,50 +29,6 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: Markd
       ta.focus()
     })
   }, [value, onChange])
-
-  const doUpload = useCallback(async (file: File) => {
-    if (!file.type.startsWith('image/')) return
-    setUploading(true)
-    try {
-      const res = await uploadImage(file)
-      insertAtCursor(res.markdown + '\n')
-    } catch (e: any) {
-      alert('上传失败: ' + (e.message || '未知错误'))
-    } finally {
-      setUploading(false)
-    }
-  }, [insertAtCursor])
-
-  const handlePaste = useCallback((e: ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData?.items
-    if (!items) return
-    for (const item of items) {
-      if (item.type.startsWith('image/')) {
-        e.preventDefault()
-        const file = item.getAsFile()
-        if (file) doUpload(file)
-        return
-      }
-    }
-  }, [doUpload])
-
-  const handleDrop = useCallback((e: DragEvent<HTMLTextAreaElement>) => {
-    const files = e.dataTransfer?.files
-    if (!files?.length) return
-    for (const file of files) {
-      if (file.type.startsWith('image/')) {
-        e.preventDefault()
-        doUpload(file)
-        return
-      }
-    }
-  }, [doUpload])
-
-  const handleFileSelect = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) doUpload(file)
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }, [doUpload])
 
   // Toolbar formatting helpers
   const wrapSelection = useCallback((before: string, after: string) => {
@@ -108,21 +61,6 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: Markd
         <ToolbarBtn title="代码" onClick={() => wrapSelection('`', '`')}>&lt;/&gt;</ToolbarBtn>
         <ToolbarBtn title="链接" onClick={() => wrapSelection('[', '](url)')}>🔗</ToolbarBtn>
         <ToolbarBtn title="列表" onClick={() => insertAtCursor('\n- ')}>•</ToolbarBtn>
-        <div className="w-px h-5 bg-[var(--color-border)] mx-1" />
-        <ToolbarBtn
-          title="上传图片"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-        >
-          {uploading ? '⏳' : '🖼'}
-        </ToolbarBtn>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileSelect}
-          className="hidden"
-        />
         <div className="flex-1" />
         <button
           onClick={() => setPreview(!preview)}
@@ -155,9 +93,6 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: Markd
           ref={textareaRef}
           value={value}
           onChange={e => onChange(e.target.value)}
-          onPaste={handlePaste}
-          onDrop={handleDrop}
-          onDragOver={e => e.preventDefault()}
           placeholder={placeholder}
           className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-base text-[var(--color-ink-secondary)] placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-border-focus)] focus:outline-none resize-y"
           style={{ fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace', fontSize: '14px', lineHeight: '1.6' }}
@@ -165,11 +100,8 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: Markd
         />
       )}
 
-      {uploading && (
-        <p className="mt-1 font-mono text-xs text-[var(--color-ink-muted)]">上传中...</p>
-      )}
       <p className="mt-1 font-mono text-xs text-[var(--color-ink-faint)]">
-        支持 Markdown · 可粘贴或拖拽图片
+        支持 Markdown
       </p>
     </div>
   )

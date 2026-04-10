@@ -858,7 +858,6 @@ function DataSection() {
       const parts = []
       if (result.attendance_count) parts.push(`${result.attendance_count} 条考勤`)
       if (result.work_log_count) parts.push(`${result.work_log_count} 条工作日志`)
-      if (result.image_count) parts.push(`${result.image_count} 张图片`)
       setMsg(`导入成功：${parts.join('，') || '无新数据'}`)
       setIsError(false)
     } catch (e: any) {
