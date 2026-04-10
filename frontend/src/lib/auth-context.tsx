@@ -25,8 +25,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isLoggedIn()) {
       authApi.me().then(data => {
         setUser(data.user)
-      }).catch(() => {
-        clearToken()
+      }).catch((err: any) => {
+        if (err.status === 401) {
+          clearToken()
+        }
       }).finally(() => setLoading(false))
     } else {
       setLoading(false)

@@ -26,9 +26,27 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers['Authorization'] = `Bearer ${token}`
   }
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
-  const data = await res.json()
+  
+  if (res.status === 401) {
+    const err = new Error('Unauthorized')
+    ;(err as any).status = 401
+    throw err
+  }
+
+  const text = await res.text()
+  let data: any = {}
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch (e) {
+      data = { error: 'Invalid response format' }
+    }
+  }
+
   if (!res.ok) {
-    throw new Error(data.error || 'Request failed')
+    const err = new Error(data.error || 'Request failed')
+    ;(err as any).status = res.status
+    throw err
   }
   return data
 }

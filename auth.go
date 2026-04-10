@@ -59,7 +59,7 @@ func createJWT(userID int64) (string, error) {
 	claims := jwtClaims{
 		Sub: userID,
 		Iat: time.Now().Unix(),
-		Exp: time.Now().Add(72 * time.Hour).Unix(),
+		Exp: time.Now().Add(90 * 24 * time.Hour).Unix(), // 90 days
 	}
 
 	hJSON, _ := json.Marshal(header)
