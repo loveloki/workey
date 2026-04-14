@@ -872,7 +872,7 @@ function DataSection() {
   return (
     <Card title="数据管理">
       <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
-        导出所有考勤、工作日志和图片为 ZIP 压缩包，或从 ZIP 文件导入数据。
+        导出所有考勤、工作日志和待办等数据为 ZIP 压缩包，或从 ZIP 文件导入数据。
       </p>
       <div className="flex flex-col sm:flex-row items-start gap-3">
         <button
