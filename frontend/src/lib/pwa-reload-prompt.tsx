@@ -6,6 +6,9 @@ export function PWAReloadPrompt() {
     updateServiceWorker,
   } = useRegisterSW({
     onRegisteredSW(swUrl, r) {
+      // Immediate update check on load
+      r && r.update()
+      
       // Check for updates every hour
       if (r) {
         setInterval(() => {
