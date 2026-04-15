@@ -22,7 +22,7 @@ export function PWAReloadPrompt() {
 
   return (
     <div
-      className="fixed top-20 left-4 right-4 sm:right-auto sm:w-80 z-[100] flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg"
+      className="fixed top-20 left-4 right-4 sm:left-auto sm:right-4 sm:w-80 z-[100] flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg"
       style={{
         background: 'var(--color-surface-strong)',
         border: '1px solid var(--color-border)',
