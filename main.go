@@ -217,6 +217,13 @@ func handleSPA(w http.ResponseWriter, r *http.Request) {
 	// Check if file exists
 	info, err := os.Stat(path)
 	if err == nil && !info.IsDir() {
+		// Prevent caching for service worker and index.html
+		if strings.HasSuffix(path, "sw.js") || strings.HasSuffix(path, "index.html") {
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		} else {
+			// Cache other static assets for 1 year (since Vite uses content hashes)
+			w.Header().Set("Cache-Control", "public, max-age=31536000")
+		}
 		http.ServeFile(w, r, path)
 		return
 	}
@@ -230,6 +237,7 @@ func handleSPA(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"status": "api-only", "message": "Frontend not built. API available at /api/"})
 		return
 	}
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	http.ServeFile(w, r, indexPath)
 }
 
