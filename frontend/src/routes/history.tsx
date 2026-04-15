@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect } from 'react'
 import { workLogs as workLogsApi, attendance as attendanceApi, lessons as lessonsApi, todos as todosApi, history as historyApi, iterationOverrides as overridesApi, type Todo } from '../lib/api'
-import { getDateRange, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration, makeIterationConfig, type IterationConfig, type IterationOverrideMap } from '../lib/date-utils'
+import { getDateRange, formatDate, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration, makeIterationConfig, type IterationConfig, type IterationOverrideMap } from '../lib/date-utils'
 import { settings as settingsApi } from '../lib/api'
 import { MarkdownContent, MarkdownEditor } from '../lib/markdown-editor'
 import { formatDayMarkdown } from '../lib/report-utils'
@@ -150,9 +150,10 @@ function IterationSelector({
 function HistoryPage() {
   const { user, loading } = useAuth()
   const navigate = useNavigate()
-  const [preset, setPreset] = useState<RangePreset | 'custom' | 'iteration'>('week')
+  const [preset, setPreset] = useState<RangePreset | 'custom' | 'iteration'>('iteration')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
+  const [currentFetchRange, setCurrentFetchRange] = useState({ start: '', end: '' })
   const [logs, setLogs] = useState<any[]>([])
   const [attendances, setAttendances] = useState<any[]>([])
   const [lessonsList, setLessonsList] = useState<any[]>([])
@@ -165,6 +166,12 @@ function HistoryPage() {
   const [selectedIter, setSelectedIter] = useState<number | null>(null)
   const [minIter, setMinIter] = useState<number | null>(null)
   const [maxIter, setMaxIter] = useState<number | null>(null)
+  
+  // Year / Quarter state
+  const currentYear = new Date().getFullYear()
+  const [availableYears, setAvailableYears] = useState<number[]>([currentYear])
+  const [selectedYear, setSelectedYear] = useState<number>(currentYear)
+  const [selectedQuarter, setSelectedQuarter] = useState<number>(Math.floor(new Date().getMonth() / 3) + 1)
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: '/login' })
@@ -187,22 +194,57 @@ function HistoryPage() {
     }).catch(console.error)
   }, [user])
 
-  // Load history date range to determine available iterations
+  // Load history date range to determine available iterations and years
   useEffect(() => {
     if (!user || !iterConfig) return
     historyApi.dateRange().then(res => {
       if (res.earliest) {
         const earliestDate = new Date(res.earliest + 'T00:00:00')
         setMinIter(getIterationNumber(earliestDate, iterConfig, iterOverrides))
+        
+        const earliestYear = earliestDate.getFullYear()
+        const cy = new Date().getFullYear()
+        const years = []
+        for (let y = cy; y >= earliestYear; y--) {
+          years.push(y)
+        }
+        if (years.length === 0) years.push(cy)
+        setAvailableYears(years)
       }
     }).catch(console.error)
   }, [user, iterConfig, iterOverrides])
 
   useEffect(() => {
     if (!user || preset === 'custom' || preset === 'iteration') return
-    const range = getDateRange(preset as RangePreset)
-    fetchData(range.start, range.end)
-  }, [preset, user])
+    
+    let startStr = ''
+    let endStr = ''
+    const now = new Date()
+    
+    if (preset === 'month') {
+      const range = getDateRange('month')
+      startStr = range.start
+      endStr = range.end
+    } else if (preset === 'quarter') {
+      const startMonth = (selectedQuarter - 1) * 3
+      const startDate = new Date(selectedYear, startMonth, 1)
+      const endDate = new Date(selectedYear, startMonth + 3, 0) // last day of quarter
+      
+      startStr = formatDate(startDate)
+      // if it's the current quarter and year, we might want to cap it to today, 
+      // but typically historical query just sends the end of the quarter
+      endStr = formatDate(endDate)
+    } else if (preset === 'year') {
+      const startDate = new Date(selectedYear, 0, 1)
+      const endDate = new Date(selectedYear, 11, 31)
+      startStr = formatDate(startDate)
+      endStr = formatDate(endDate)
+    }
+    
+    if (startStr && endStr) {
+      fetchData(startStr, endStr)
+    }
+  }, [preset, user, selectedYear, selectedQuarter])
 
   // Fetch data when iteration changes
   useEffect(() => {
@@ -212,6 +254,7 @@ function HistoryPage() {
   }, [selectedIter, preset, user, iterConfig, iterOverrides])
 
   const fetchData = async (start: string, end: string) => {
+    setCurrentFetchRange({ start, end })
     setFetching(true)
     try {
       const [logsRes, attRes, lessonsRes, todosRes] = await Promise.all([
@@ -237,12 +280,10 @@ function HistoryPage() {
   }
 
   const presets: { key: RangePreset | 'custom' | 'iteration'; label: string }[] = [
-    { key: 'week', label: '本周' },
+    { key: 'iteration', label: '本 iteration' },
     { key: 'month', label: '本月' },
-    { key: 'iteration', label: 'Iteration' },
-    { key: 'quarter', label: '本季度' },
-    { key: 'half-year', label: '半年' },
-    { key: 'year', label: '全年' },
+    { key: 'quarter', label: '季度' },
+    { key: 'year', label: '年度' },
     { key: 'custom', label: '自定义' },
   ]
 
@@ -362,6 +403,53 @@ function HistoryPage() {
         />
       )}
 
+      {/* Quarter selector */}
+      {preset === 'quarter' && (
+        <div className="mb-4 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={selectedYear}
+              onChange={e => setSelectedYear(parseInt(e.target.value, 10))}
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-sm text-[var(--color-ink)] focus:outline-none"
+            >
+              {availableYears.map(y => (
+                <option key={y} value={y}>{y} 年</option>
+              ))}
+            </select>
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {[1, 2, 3, 4].map(q => (
+                <button
+                  key={q}
+                  onClick={() => setSelectedQuarter(q)}
+                  className={`rounded-md border px-3 py-1.5 font-mono text-xs transition-colors ${
+                    selectedQuarter === q
+                      ? 'border-[var(--color-border-strong)] bg-[var(--color-surface-hover)] font-medium text-[var(--color-ink)]'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface-strong)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]'
+                  }`}
+                >
+                  {selectedYear}Q{q}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Year selector */}
+      {preset === 'year' && (
+        <div className="mb-4">
+          <select
+            value={selectedYear}
+            onChange={e => setSelectedYear(parseInt(e.target.value, 10))}
+            className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-sm text-[var(--color-ink)] focus:outline-none"
+          >
+            {availableYears.map(y => (
+              <option key={y} value={y}>{y} 年</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Custom date range */}
       {preset === 'custom' && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -398,7 +486,7 @@ function HistoryPage() {
         <div className="space-y-3">
           {sortedDates.map(date => {
             const entry = dateMap.get(date)!
-            return <HistoryEntry key={date} date={date} entry={entry} getDayMarkdown={getDayMarkdown} onRefresh={() => handleCustomSearch()} preset={preset} fetchData={fetchData} currentRange={preset === 'custom' ? {start: customStart, end: customEnd} : preset === 'iteration' && iterConfig && selectedIter !== null ? getIterationRange(selectedIter, iterConfig, iterOverrides) : getDateRange(preset as RangePreset)} />
+            return <HistoryEntry key={date} date={date} entry={entry} getDayMarkdown={getDayMarkdown} onRefresh={() => handleCustomSearch()} preset={preset} fetchData={fetchData} currentRange={currentFetchRange} />
           })}
         </div>
       )}
