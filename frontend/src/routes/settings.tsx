@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect, useRef } from 'react'
-import { settings, passkeys as passkeysApi, iterationOverrides as overridesApi, base64urlToBuffer, type Passkey, type IterationOverride } from '../lib/api'
+import { settings, system, passkeys as passkeysApi, iterationOverrides as overridesApi, base64urlToBuffer, type Passkey, type IterationOverride } from '../lib/api'
 import { makeIterationConfig, getCurrentIteration, getIterationRange, computeIterations, type IterationConfig, type IterationOverrideMap } from '../lib/date-utils'
 import { useTheme, type Theme } from '../lib/theme-context'
 
@@ -39,6 +39,7 @@ function SettingsPage() {
         <PasswordSection />
         <DataSection />
         <DeleteDataSection />
+        <VersionSection />
       </div>
     </main>
   )
@@ -1029,6 +1030,51 @@ function DeleteDataSection() {
         <p className="font-mono text-sm mt-3" style={{ color: isError ? 'var(--color-danger-text)' : 'var(--color-ink-muted)' }}>
           {msg}
         </p>
+      )}
+    </Card>
+  )
+}
+
+/* ── Version Info ─────────────────────────────────────── */
+
+function VersionSection() {
+  const [version, setVersion] = useState<{ commit: string; date: string; content: string } | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    system.version().then(data => {
+      setVersion(data)
+    }).catch(() => {
+      // ignore
+    }).finally(() => {
+      setLoading(false)
+    })
+  }, [])
+
+  return (
+    <Card title="关于系统">
+      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
+        当前部署的系统版本信息。
+      </p>
+      {loading ? (
+        <p className="font-mono text-sm" style={{ color: 'var(--color-ink-muted)' }}>加载中...</p>
+      ) : version ? (
+        <div className="space-y-2 font-mono text-sm">
+          <div className="flex flex-col sm:flex-row sm:gap-4">
+            <span style={{ color: 'var(--color-ink-muted)', minWidth: '80px' }}>更新日期</span>
+            <span style={{ color: 'var(--color-ink)' }}>{version.date}</span>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:gap-4">
+            <span style={{ color: 'var(--color-ink-muted)', minWidth: '80px' }}>更新 Commit</span>
+            <span style={{ color: 'var(--color-ink)' }}>{version.commit}</span>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:gap-4">
+            <span style={{ color: 'var(--color-ink-muted)', minWidth: '80px' }}>更新内容</span>
+            <span style={{ color: 'var(--color-ink)' }}>{version.content}</span>
+          </div>
+        </div>
+      ) : (
+        <p className="font-mono text-sm" style={{ color: 'var(--color-ink-muted)' }}>未知版本</p>
       )}
     </Card>
   )

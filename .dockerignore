@@ -2,5 +2,4 @@ workey
 workey.db*
 frontend/node_modules/
 frontend/dist/
-.git/
 uploads/

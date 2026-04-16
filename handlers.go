@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 )
@@ -1726,4 +1728,40 @@ func handleHistoryDateRange(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonOK(w, map[string]interface{}{"earliest": earliest.String, "latest": latest.String})
+}
+
+func handleSystemVersion(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	type Version struct {
+		Commit  string `json:"commit"`
+		Date    string `json:"date"`
+		Content string `json:"content"`
+	}
+
+	var v Version
+	// Try reading from file first
+	data, err := os.ReadFile("version.json")
+	if err == nil {
+		if err := json.Unmarshal(data, &v); err == nil && v.Commit != "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(data)
+			return
+		}
+	}
+
+	// Fallback to git
+	cmd := exec.Command("git", "log", "-1", "--format={\"commit\":\"%h\",\"date\":\"%cd\",\"content\":\"%s\"}", "--date=short")
+	out, err := cmd.Output()
+	if err == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(out)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"commit":"unknown","date":"unknown","content":"unknown"}`))
 }

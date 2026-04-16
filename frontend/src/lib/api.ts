@@ -285,6 +285,11 @@ export const iterationOverrides = {
     }),
 }
 
+// System
+export const system = {
+  version: () => request<{ commit: string; date: string; content: string }>('/api/system/version'),
+}
+
 // History
 export const history = {
   dateRange: () =>

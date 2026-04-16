@@ -71,6 +71,7 @@ func main() {
 	// Settings routes
 	mux.HandleFunc("/api/auth/change-password", corsMiddleware(authMiddleware(handleChangePassword)))
 	mux.HandleFunc("/api/settings", corsMiddleware(authMiddleware(handleSettings)))
+	mux.HandleFunc("/api/system/version", corsMiddleware(authMiddleware(handleSystemVersion)))
 
 	// Iteration override routes
 	mux.HandleFunc("/api/iteration-overrides", corsMiddleware(authMiddleware(handleIterationOverrides)))
