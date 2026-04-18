@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect } from 'react'
-import { workLogs as workLogsApi, attendance as attendanceApi, lessons as lessonsApi, todos as todosApi, history as historyApi, iterationOverrides as overridesApi, type Todo } from '../lib/api'
-import { getDateRange, formatDate, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration, makeIterationConfig, type IterationConfig, type IterationOverrideMap } from '../lib/date-utils'
+import { workLogs as workLogsApi, attendance as attendanceApi, lessons as lessonsApi, todos as todosApi, history as historyApi, type Todo } from '../lib/api'
+import { getDateRange, formatDate, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration } from '../lib/date-utils'
 import { settings as settingsApi } from '../lib/api'
 import { MarkdownContent, MarkdownEditor } from '../lib/markdown-editor'
 import { formatDayMarkdown } from '../lib/report-utils'
@@ -45,15 +45,13 @@ function IterationSelector({
   selectedIter,
   minIter,
   maxIter,
-  iterConfig,
-  iterOverrides,
+  epochStr,
   onSelect,
 }: {
   selectedIter: number
   minIter: number
   maxIter: number
-  iterConfig: IterationConfig
-  iterOverrides: IterationOverrideMap
+  epochStr: string
   onSelect: (n: number) => void
 }) {
   const [jumpValue, setJumpValue] = useState('')
@@ -74,7 +72,7 @@ function IterationSelector({
     }
   }
 
-  const currentRange = getIterationRange(selectedIter, iterConfig, iterOverrides)
+  const currentRange = getIterationRange(selectedIter, epochStr)
 
   const navBtn = (label: string, target: number, disabled: boolean) => (
     <button
@@ -96,7 +94,7 @@ function IterationSelector({
         {navBtn('‹', clamp(selectedIter + 1), selectedIter === maxIter)}
 
         {windowIters.map(iterNum => {
-          const range = getIterationRange(iterNum, iterConfig, iterOverrides)
+          const range = getIterationRange(iterNum, epochStr)
           return (
             <button
               key={iterNum}
@@ -160,8 +158,7 @@ function HistoryPage() {
   const [completedTodos, setCompletedTodos] = useState<Todo[]>([])
   const [fetching, setFetching] = useState(false)
   // Iteration config from settings
-  const [iterConfig, setIterConfig] = useState<IterationConfig | null>(null)
-  const [iterOverrides, setIterOverrides] = useState<IterationOverrideMap>({})
+  const [epochStr, setEpochStr] = useState<string>('')
   // Iteration state
   const [selectedIter, setSelectedIter] = useState<number | null>(null)
   const [minIter, setMinIter] = useState<number | null>(null)
@@ -178,29 +175,25 @@ function HistoryPage() {
   }, [loading, user, navigate])
 
   // Load iteration config + overrides from settings
-  useEffect(() => {
+    useEffect(() => {
     if (!user) return
-    Promise.all([settingsApi.get(), overridesApi.list()]).then(([data, ovRes]) => {
-      const cfg = makeIterationConfig(data.iteration_start_date, data.iteration_duration_days)
-      setIterConfig(cfg)
-      const ovMap: IterationOverrideMap = {}
-      for (const o of ovRes.overrides) {
-        ovMap[o.iteration_number] = { start: o.start_date, end: o.end_date }
+    historyApi.dateRange().then(res => {
+      if (res.earliest) {
+        setEpochStr(res.earliest)
+      } else {
+        const todayStr = new Date().toISOString().split('T')[0]
+        setEpochStr(todayStr)
       }
-      setIterOverrides(ovMap)
-      const cur = getCurrentIteration(cfg, ovMap)
-      setSelectedIter(cur)
-      setMaxIter(cur + 2)
     }).catch(console.error)
   }, [user])
 
   // Load history date range to determine available iterations and years
   useEffect(() => {
-    if (!user || !iterConfig) return
+    if (!user || !epochStr) return
     historyApi.dateRange().then(res => {
       if (res.earliest) {
         const earliestDate = new Date(res.earliest + 'T00:00:00')
-        setMinIter(getIterationNumber(earliestDate, iterConfig, iterOverrides))
+        setMinIter(getIterationNumber(res.earliest, epochStr))
         
         const earliestYear = earliestDate.getFullYear()
         const cy = new Date().getFullYear()
@@ -212,7 +205,7 @@ function HistoryPage() {
         setAvailableYears(years)
       }
     }).catch(console.error)
-  }, [user, iterConfig, iterOverrides])
+  }, [user, epochStr])
 
   useEffect(() => {
     if (!user || preset === 'custom' || preset === 'iteration') return
@@ -248,10 +241,10 @@ function HistoryPage() {
 
   // Fetch data when iteration changes
   useEffect(() => {
-    if (!user || preset !== 'iteration' || !iterConfig || selectedIter === null) return
-    const range = getIterationRange(selectedIter, iterConfig, iterOverrides)
+    if (!user || preset !== 'iteration' || !epochStr || selectedIter === null) return
+    const range = getIterationRange(selectedIter, epochStr)
     fetchData(range.start, range.end)
-  }, [selectedIter, preset, user, iterConfig, iterOverrides])
+  }, [selectedIter, preset, user, epochStr])
 
   const fetchData = async (start: string, end: string) => {
     setCurrentFetchRange({ start, end })
@@ -392,13 +385,12 @@ function HistoryPage() {
       </div>
 
       {/* Iteration selector — windowed buttons + jump input */}
-      {preset === 'iteration' && minIter !== null && maxIter !== null && iterConfig && selectedIter !== null && (
+      {preset === 'iteration' && minIter !== null && maxIter !== null && epochStr && selectedIter !== null && (
         <IterationSelector
           selectedIter={selectedIter}
           minIter={minIter}
           maxIter={maxIter}
-          iterConfig={iterConfig}
-          iterOverrides={iterOverrides}
+          epochStr={epochStr}
           onSelect={setSelectedIter}
         />
       )}
@@ -541,12 +533,16 @@ function HistoryEntry({ date, entry, getDayMarkdown, onRefresh, preset, fetchDat
           )}
         </div>
         <div className="flex items-center gap-3">
-          {entry.attendance && (
-            <div className="flex items-center gap-3 font-mono text-xs text-[var(--color-ink-muted)]">
-              <span>上班 {formatTime(entry.attendance.clock_in)}</span>
-              <span>下班 {formatTime(entry.attendance.clock_out)}</span>
-            </div>
-          )}
+          {entry.attendance && (() => {
+            const isWeekend = [0, 6].includes(new Date(date + 'T00:00:00').getDay())
+            return (
+              <div className="flex items-center gap-3 font-mono text-xs text-[var(--color-ink-muted)]">
+                {isWeekend && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">加班</span>}
+                <span>上班 {formatTime(entry.attendance.clock_in)}</span>
+                <span>下班 {formatTime(entry.attendance.clock_out)}</span>
+              </div>
+            )
+          })()}
           <CopyButton getText={() => getDayMarkdown(date)} className="hidden sm:flex" />
         </div>
       </div>

@@ -60,15 +60,6 @@ type Todo struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-type IterationOverride struct {
-	ID              int64  `json:"id"`
-	UserID          int64  `json:"user_id"`
-	IterationNumber int64  `json:"iteration_number"`
-	StartDate       string `json:"start_date"`
-	EndDate         string `json:"end_date"`
-	CreatedAt       string `json:"created_at"`
-	UpdatedAt       string `json:"updated_at"`
-}
 
 func today() string {
 	return time.Now().Format("2006-01-02")
@@ -643,25 +634,8 @@ func handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var iterationStartDate string
-	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'iteration_start_date'", userID).Scan(&iterationStartDate)
-	if err == sql.ErrNoRows {
-		iterationStartDate = "2019-09-02"
-	} else if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
-	}
-
-	var iterationDurationDays string
-	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'iteration_duration_days'", userID).Scan(&iterationDurationDays)
-	if err == sql.ErrNoRows {
-		iterationDurationDays = "14"
-	} else if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
-	}
-
-	jsonOK(w, map[string]string{"timezone": timezone, "kanban_url": kanbanURL, "theme": theme, "iteration_start_date": iterationStartDate, "iteration_duration_days": iterationDurationDays})
+	
+	jsonOK(w, map[string]string{"timezone": timezone, "kanban_url": kanbanURL, "theme": theme, })
 }
 
 func handlePostSettings(w http.ResponseWriter, r *http.Request) {
@@ -671,9 +645,7 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		Timezone              string `json:"timezone"`
 		KanbanURL             string `json:"kanban_url"`
 		Theme                 string `json:"theme"`
-		IterationStartDate    string `json:"iteration_start_date"`
-		IterationDurationDays string `json:"iteration_duration_days"`
-	}
+			}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -712,28 +684,6 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if req.IterationStartDate != "" {
-		_, err := db.Exec(
-			"INSERT INTO user_settings (user_id, key, value) VALUES (?, 'iteration_start_date', ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
-			userID, req.IterationStartDate,
-		)
-		if err != nil {
-			jsonError(w, "Failed to save settings", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	if req.IterationDurationDays != "" {
-		_, err := db.Exec(
-			"INSERT INTO user_settings (user_id, key, value) VALUES (?, 'iteration_duration_days', ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
-			userID, req.IterationDurationDays,
-		)
-		if err != nil {
-			jsonError(w, "Failed to save settings", http.StatusInternalServerError)
-			return
-		}
-	}
-
 	// Read current values for response
 	var timezone string
 	err := db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'timezone'", userID).Scan(&timezone)
@@ -753,19 +703,8 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		theme = "light"
 	}
 
-	var iterationStartDate string
-	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'iteration_start_date'", userID).Scan(&iterationStartDate)
-	if err != nil {
-		iterationStartDate = "2019-09-02"
-	}
-
-	var iterationDurationDays string
-	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'iteration_duration_days'", userID).Scan(&iterationDurationDays)
-	if err != nil {
-		iterationDurationDays = "14"
-	}
-
-	jsonOK(w, map[string]string{"timezone": timezone, "kanban_url": kanbanURL, "theme": theme, "iteration_start_date": iterationStartDate, "iteration_duration_days": iterationDurationDays})
+	
+	jsonOK(w, map[string]string{"timezone": timezone, "kanban_url": kanbanURL, "theme": theme, })
 }
 
 // --- Todo handlers ---
@@ -1203,138 +1142,6 @@ func handleDeleteChecklist(w http.ResponseWriter, r *http.Request) {
 
 // --- Iteration Override handlers ---
 
-func handleIterationOverrides(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		handleGetIterationOverrides(w, r)
-	case "POST":
-		handleCreateIterationOverride(w, r)
-	case "DELETE":
-		handleDeleteIterationOverride(w, r)
-	default:
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-func handleGetIterationOverrides(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-
-	rows, err := db.Query(
-		"SELECT id, user_id, iteration_number, start_date, end_date, created_at, updated_at FROM iteration_overrides WHERE user_id = ? ORDER BY iteration_number",
-		userID,
-	)
-	if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	overrides := []IterationOverride{}
-	for rows.Next() {
-		var o IterationOverride
-		rows.Scan(&o.ID, &o.UserID, &o.IterationNumber, &o.StartDate, &o.EndDate, &o.CreatedAt, &o.UpdatedAt)
-		overrides = append(overrides, o)
-	}
-	jsonOK(w, map[string]interface{}{"overrides": overrides})
-}
-
-func handleCreateIterationOverride(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-
-	var req struct {
-		IterationNumber int64  `json:"iteration_number"`
-		StartDate       string `json:"start_date"`
-		EndDate         string `json:"end_date"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.IterationNumber < 1 {
-		jsonError(w, "iteration_number must be >= 1", http.StatusBadRequest)
-		return
-	}
-
-	startDate, err := time.Parse("2006-01-02", req.StartDate)
-	if err != nil {
-		jsonError(w, "start_date must be in YYYY-MM-DD format", http.StatusBadRequest)
-		return
-	}
-
-	endDate, err := time.Parse("2006-01-02", req.EndDate)
-	if err != nil {
-		jsonError(w, "end_date must be in YYYY-MM-DD format", http.StatusBadRequest)
-		return
-	}
-
-	if startDate.After(endDate) {
-		jsonError(w, "start_date must be <= end_date", http.StatusBadRequest)
-		return
-	}
-
-	now := nowDatetime()
-
-	// Upsert: try update first, then insert
-	result, err := db.Exec(
-		"UPDATE iteration_overrides SET start_date = ?, end_date = ?, updated_at = ? WHERE user_id = ? AND iteration_number = ?",
-		req.StartDate, req.EndDate, now, userID, req.IterationNumber,
-	)
-	if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		_, err = db.Exec(
-			"INSERT INTO iteration_overrides (user_id, iteration_number, start_date, end_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-			userID, req.IterationNumber, req.StartDate, req.EndDate, now, now,
-		)
-		if err != nil {
-			jsonError(w, "Internal error", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	// Fetch the upserted record
-	var o IterationOverride
-	err = db.QueryRow(
-		"SELECT id, user_id, iteration_number, start_date, end_date, created_at, updated_at FROM iteration_overrides WHERE user_id = ? AND iteration_number = ?",
-		userID, req.IterationNumber,
-	).Scan(&o.ID, &o.UserID, &o.IterationNumber, &o.StartDate, &o.EndDate, &o.CreatedAt, &o.UpdatedAt)
-	if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
-	}
-
-	jsonOK(w, map[string]interface{}{"override": o})
-}
-
-func handleDeleteIterationOverride(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-	iterationNumber := r.URL.Query().Get("iteration_number")
-	if iterationNumber == "" {
-		jsonError(w, "iteration_number query parameter is required", http.StatusBadRequest)
-		return
-	}
-
-	result, err := db.Exec("DELETE FROM iteration_overrides WHERE user_id = ? AND iteration_number = ?", userID, iterationNumber)
-	if err != nil {
-		jsonError(w, "Failed to delete override", http.StatusInternalServerError)
-		return
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		jsonError(w, "Override not found", http.StatusNotFound)
-		return
-	}
-
-	jsonOK(w, map[string]string{"message": "Override deleted"})
-}
-
-// --- Export/Import Data ---
 
 type ExportData struct {
 	Attendance         []Attendance        `json:"attendance"`
@@ -1343,7 +1150,6 @@ type ExportData struct {
 	Todos              []Todo              `json:"todos"`
 	Checklists         []Checklist         `json:"checklists"`
 	UserSettings       map[string]string   `json:"user_settings"`
-	IterationOverrides []IterationOverride `json:"iteration_overrides"`
 	ExportedAt         string              `json:"exported_at"`
 }
 
@@ -1448,21 +1254,7 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 	}
 	rows.Close()
 
-	overridesList := []IterationOverride{}
-	rows, err = db.Query(
-		"SELECT id, user_id, iteration_number, start_date, end_date, created_at, updated_at FROM iteration_overrides WHERE user_id = ? ORDER BY iteration_number",
-		userID,
-	)
-	if err != nil {
-		jsonError(w, "Failed to export iteration overrides", http.StatusInternalServerError)
-		return
-	}
-	for rows.Next() {
-		var o IterationOverride
-		rows.Scan(&o.ID, &o.UserID, &o.IterationNumber, &o.StartDate, &o.EndDate, &o.CreatedAt, &o.UpdatedAt)
-		overridesList = append(overridesList, o)
-	}
-	rows.Close()
+	
 
 	exportData := ExportData{
 		Attendance:         attendances,
@@ -1471,8 +1263,7 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		Todos:              todosList,
 		Checklists:         checklistsList,
 		UserSettings:       userSettings,
-		IterationOverrides: overridesList,
-		ExportedAt:         time.Now().Format(time.RFC3339),
+				ExportedAt:         time.Now().Format(time.RFC3339),
 	}
 
 	// Build zip in memory
@@ -1674,7 +1465,7 @@ func handleDataDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete all user data
-	tables := []string{"attendance", "work_logs", "lessons", "todos", "checklists", "iteration_overrides"}
+	tables := []string{"attendance", "work_logs", "lessons", "todos", "checklists"}
 	counts := map[string]int64{}
 	for _, table := range tables {
 		result, err := db.Exec("DELETE FROM "+table+" WHERE user_id = ?", userID)
