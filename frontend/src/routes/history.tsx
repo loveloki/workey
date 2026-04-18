@@ -541,12 +541,16 @@ function HistoryEntry({ date, entry, getDayMarkdown, onRefresh, preset, fetchDat
           )}
         </div>
         <div className="flex items-center gap-3">
-          {entry.attendance && (
-            <div className="flex items-center gap-3 font-mono text-xs text-[var(--color-ink-muted)]">
-              <span>上班 {formatTime(entry.attendance.clock_in)}</span>
-              <span>下班 {formatTime(entry.attendance.clock_out)}</span>
-            </div>
-          )}
+          {entry.attendance && (() => {
+            const isWeekend = [0, 6].includes(new Date(date + 'T00:00:00').getDay())
+            return (
+              <div className="flex items-center gap-3 font-mono text-xs text-[var(--color-ink-muted)]">
+                {isWeekend && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">加班</span>}
+                <span>上班 {formatTime(entry.attendance.clock_in)}</span>
+                <span>下班 {formatTime(entry.attendance.clock_out)}</span>
+              </div>
+            )
+          })()}
           <CopyButton getText={() => getDayMarkdown(date)} className="hidden sm:flex" />
         </div>
       </div>
