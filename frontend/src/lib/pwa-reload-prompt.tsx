@@ -35,7 +35,19 @@ export function PWAReloadPrompt() {
         新版本已可用
       </span>
       <button
-        onClick={() => updateServiceWorker(true)}
+        onClick={() => {
+          updateServiceWorker(true)
+          // Add explicit fallback in case workbox isUpdate check fails
+          if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+              window.location.reload()
+            })
+            // Fallback timeout just in case controllerchange doesn't fire
+            setTimeout(() => window.location.reload(), 1000)
+          } else {
+            window.location.reload()
+          }
+        }}
         className="font-mono text-sm px-3 py-1.5 rounded-md transition-colors"
         style={{
           background: '#4fb8b2',
