@@ -74,6 +74,7 @@ func main() {
 	mux.HandleFunc("/api/system/version", corsMiddleware(authMiddleware(handleSystemVersion)))
 
 	// Iteration override routes
+	mux.HandleFunc("/api/iteration-overrides", corsMiddleware(authMiddleware(handleIterationOverrides)))
 
 	// Export/Import/Delete routes
 	mux.HandleFunc("/api/data/export", corsMiddleware(authMiddleware(handleDataExport)))
@@ -175,6 +176,16 @@ func initDB() {
 			done INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS iteration_overrides (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL REFERENCES users(id),
+			iteration_number INTEGER NOT NULL,
+			start_date TEXT NOT NULL,
+			end_date TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, iteration_number)
 		)`,
 	}
 	for _, q := range queries {

@@ -260,6 +260,31 @@ export function base64urlToBuffer(base64url: string): ArrayBuffer {
   return bytes.buffer
 }
 
+// Iteration Overrides
+export interface IterationOverride {
+  id: number
+  user_id: number
+  iteration_number: number
+  start_date: string
+  end_date: string
+  created_at: string
+  updated_at: string
+}
+
+export const iterationOverrides = {
+  list: () =>
+    request<{ overrides: IterationOverride[] }>('/api/iteration-overrides'),
+  save: (iteration_number: number, start_date: string, end_date: string) =>
+    request<{ override: IterationOverride }>('/api/iteration-overrides', {
+      method: 'POST',
+      body: JSON.stringify({ iteration_number, start_date, end_date }),
+    }),
+  delete: (iteration_number: number) =>
+    request<{ message: string }>(`/api/iteration-overrides?iteration_number=${iteration_number}`, {
+      method: 'DELETE',
+    }),
+}
+
 // System
 export const system = {
   version: () => request<{ commit: string; date: string; content: string }>('/api/system/version'),
@@ -273,9 +298,9 @@ export const history = {
 
 // Settings
 export const settings = {
-  get: () => request<{ timezone: string; kanban_url: string; theme: string; }>('/api/settings'),
-  save: (data: { timezone?: string; kanban_url?: string; theme?: string; }) =>
-    request<{ timezone: string; kanban_url: string; theme: string; }>('/api/settings', {
+  get: () => request<{ timezone: string; kanban_url: string; theme: string; iteration_start_date: string; iteration_duration_days: string }>('/api/settings'),
+  save: (data: { timezone?: string; kanban_url?: string; theme?: string; iteration_start_date?: string; iteration_duration_days?: string }) =>
+    request<{ timezone: string; kanban_url: string; theme: string; iteration_start_date: string; iteration_duration_days: string }>('/api/settings', {
       method: 'POST',
       body: JSON.stringify(data),
     }),

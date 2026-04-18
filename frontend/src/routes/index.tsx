@@ -106,7 +106,6 @@ function Dashboard() {
           {todayData && (
             <div className="flex items-center gap-6 px-6 py-4">
               <div className="flex items-center gap-2">
-                {[0, 6].includes(new Date().getDay()) && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">加班</span>}
                 <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">上班</span>
                 <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_in)}</span>
               </div>
@@ -148,7 +147,6 @@ function Dashboard() {
           {todayData && (
             <div className="flex items-center gap-6 px-6 py-4">
               <div className="flex items-center gap-2">
-                {[0, 6].includes(new Date().getDay()) && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">加班</span>}
                 <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">上班</span>
                 <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_in)}</span>
               </div>

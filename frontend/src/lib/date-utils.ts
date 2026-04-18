@@ -69,58 +69,120 @@ export function formatDateFull(dateStr: string): string {
 }
 
 // --- Iteration utilities ---
+// Configurable iteration settings: start date and duration in days.
+// Supports per-iteration overrides that cascade to subsequent iterations.
 
-export function getMonday(dateStr: string): Date {
-  const d = new Date(dateStr + 'T00:00:00')
-  const day = d.getDay() || 7
-  d.setDate(d.getDate() - day + 1)
-  return d
+export interface IterationConfig {
+  epoch: Date      // first iteration starts on this date
+  duration: number // days per iteration
 }
 
-// Calculate iterations based on the earliest date in the system.
-// We assume an iteration is exactly 14 days, starting on a Monday.
+export interface IterationOverrideMap {
+  [iterNum: number]: { start: string; end: string }
+}
+
+const DEFAULT_ITER_CONFIG: IterationConfig = {
+  epoch: new Date('2019-09-02T00:00:00'),
+  duration: 14,
+}
+
+export function makeIterationConfig(startDate?: string, durationDays?: string): IterationConfig {
+  const epoch = startDate ? new Date(startDate + 'T00:00:00') : DEFAULT_ITER_CONFIG.epoch
+  const duration = durationDays ? parseInt(durationDays, 10) : DEFAULT_ITER_CONFIG.duration
+  return {
+    epoch: isNaN(epoch.getTime()) ? DEFAULT_ITER_CONFIG.epoch : epoch,
+    duration: isNaN(duration) || duration < 1 ? DEFAULT_ITER_CONFIG.duration : duration,
+  }
+}
+
+function addDays(d: Date, n: number): Date {
+  const r = new Date(d)
+  r.setDate(r.getDate() + n)
+  return r
+}
+
+function parseLocalDate(s: string): Date {
+  return new Date(s + 'T00:00:00')
+}
+
+/** Compute a range of iterations, accounting for overrides that cascade. */
 export function computeIterations(
   fromNum: number,
   count: number,
-  epochStr: string,
-): { num: number; start: string; end: string }[] {
-  const epoch = getMonday(epochStr)
-  const results: { num: number; start: string; end: string }[] = []
-  
-  for (let i = 0; i < count; i++) {
-    const iterNum = fromNum + i
-    const s = new Date(epoch)
-    s.setDate(s.getDate() + (iterNum - 1) * 14)
-    const e = new Date(s)
-    e.setDate(e.getDate() + 13)
-    results.push({ num: iterNum, start: formatDate(s), end: formatDate(e) })
+  config: IterationConfig = DEFAULT_ITER_CONFIG,
+  overrides: IterationOverrideMap = {},
+): { num: number; start: string; end: string; isOverride: boolean }[] {
+  const results: { num: number; start: string; end: string; isOverride: boolean }[] = []
+  let cursor = new Date(config.epoch)
+
+  for (let i = 1; i <= fromNum + count - 1; i++) {
+    let iterStart: string
+    let iterEnd: string
+    let isOverride = false
+
+    if (overrides[i]) {
+      iterStart = overrides[i].start
+      iterEnd = overrides[i].end
+      isOverride = true
+      cursor = addDays(parseLocalDate(iterEnd), 1)
+    } else {
+      iterStart = formatDate(cursor)
+      iterEnd = formatDate(addDays(cursor, config.duration - 1))
+      cursor = addDays(cursor, config.duration)
+    }
+
+    if (i >= fromNum && results.length < count) {
+      results.push({ num: i, start: iterStart, end: iterEnd, isOverride })
+    }
   }
   return results
 }
 
+/** Find which iteration a date falls in (override-aware). */
 export function getIterationNumber(
-  dateStr: string,
-  epochStr: string,
+  date: Date,
+  config: IterationConfig = DEFAULT_ITER_CONFIG,
+  overrides: IterationOverrideMap = {},
 ): number {
-  const epoch = getMonday(epochStr)
-  const target = new Date(dateStr + 'T00:00:00')
-  
-  const diffTime = target.getTime() - epoch.getTime()
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-  if (diffDays < 0) {
-     return Math.floor(diffDays / 14) + 1
+  const target = formatDate(date)
+  let cursor = new Date(config.epoch)
+
+  for (let i = 1; i < 9999; i++) {
+    let iterStart: string
+    let iterEnd: string
+
+    if (overrides[i]) {
+      iterStart = overrides[i].start
+      iterEnd = overrides[i].end
+      cursor = addDays(parseLocalDate(iterEnd), 1)
+    } else {
+      iterStart = formatDate(cursor)
+      iterEnd = formatDate(addDays(cursor, config.duration - 1))
+      cursor = addDays(cursor, config.duration)
+    }
+
+    if (target >= iterStart && target <= iterEnd) return i
+    if (target < iterStart) return i
   }
-  return Math.floor(diffDays / 14) + 1
+  return 1
 }
 
+/** Get the range for a specific iteration number (override-aware). */
 export function getIterationRange(
   iterNum: number,
-  epochStr: string,
+  config: IterationConfig = DEFAULT_ITER_CONFIG,
+  overrides: IterationOverrideMap = {},
 ): { start: string; end: string; label: string } {
-  const results = computeIterations(iterNum, 1, epochStr)
+  const results = computeIterations(iterNum, 1, config, overrides)
+  if (results.length === 0) {
+    // fallback
+    const s = addDays(config.epoch, (iterNum - 1) * config.duration)
+    const e = addDays(s, config.duration - 1)
+    return { start: formatDate(s), end: formatDate(e), label: `Iter${iterNum}` }
+  }
   const r = results[0]
-  const sd = new Date(r.start + 'T00:00:00')
-  const ed = new Date(r.end + 'T00:00:00')
+  const sd = parseLocalDate(r.start)
+  const ed = parseLocalDate(r.end)
   const sm = sd.getMonth() + 1, sday = sd.getDate()
   const em = ed.getMonth() + 1, eday = ed.getDate()
   return {
@@ -130,6 +192,9 @@ export function getIterationRange(
   }
 }
 
-export function getCurrentIteration(epochStr: string): number {
-  return getIterationNumber(formatDate(new Date()), epochStr)
+export function getCurrentIteration(
+  config: IterationConfig = DEFAULT_ITER_CONFIG,
+  overrides: IterationOverrideMap = {},
+): number {
+  return getIterationNumber(new Date(), config, overrides)
 }
