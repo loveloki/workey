@@ -289,20 +289,6 @@ function IterationSection() {
   const saveEdit = async () => {
     if (!editStart || !editEnd) { setEditError('请填写起止日期'); return }
     if (editStart > editEnd) { setEditError('起始日期不能晚于结束日期'); return }
-    // Validate start matches previous iter's end + 1
-    if (editingIter! > 1 && iterConfig) {
-      const prevIters = computeIterations(editingIter! - 1, 1, iterConfig, overrides)
-      if (prevIters.length > 0) {
-        const prevEnd = new Date(prevIters[0].end + 'T00:00:00')
-        const expectedStart = new Date(prevEnd)
-        expectedStart.setDate(expectedStart.getDate() + 1)
-        const expectedStr = expectedStart.toISOString().slice(0, 10)
-        if (editStart !== expectedStr) {
-          setEditError(`起始日期应为 ${expectedStr}（上一个 Iteration 结束日期的次日）`)
-          return
-        }
-      }
-    }
     try {
       await overridesApi.save(editingIter!, editStart, editEnd)
       setOverrides(prev => ({ ...prev, [editingIter!]: { start: editStart, end: editEnd } }))
