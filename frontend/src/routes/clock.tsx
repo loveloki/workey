@@ -55,6 +55,7 @@ function ClockWidget() {
 
   const clockedIn = !!data?.clock_in
   const clockedOut = !!data?.clock_out
+  const isLeave = data?.status === 'leave'
 
   const clockIn = async () => {
     setActing(true)
@@ -80,6 +81,17 @@ function ClockWidget() {
     setActing(false)
   }
 
+  const markLeave = async () => {
+    setActing(true)
+    try {
+      const res = await attendance.leave()
+      setData(res)
+    } catch (e: any) {
+      alert(e.message)
+    }
+    setActing(false)
+  }
+
   if (loading) return <Loading />
 
   const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
@@ -92,28 +104,68 @@ function ClockWidget() {
       </p>
 
       {/* Big circular button */}
-      {!clockedIn ? (
-        <button
-          onClick={clockIn}
-          disabled={acting}
-          className="group relative"
-          style={{ outline: 'none' }}
-        >
-          <div
-            className="w-44 h-44 sm:w-52 sm:h-52 rounded-full flex flex-col items-center justify-center transition-all duration-200 active:scale-95 disabled:opacity-50"
-            style={{
-              background: 'var(--color-solid)',
-              boxShadow: '0 4px 24px rgba(0,0,0,0.15), 0 0 0 6px rgba(0,0,0,0.04)',
+      {!clockedIn && !isLeave ? (
+        <div className="flex flex-col items-center gap-6">
+          <button
+            onClick={clockIn}
+            disabled={acting}
+            className="group relative"
+            style={{ outline: 'none' }}
+          >
+            <div
+              className="w-44 h-44 sm:w-52 sm:h-52 rounded-full flex flex-col items-center justify-center transition-all duration-200 active:scale-95 disabled:opacity-50"
+              style={{
+                background: 'var(--color-solid)',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.15), 0 0 0 6px rgba(0,0,0,0.04)',
+              }}
+            >
+              <span className="font-mono text-2xl sm:text-3xl font-bold" style={{ color: 'var(--color-solid-text)' }}>
+                {acting ? '打卡中' : '上班'}
+              </span>
+              <span className="font-mono text-sm mt-1" style={{ color: 'var(--color-solid-text)', opacity: 0.6 }}>
+                点击打卡
+              </span>
+            </div>
+          </button>
+          
+          <button
+            onClick={markLeave}
+            disabled={acting}
+            className="font-mono text-sm px-6 py-2 rounded-full transition-colors active:scale-95 disabled:opacity-50"
+            style={{ 
+              background: 'transparent',
+              color: 'var(--color-ink-muted)',
+              border: '1px solid var(--color-border)'
             }}
           >
-            <span className="font-mono text-2xl sm:text-3xl font-bold" style={{ color: 'var(--color-solid-text)' }}>
-              {acting ? '打卡中' : '上班'}
-            </span>
-            <span className="font-mono text-sm mt-1" style={{ color: 'var(--color-solid-text)', opacity: 0.6 }}>
-              点击打卡
+            我今天请假
+          </button>
+        </div>
+      ) : isLeave ? (
+        <div className="flex flex-col items-center gap-6">
+          <div
+            className="w-44 h-44 sm:w-52 sm:h-52 rounded-full flex flex-col items-center justify-center"
+            style={{
+              background: 'var(--color-surface-strong)',
+              border: '2px dashed var(--color-border)',
+            }}
+          >
+            <span className="font-mono text-2xl sm:text-3xl font-bold" style={{ color: 'var(--color-ink-muted)' }}>
+              已请假
             </span>
           </div>
-        </button>
+          <button
+            onClick={clockIn}
+            disabled={acting}
+            className="font-mono text-sm px-6 py-2 rounded-full transition-colors active:scale-95 disabled:opacity-50"
+            style={{ 
+              background: 'var(--color-solid)',
+              color: 'var(--color-solid-text)',
+            }}
+          >
+            取消请假并上班
+          </button>
+        </div>
       ) : (
         <button
           onClick={clockOut}
@@ -145,14 +197,14 @@ function ClockWidget() {
       >
         <div className="text-center">
           <p className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">上班</p>
-          <p className="font-mono text-xl font-bold text-[var(--color-ink)]">{formatTime(data?.clock_in)}</p>
+          <p className="font-mono text-xl font-bold text-[var(--color-ink)]">{isLeave ? '--:--' : formatTime(data?.clock_in)}</p>
         </div>
         <div className="h-10 w-px bg-[var(--color-border)]" />
         <div className="text-center">
           <p className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">下班</p>
-          <p className="font-mono text-xl font-bold text-[var(--color-ink)]">{formatTime(data?.clock_out)}</p>
+          <p className="font-mono text-xl font-bold text-[var(--color-ink)]">{isLeave ? '--:--' : formatTime(data?.clock_out)}</p>
         </div>
-        {clockedIn && data?.clock_in && data?.clock_out && (
+        {!isLeave && clockedIn && data?.clock_in && data?.clock_out && (
           <>
             <div className="h-10 w-px bg-[var(--color-border)]" />
             <div className="text-center">

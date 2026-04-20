@@ -60,6 +60,7 @@ func main() {
 	// Attendance routes
 	mux.HandleFunc("/api/attendance/clock-in", corsMiddleware(authMiddleware(handleClockIn)))
 	mux.HandleFunc("/api/attendance/clock-out", corsMiddleware(authMiddleware(handleClockOut)))
+	mux.HandleFunc("/api/attendance/leave", corsMiddleware(authMiddleware(handleLeave)))
 	mux.HandleFunc("/api/attendance/today", corsMiddleware(authMiddleware(handleAttendanceToday)))
 	mux.HandleFunc("/api/attendance/range", corsMiddleware(authMiddleware(handleAttendanceRange)))
 
@@ -191,6 +192,39 @@ func initDB() {
 	for _, q := range queries {
 		if _, err := db.Exec(q); err != nil {
 			log.Fatalf("Failed to init DB: %v\nQuery: %s", err, q)
+		}
+	}
+
+	// Migrations
+	migrateDB()
+}
+
+func migrateDB() {
+	// Check if status column exists in attendance
+	rows, err := db.Query("PRAGMA table_info(attendance)")
+	if err != nil {
+		log.Fatalf("Failed to get table info: %v", err)
+	}
+	defer rows.Close()
+
+	hasStatus := false
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull int
+		var dflt_value *string
+		var pk int
+		err = rows.Scan(&cid, &name, &ctype, &notnull, &dflt_value, &pk)
+		if err == nil && name == "status" {
+			hasStatus = true
+			break
+		}
+	}
+
+	if !hasStatus {
+		_, err = db.Exec("ALTER TABLE attendance ADD COLUMN status TEXT NOT NULL DEFAULT 'normal'")
+		if err != nil {
+			log.Fatalf("Failed to add status column to attendance: %v", err)
 		}
 	}
 }

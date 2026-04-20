@@ -13,7 +13,11 @@ export function formatDayMarkdown(
   lines.push(`## ${formatDateFull(date)}`)
   lines.push('')
   if (att) {
-    lines.push(`> 上班 ${formatTime(att.clock_in)}　下班 ${formatTime(att.clock_out)}`)
+    if (att.status === 'leave') {
+      lines.push(`> 状态：请假`)
+    } else {
+      lines.push(`> 上班 ${formatTime(att.clock_in)}　下班 ${formatTime(att.clock_out)}`)
+    }
     lines.push('')
   }
   if (logContent.trim()) {

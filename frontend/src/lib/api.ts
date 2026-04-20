@@ -75,6 +75,7 @@ export const auth = {
 export const attendance = {
   clockIn: () => request<any>('/api/attendance/clock-in', { method: 'POST' }),
   clockOut: () => request<any>('/api/attendance/clock-out', { method: 'POST' }),
+  leave: () => request<any>('/api/attendance/leave', { method: 'POST' }),
   today: () => request<{ attendance: any }>('/api/attendance/today'),
   range: (start: string, end: string) =>
     request<{ attendances: any[] }>(`/api/attendance/range?start=${start}&end=${end}`),

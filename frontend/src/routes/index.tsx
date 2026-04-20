@@ -51,7 +51,7 @@ function Dashboard() {
     if (!user) return
     attendance.today()
       .then(d => {
-        if (!d.attendance?.clock_in) {
+        if (!d.attendance?.clock_in && d.attendance?.status !== 'leave') {
           navigate({ to: '/clock' })
         } else {
           setTodayData(d.attendance)
@@ -107,14 +107,24 @@ function Dashboard() {
             <div className="flex items-center gap-6 px-6 py-4">
               <div className="flex items-center gap-2">
                 {[0, 6].includes(new Date().getDay()) && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">加班</span>}
-                <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">上班</span>
-                <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_in)}</span>
+                {todayData.status === 'leave' ? (
+                  <span className="font-mono text-sm font-bold" style={{ color: 'var(--color-danger-text, #dc2626)' }}>已请假</span>
+                ) : (
+                  <>
+                    <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">上班</span>
+                    <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_in)}</span>
+                  </>
+                )}
               </div>
-              <div className="h-4 w-px" style={{ background: 'var(--color-border)' }} />
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">下班</span>
-                <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_out)}</span>
-              </div>
+              {todayData.status !== 'leave' && (
+                <>
+                  <div className="h-4 w-px" style={{ background: 'var(--color-border)' }} />
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">下班</span>
+                    <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_out)}</span>
+                  </div>
+                </>
+              )}
               <div className="flex-1" />
               <button
                 onClick={() => navigate({ to: '/clock' })}
@@ -149,14 +159,24 @@ function Dashboard() {
             <div className="flex items-center gap-6 px-6 py-4">
               <div className="flex items-center gap-2">
                 {[0, 6].includes(new Date().getDay()) && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">加班</span>}
-                <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">上班</span>
-                <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_in)}</span>
+                {todayData.status === 'leave' ? (
+                  <span className="font-mono text-sm font-bold" style={{ color: 'var(--color-danger-text, #dc2626)' }}>已请假</span>
+                ) : (
+                  <>
+                    <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">上班</span>
+                    <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_in)}</span>
+                  </>
+                )}
               </div>
-              <div className="h-4 w-px" style={{ background: 'var(--color-border)' }} />
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">下班</span>
-                <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_out)}</span>
-              </div>
+              {todayData.status !== 'leave' && (
+                <>
+                  <div className="h-4 w-px" style={{ background: 'var(--color-border)' }} />
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">下班</span>
+                    <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(todayData.clock_out)}</span>
+                  </div>
+                </>
+              )}
               <div className="flex-1" />
               <button
                 onClick={() => navigate({ to: '/clock' })}

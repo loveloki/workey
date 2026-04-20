@@ -12,6 +12,7 @@ interface AttendanceRecord {
   date: string
   clock_in: string | null
   clock_out: string | null
+  status: string
 }
 
 function timeToMinutes(datetime: string | null): number | null {
@@ -152,18 +153,22 @@ function TrendsPage() {
 
       {/* Stats summary */}
       {data.length > 0 && (
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+        <div className="mt-4 grid gap-4 sm:grid-cols-4">
           <StatCard
             label="平均上班时间"
-            value={avgTime(data.map(d => timeToMinutes(d.clock_in)).filter((v): v is number => v !== null))}
+            value={avgTime(data.filter(d => d.status !== 'leave').map(d => timeToMinutes(d.clock_in)).filter((v): v is number => v !== null))}
           />
           <StatCard
             label="平均下班时间"
-            value={avgTime(data.map(d => timeToMinutes(d.clock_out)).filter((v): v is number => v !== null))}
+            value={avgTime(data.filter(d => d.status !== 'leave').map(d => timeToMinutes(d.clock_out)).filter((v): v is number => v !== null))}
           />
           <StatCard
             label="打卡天数"
-            value={`${data.length} 天`}
+            value={`${data.filter(d => d.status !== 'leave').length} 天`}
+          />
+          <StatCard
+            label="请假天数"
+            value={`${data.filter(d => d.status === 'leave').length} 天`}
           />
         </div>
       )}
@@ -338,6 +343,12 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
         <path d={makePath(clockOuts)} fill="none" stroke="var(--color-ink-muted)" strokeWidth="2.5"
           strokeLinecap="round" strokeLinejoin="round" />
 
+        {/* Leave dots */}
+        {sorted.map((d, i) => d.status === 'leave' ? (
+          <circle key={`leave-${i}`} cx={xScale(i)} cy={H - PAD.bottom + 5} r="4"
+            fill="var(--color-danger-text, #dc2626)" />
+        ) : null)}
+
         {/* Dots */}
         {clockIns.map((p, i) => p.minutes !== null ? (
           <circle key={`in-${i}`} cx={xScale(i)} cy={yScale(p.minutes)} r="3.5"
@@ -350,6 +361,7 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
 
         {/* Selected date annotations */}
         {selectedIdx >= 0 && (() => {
+          const isLeave = sorted[selectedIdx].status === 'leave'
           const inMin = clockIns[selectedIdx]?.minutes
           const outMin = clockOuts[selectedIdx]?.minutes
           const cx = xScale(selectedIdx)
@@ -357,6 +369,29 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
           const isRightHalf = cx > PAD.left + plotW / 2
           const labelAnchor = isRightHalf ? 'end' as const : 'start' as const
           const labelDx = isRightHalf ? -12 : 12
+
+          if (isLeave) {
+            return (
+              <g>
+                <circle cx={cx} cy={H - PAD.bottom + 5} r="6"
+                  fill="var(--color-danger-text, #dc2626)" stroke="var(--color-accent, #e67e22)" strokeWidth="2.5" />
+                <rect
+                  x={isRightHalf ? cx + labelDx - 48 : cx + labelDx - 4}
+                  y={H - PAD.bottom + 5 - 11}
+                  width={52} height={20} rx={4}
+                  fill="var(--color-danger-text, #dc2626)" opacity={0.9}
+                />
+                <text
+                  x={isRightHalf ? cx + labelDx - 22 : cx + labelDx + 22}
+                  y={H - PAD.bottom + 5 + 3}
+                  textAnchor="middle"
+                  fill="#fff" fontSize="11" fontWeight="600"
+                >
+                  请假
+                </text>
+              </g>
+            )
+          }
 
           return (
             <g>

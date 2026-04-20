@@ -28,6 +28,7 @@ type Attendance struct {
 	Date      string  `json:"date"`
 	ClockIn   *string `json:"clock_in"`
 	ClockOut  *string `json:"clock_out"`
+	Status    string  `json:"status"`
 	CreatedAt string  `json:"created_at"`
 	UpdatedAt string  `json:"updated_at"`
 }
@@ -205,20 +206,77 @@ func handleClockIn(w http.ResponseWriter, r *http.Request) {
 	date := today()
 	now := nowDatetime()
 
-	// Check if already clocked in today
+	// Check if record exists for today
 	var existingID int64
-	err := db.QueryRow("SELECT id FROM attendance WHERE user_id = ? AND date = ?", userID, date).Scan(&existingID)
+	var existingClockIn *string
+	err := db.QueryRow("SELECT id, clock_in FROM attendance WHERE user_id = ? AND date = ?", userID, date).Scan(&existingID, &existingClockIn)
+	
 	if err == nil {
-		jsonError(w, "Already clocked in today", http.StatusConflict)
+		// Record exists
+		if existingClockIn != nil {
+			jsonError(w, "Already clocked in today", http.StatusConflict)
+			return
+		}
+		// Record exists but clock_in is null (e.g., was on leave). Update it.
+		_, err = db.Exec(
+			"UPDATE attendance SET clock_in = ?, status = 'normal', updated_at = ? WHERE id = ?",
+			now, now, existingID,
+		)
+		if err != nil {
+			jsonError(w, "Failed to clock in", http.StatusInternalServerError)
+			return
+		}
+	} else if err == sql.ErrNoRows {
+		// No record, insert new
+		_, err = db.Exec(
+			"INSERT INTO attendance (user_id, date, clock_in, status, created_at, updated_at) VALUES (?, ?, ?, 'normal', ?, ?)",
+			userID, date, now, now, now,
+		)
+		if err != nil {
+			jsonError(w, "Failed to clock in", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		jsonError(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 
-	_, err = db.Exec(
-		"INSERT INTO attendance (user_id, date, clock_in, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-		userID, date, now, now, now,
-	)
+	attendance := getAttendance(userID, date)
+	jsonOK(w, attendance)
+}
+
+func handleLeave(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+	date := today()
+	now := nowDatetime()
+
+	var existingID int64
+	err := db.QueryRow("SELECT id FROM attendance WHERE user_id = ? AND date = ?", userID, date).Scan(&existingID)
+
+	if err == nil {
+		// Update existing record
+		_, err = db.Exec(
+			"UPDATE attendance SET clock_in = NULL, clock_out = NULL, status = 'leave', updated_at = ? WHERE id = ?",
+			now, existingID,
+		)
+	} else if err == sql.ErrNoRows {
+		// Insert new record
+		_, err = db.Exec(
+			"INSERT INTO attendance (user_id, date, clock_in, clock_out, status, created_at, updated_at) VALUES (?, ?, NULL, NULL, 'leave', ?, ?)",
+			userID, date, now, now,
+		)
+	} else {
+		jsonError(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
 	if err != nil {
-		jsonError(w, "Failed to clock in", http.StatusInternalServerError)
+		jsonError(w, "Failed to set leave status", http.StatusInternalServerError)
 		return
 	}
 
@@ -245,7 +303,7 @@ func handleClockOut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = db.Exec(
-		"UPDATE attendance SET clock_out = ?, updated_at = ? WHERE user_id = ? AND date = ?",
+		"UPDATE attendance SET clock_out = ?, status = 'normal', updated_at = ? WHERE user_id = ? AND date = ?",
 		now, now, userID, date,
 	)
 	if err != nil {
@@ -287,7 +345,7 @@ func handleAttendanceRange(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := db.Query(
-		"SELECT id, user_id, date, clock_in, clock_out, created_at, updated_at FROM attendance WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date",
+		"SELECT id, user_id, date, clock_in, clock_out, status, created_at, updated_at FROM attendance WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date",
 		userID, start, end,
 	)
 	if err != nil {
@@ -297,20 +355,20 @@ func handleAttendanceRange(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	attendances := []Attendance{}
-	for rows.Next() {
-		var a Attendance
-		rows.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.CreatedAt, &a.UpdatedAt)
-		attendances = append(attendances, a)
-	}
-	jsonOK(w, map[string]interface{}{"attendances": attendances})
+		for rows.Next() {
+			var a Attendance
+			rows.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &a.CreatedAt, &a.UpdatedAt)
+			attendances = append(attendances, a)
+		}
+		jsonOK(w, map[string]interface{}{"attendances": attendances})
 }
 
 func getAttendance(userID int64, date string) *Attendance {
 	var a Attendance
 	err := db.QueryRow(
-		"SELECT id, user_id, date, clock_in, clock_out, created_at, updated_at FROM attendance WHERE user_id = ? AND date = ?",
+		"SELECT id, user_id, date, clock_in, clock_out, status, created_at, updated_at FROM attendance WHERE user_id = ? AND date = ?",
 		userID, date,
-	).Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.CreatedAt, &a.UpdatedAt)
+	).Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil
 	}
@@ -1357,7 +1415,7 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 
 	attendances := []Attendance{}
 	rows, err := db.Query(
-		"SELECT id, user_id, date, clock_in, clock_out, created_at, updated_at FROM attendance WHERE user_id = ? ORDER BY date",
+		"SELECT id, user_id, date, clock_in, clock_out, status, created_at, updated_at FROM attendance WHERE user_id = ? ORDER BY date",
 		userID,
 	)
 	if err != nil {
@@ -1365,11 +1423,11 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for rows.Next() {
-		var a Attendance
-		rows.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.CreatedAt, &a.UpdatedAt)
-		attendances = append(attendances, a)
-	}
-	rows.Close()
+			var a Attendance
+			rows.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &a.CreatedAt, &a.UpdatedAt)
+			attendances = append(attendances, a)
+		}
+		rows.Close()
 
 	workLogsList := []WorkLog{}
 	rows, err = db.Query(
@@ -1563,23 +1621,28 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		now := nowDatetime()
-		result, err := db.Exec(
-			"UPDATE attendance SET clock_in = ?, clock_out = ?, updated_at = ? WHERE user_id = ? AND date = ?",
-			a.ClockIn, a.ClockOut, now, userID, a.Date,
-		)
-		if err != nil {
-			continue
-		}
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
-			_, err = db.Exec(
-				"INSERT INTO attendance (user_id, date, clock_in, clock_out, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-				userID, a.Date, a.ClockIn, a.ClockOut, now, now,
+			status := a.Status
+			if status == "" {
+				status = "normal"
+			}
+			result, err := db.Exec(
+				"UPDATE attendance SET clock_in = ?, clock_out = ?, status = ?, updated_at = ? WHERE user_id = ? AND date = ?",
+				a.ClockIn, a.ClockOut, status, now, userID, a.Date,
 			)
 			if err != nil {
 				continue
 			}
-		}
+
+			rowsAffected, _ := result.RowsAffected()
+			if rowsAffected == 0 {
+				_, err = db.Exec(
+					"INSERT INTO attendance (user_id, date, clock_in, clock_out, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+					userID, a.Date, a.ClockIn, a.ClockOut, status, now, now,
+				)
+				if err != nil {
+					continue
+				}
+			}
 		attendanceCount++
 	}
 
