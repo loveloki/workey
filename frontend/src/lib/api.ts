@@ -79,6 +79,7 @@ export const attendance = {
   today: () => request<{ attendance: any }>('/api/attendance/today'),
   range: (start: string, end: string) =>
     request<{ attendances: any[] }>(`/api/attendance/range?start=${start}&end=${end}`),
+  stats: () => request<{ global_overtime_days: number; global_leave_days: number; global_remaining: number }>('/api/attendance/stats'),
 }
 
 // Work Logs

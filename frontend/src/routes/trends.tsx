@@ -38,9 +38,16 @@ function TrendsPage() {
   const [fetching, setFetching] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
 
+  const [globalStats, setGlobalStats] = useState<{ global_overtime_days: number; global_leave_days: number; global_remaining: number } | null>(null)
+
   useEffect(() => {
     if (!loading && !user) navigate({ to: '/login' })
   }, [loading, user, navigate])
+
+  useEffect(() => {
+    if (!user) return
+    attendanceApi.stats().then(res => setGlobalStats(res)).catch(() => {})
+  }, [user])
 
   useEffect(() => {
     if (!user || preset === 'custom') return
@@ -152,23 +159,42 @@ function TrendsPage() {
       )}
 
       {/* Stats summary */}
-      {data.length > 0 && (
-        <div className="mt-4 grid gap-4 sm:grid-cols-4">
+      <div className="mt-4 grid gap-4 sm:grid-cols-4">
+        <StatCard
+          label="当前时段平均上班"
+          value={data.length > 0 ? avgTime(data.filter(d => d.status !== 'leave').map(d => timeToMinutes(d.clock_in)).filter((v): v is number => v !== null)) : '--:--'}
+        />
+        <StatCard
+          label="当前时段平均下班"
+          value={data.length > 0 ? avgTime(data.filter(d => d.status !== 'leave').map(d => timeToMinutes(d.clock_out)).filter((v): v is number => v !== null)) : '--:--'}
+        />
+        <StatCard
+          label="当前时段打卡天数"
+          value={data.length > 0 ? `${data.filter(d => d.status !== 'leave').length} 天` : '0 天'}
+        />
+        <StatCard
+          label="当前时段请假天数"
+          value={data.length > 0 ? `${data.filter(d => d.status === 'leave').length} 天` : '0 天'}
+        />
+      </div>
+
+      {/* Global balance */}
+      {globalStats && (
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <StatCard
-            label="平均上班时间"
-            value={avgTime(data.filter(d => d.status !== 'leave').map(d => timeToMinutes(d.clock_in)).filter((v): v is number => v !== null))}
+            label="累计加班天数 (周末)"
+            value={`${globalStats.global_overtime_days} 天`}
+            valueColor="var(--color-danger-text)"
           />
           <StatCard
-            label="平均下班时间"
-            value={avgTime(data.filter(d => d.status !== 'leave').map(d => timeToMinutes(d.clock_out)).filter((v): v is number => v !== null))}
+            label="累计请假天数"
+            value={`${globalStats.global_leave_days} 天`}
+            valueColor="var(--color-ink-muted)"
           />
           <StatCard
-            label="打卡天数"
-            value={`${data.filter(d => d.status !== 'leave').length} 天`}
-          />
-          <StatCard
-            label="请假天数"
-            value={`${data.filter(d => d.status === 'leave').length} 天`}
+            label="剩余可调休假期"
+            value={`${globalStats.global_remaining} 天`}
+            valueColor={globalStats.global_remaining > 0 ? '#16a34a' : 'var(--color-ink)'}
           />
         </div>
       )}
@@ -182,11 +208,11 @@ function avgTime(minutes: number[]): string {
   return minutesToTime(avg)
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ label, value, valueColor = 'var(--color-ink)' }: { label: string; value: string; valueColor?: string }) {
   return (
     <div className="rounded-lg border p-5 text-center" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-strong)' }}>
       <p className="mb-1 font-mono text-xs uppercase tracking-[0.3em]" style={{ color: 'var(--color-ink-muted)' }}>{label}</p>
-      <p className="font-mono text-2xl font-bold" style={{ color: 'var(--color-ink)' }}>{value}</p>
+      <p className="font-mono text-2xl font-bold" style={{ color: valueColor }}>{value}</p>
     </div>
   )
 }

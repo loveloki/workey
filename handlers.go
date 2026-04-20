@@ -330,6 +330,36 @@ func handleAttendanceToday(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]interface{}{"attendance": attendance})
 }
 
+func handleAttendanceStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userID := getUserID(r)
+
+	var overtimeDays int
+	var leaveDays int
+
+	err := db.QueryRow(`
+		SELECT 
+			COUNT(CASE WHEN status != 'leave' AND (strftime('%w', date) = '0' OR strftime('%w', date) = '6') THEN 1 END) as overtime_days,
+			COUNT(CASE WHEN status = 'leave' THEN 1 END) as leave_days
+		FROM attendance 
+		WHERE user_id = ?
+	`, userID).Scan(&overtimeDays, &leaveDays)
+
+	if err != nil {
+		jsonError(w, "Failed to calculate stats", http.StatusInternalServerError)
+		return
+	}
+
+	jsonOK(w, map[string]interface{}{
+		"global_overtime_days": overtimeDays,
+		"global_leave_days":    leaveDays,
+		"global_remaining":     overtimeDays - leaveDays,
+	})
+}
+
 func handleAttendanceRange(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)

@@ -63,6 +63,7 @@ func main() {
 	mux.HandleFunc("/api/attendance/leave", corsMiddleware(authMiddleware(handleLeave)))
 	mux.HandleFunc("/api/attendance/today", corsMiddleware(authMiddleware(handleAttendanceToday)))
 	mux.HandleFunc("/api/attendance/range", corsMiddleware(authMiddleware(handleAttendanceRange)))
+	mux.HandleFunc("/api/attendance/stats", corsMiddleware(authMiddleware(handleAttendanceStats)))
 
 	// Work log routes
 	mux.HandleFunc("/api/work-logs", corsMiddleware(authMiddleware(handleWorkLogs)))
