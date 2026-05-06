@@ -190,7 +190,7 @@ function HistoryPage() {
       setIterOverrides(ovMap)
       const cur = getCurrentIteration(cfg, ovMap)
       setSelectedIter(cur)
-      setMaxIter(cur + 2)
+      setMaxIter(cur)
     }).catch(console.error)
   }, [user])
 
