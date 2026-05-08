@@ -140,8 +140,20 @@ function ChecklistForm({
   const [title, setTitle] = useState(initial?.title || '')
   const [itemTexts, setItemTexts] = useState<string[]>(initial?.items?.length ? initial.items : [''])
   const [saving, setSaving] = useState(false)
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
   const titleRef = useRef<HTMLInputElement>(null)
   const itemRefs = useRef<(HTMLInputElement | null)[]>([])
+
+  const reorder = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= itemTexts.length || to >= itemTexts.length) return
+    setItemTexts(prev => {
+      const next = [...prev]
+      const [m] = next.splice(from, 1)
+      next.splice(to, 0, m)
+      return next
+    })
+  }
 
   useEffect(() => {
     titleRef.current?.focus()
@@ -217,32 +229,103 @@ function ChecklistForm({
       <p className="font-mono text-xs mb-2" style={{ color: 'var(--color-ink-muted)' }}>检查项目：</p>
 
       <div className="space-y-2 mb-4">
-        {itemTexts.map((text, idx) => (
-          <div key={idx} className="flex items-center gap-2">
-            <span className="font-mono text-xs w-5 text-right shrink-0" style={{ color: 'var(--color-ink-faint)' }}>
-              {idx + 1}.
-            </span>
-            <input
-              ref={el => { itemRefs.current[idx] = el }}
-              type="text"
-              value={text}
-              onChange={e => updateItem(idx, e.target.value)}
-              onKeyDown={e => handleItemKeyDown(e, idx)}
-              placeholder="输入检查项..."
-              className="font-mono text-sm flex-1 px-3 py-1.5 bg-[var(--color-surface-strong)]"
-              style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
-            />
-            {itemTexts.length > 1 && (
+        {itemTexts.map((text, idx) => {
+          const isDragging = dragIdx === idx
+          const isDragOver = dragOverIdx === idx && dragIdx !== null && dragIdx !== idx
+          return (
+            <div
+              key={idx}
+              className="flex items-center gap-2"
+              onDragOver={e => {
+                if (dragIdx === null) return
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+                if (dragOverIdx !== idx) setDragOverIdx(idx)
+              }}
+              onDrop={e => {
+                if (dragIdx === null) return
+                e.preventDefault()
+                reorder(dragIdx, idx)
+                setDragIdx(null)
+                setDragOverIdx(null)
+              }}
+              style={{
+                opacity: isDragging ? 0.4 : 1,
+                borderTop: isDragOver && (dragIdx ?? -1) > idx ? '2px solid var(--color-solid)' : '2px solid transparent',
+                borderBottom: isDragOver && (dragIdx ?? -1) < idx ? '2px solid var(--color-solid)' : '2px solid transparent',
+                transition: 'opacity 0.15s',
+              }}
+            >
               <button
-                onClick={() => removeItem(idx)}
-                className="font-mono text-xs px-2 py-1 rounded hover:bg-[var(--color-danger-bg)] shrink-0 transition-colors"
-                style={{ color: 'var(--color-danger-text, #c00)' }}
+                type="button"
+                draggable
+                onDragStart={e => {
+                  setDragIdx(idx)
+                  e.dataTransfer.effectAllowed = 'move'
+                  try { e.dataTransfer.setData('text/plain', String(idx)) } catch {}
+                }}
+                onDragEnd={() => { setDragIdx(null); setDragOverIdx(null) }}
+                className="font-mono text-sm shrink-0 px-1 select-none transition-colors hover:text-[var(--color-ink)]"
+                style={{ color: 'var(--color-ink-faint)', cursor: 'grab', touchAction: 'none' }}
+                title="拖动调整顺序"
+                aria-label="拖动手柄"
               >
-                ✕
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <circle cx="9" cy="5" r="1.6" /><circle cx="15" cy="5" r="1.6" />
+                  <circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" />
+                  <circle cx="9" cy="19" r="1.6" /><circle cx="15" cy="19" r="1.6" />
+                </svg>
               </button>
-            )}
-          </div>
-        ))}
+              <span className="font-mono text-xs w-5 text-right shrink-0" style={{ color: 'var(--color-ink-faint)' }}>
+                {idx + 1}.
+              </span>
+              <input
+                ref={el => { itemRefs.current[idx] = el }}
+                type="text"
+                value={text}
+                onChange={e => updateItem(idx, e.target.value)}
+                onKeyDown={e => handleItemKeyDown(e, idx)}
+                placeholder="输入检查项..."
+                className="font-mono text-sm flex-1 px-3 py-1.5 bg-[var(--color-surface-strong)]"
+                style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
+              />
+              {itemTexts.length > 1 && idx > 0 && (
+                <button
+                  type="button"
+                  onClick={() => reorder(idx, idx - 1)}
+                  className="font-mono text-xs w-6 h-6 rounded hover:bg-[var(--color-surface-hover)] shrink-0 transition-colors"
+                  style={{ color: 'var(--color-ink-faint)' }}
+                  title="上移"
+                  aria-label="上移"
+                >
+                  ↑
+                </button>
+              )}
+              {itemTexts.length > 1 && idx < itemTexts.length - 1 && (
+                <button
+                  type="button"
+                  onClick={() => reorder(idx, idx + 1)}
+                  className="font-mono text-xs w-6 h-6 rounded hover:bg-[var(--color-surface-hover)] shrink-0 transition-colors"
+                  style={{ color: 'var(--color-ink-faint)' }}
+                  title="下移"
+                  aria-label="下移"
+                >
+                  ↓
+                </button>
+              )}
+              {itemTexts.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeItem(idx)}
+                  className="font-mono text-xs px-2 py-1 rounded hover:bg-[var(--color-danger-bg)] shrink-0 transition-colors"
+                  style={{ color: 'var(--color-danger-text, #c00)' }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       <button
@@ -270,7 +353,7 @@ function ChecklistForm({
           取消
         </button>
         <span className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>
-          Enter 添加新项
+Enter 添加新项 · 拖动⋮⋮ 或 ↑↓ 调整顺序
         </span>
       </div>
     </div>
