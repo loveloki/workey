@@ -421,6 +421,37 @@ function ChecklistCard({
 
 /* ── Checklist Use (临时打勾) ──────────────────────────────── */
 
+type SavedRun = {
+  id: string
+  title: string
+  checked: boolean[]
+  notes: string[]
+  itemsHash: string
+  savedAt: string
+}
+
+type DraftRun = { checked: boolean[]; notes: string[]; itemsHash: string; updatedAt: string }
+
+function loadSavedRuns(checklistId: number, itemsHash: string, length: number): SavedRun[] {
+  try {
+    const raw = localStorage.getItem(`checklist-runs:${checklistId}`)
+    if (!raw) return []
+    const arr = JSON.parse(raw) as SavedRun[]
+    if (!Array.isArray(arr)) return []
+    return arr.filter(r =>
+      r && r.itemsHash === itemsHash &&
+      Array.isArray(r.checked) && r.checked.length === length &&
+      Array.isArray(r.notes) && r.notes.length === length
+    )
+  } catch { return [] }
+}
+
+function writeSavedRuns(checklistId: number, runs: SavedRun[]) {
+  try {
+    localStorage.setItem(`checklist-runs:${checklistId}`, JSON.stringify(runs))
+  } catch { /* ignore */ }
+}
+
 function ChecklistUse({
   checklist,
   onBack,
@@ -432,16 +463,14 @@ function ChecklistUse({
     try { return JSON.parse(checklist.items) } catch { return [] }
   })()
 
-  const storageKey = `checklist-run:${checklist.id}`
-
-  type CachedRun = { checked: boolean[]; notes: string[]; itemsHash: string; updatedAt: string }
+  const draftKey = `checklist-run:${checklist.id}`
   const itemsHash = JSON.stringify(parsedItems)
 
-  const loadCache = (): CachedRun | null => {
+  const loadDraft = (): DraftRun | null => {
     try {
-      const raw = localStorage.getItem(storageKey)
+      const raw = localStorage.getItem(draftKey)
       if (!raw) return null
-      const parsed = JSON.parse(raw) as CachedRun
+      const parsed = JSON.parse(raw) as DraftRun
       if (parsed.itemsHash !== itemsHash) return null
       if (!Array.isArray(parsed.checked) || parsed.checked.length !== parsedItems.length) return null
       if (!Array.isArray(parsed.notes) || parsed.notes.length !== parsedItems.length) return null
@@ -449,30 +478,78 @@ function ChecklistUse({
     } catch { return null }
   }
 
-  const cached = loadCache()
+  const draft = loadDraft()
 
-  const [checked, setChecked] = useState<boolean[]>(() => cached?.checked ?? parsedItems.map(() => false))
-  const [notes, setNotes] = useState<string[]>(() => cached?.notes ?? parsedItems.map(() => ''))
+  const [checked, setChecked] = useState<boolean[]>(() => draft?.checked ?? parsedItems.map(() => false))
+  const [notes, setNotes] = useState<string[]>(() => draft?.notes ?? parsedItems.map(() => ''))
   const [editingNote, setEditingNote] = useState<number | null>(null)
-  const [lastSavedAt] = useState<string | null>(cached?.updatedAt ?? null)
+  const [lastSavedAt] = useState<string | null>(draft?.updatedAt ?? null)
 
-  // Persist progress to localStorage
+  const [savedRuns, setSavedRuns] = useState<SavedRun[]>(() =>
+    loadSavedRuns(checklist.id, itemsHash, parsedItems.length)
+  )
+  const [snapshotTitle, setSnapshotTitle] = useState('')
+  const [viewingRunId, setViewingRunId] = useState<string | null>(null)
+  const [showSavedList, setShowSavedList] = useState(false)
+  const [confirmDeleteRunId, setConfirmDeleteRunId] = useState<string | null>(null)
+
+  // Persist working progress (draft) to localStorage
   useEffect(() => {
     try {
       const hasAny = checked.some(Boolean) || notes.some(n => n.trim() !== '')
       if (!hasAny) {
-        localStorage.removeItem(storageKey)
+        localStorage.removeItem(draftKey)
         return
       }
-      const payload: CachedRun = {
+      const payload: DraftRun = {
         checked,
         notes,
         itemsHash,
         updatedAt: new Date().toISOString(),
       }
-      localStorage.setItem(storageKey, JSON.stringify(payload))
+      localStorage.setItem(draftKey, JSON.stringify(payload))
     } catch { /* quota or unavailable — ignore */ }
-  }, [checked, notes, storageKey, itemsHash])
+  }, [checked, notes, draftKey, itemsHash])
+
+  const saveSnapshot = () => {
+    const title = snapshotTitle.trim() || `检查 - ${new Date().toLocaleString('zh-CN')}`
+    const run: SavedRun = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title,
+      checked: [...checked],
+      notes: [...notes],
+      itemsHash,
+      savedAt: new Date().toISOString(),
+    }
+    const next = [run, ...savedRuns]
+    setSavedRuns(next)
+    writeSavedRuns(checklist.id, next)
+    setSnapshotTitle('')
+    setShowSavedList(true)
+  }
+
+  const loadSnapshot = (run: SavedRun) => {
+    setChecked([...run.checked])
+    setNotes([...run.notes])
+    setViewingRunId(run.id)
+    setEditingNote(null)
+  }
+
+  const deleteSnapshot = (id: string) => {
+    const next = savedRuns.filter(r => r.id !== id)
+    setSavedRuns(next)
+    writeSavedRuns(checklist.id, next)
+    if (viewingRunId === id) setViewingRunId(null)
+    setConfirmDeleteRunId(null)
+  }
+
+  const startNewRun = () => {
+    setChecked(parsedItems.map(() => false))
+    setNotes(parsedItems.map(() => ''))
+    setViewingRunId(null)
+    setEditingNote(null)
+    try { localStorage.removeItem(draftKey) } catch {}
+  }
 
   const toggle = (idx: number) => {
     setChecked(prev => prev.map((v, i) => i === idx ? !v : v))
@@ -519,18 +596,13 @@ function ChecklistUse({
               {allDone && ' ✅ 全部完成！'}
             </p>
           </div>
-          {checkedCount > 0 && !allDone && (
+          {(checkedCount > 0 || notes.some(n => n.trim() !== '')) && (
             <button
-              onClick={() => {
-                setChecked(parsedItems.map(() => false))
-                setNotes(parsedItems.map(() => ''))
-                setEditingNote(null)
-                try { localStorage.removeItem(storageKey) } catch {}
-              }}
+              onClick={startNewRun}
               className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
               style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
             >
-              重置
+              {viewingRunId ? '新建一份' : '重置'}
             </button>
           )}
         </div>
@@ -634,11 +706,120 @@ function ChecklistUse({
         )}
       </div>
 
+      {/* Save snapshot */}
+      <div
+        className="rounded-lg p-4 mt-4"
+        style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: '8px' }}
+      >
+        <p className="font-mono text-xs mb-2" style={{ color: 'var(--color-ink-muted)' }}>
+          {viewingRunId ? '📂 正在查看已保存的记录，可修改后另存一份' : '💾 保存当前进度为一份快照，方便后续查看'}
+        </p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="text"
+            value={snapshotTitle}
+            onChange={e => setSnapshotTitle(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveSnapshot() } }}
+            placeholder={`快照标题（默认：检查 - ${new Date().toLocaleString('zh-CN')}）`}
+            className="font-mono text-sm flex-1 min-w-[200px] px-3 py-2 bg-[var(--color-surface-strong)]"
+            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
+          />
+          <button
+            onClick={saveSnapshot}
+            disabled={checkedCount === 0 && notes.every(n => n.trim() === '')}
+            className="font-mono text-sm px-4 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
+            style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
+          >
+            保存快照
+          </button>
+        </div>
+      </div>
+
+      {/* Saved runs */}
+      {savedRuns.length > 0 && (
+        <div
+          className="rounded-lg mt-4"
+          style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: '8px' }}
+        >
+          <button
+            onClick={() => setShowSavedList(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 font-mono text-sm transition-colors hover:bg-[var(--color-surface-hover)]"
+            style={{ color: 'var(--color-ink)', borderRadius: '8px' }}
+          >
+            <span>📚 已保存的快照 ({savedRuns.length})</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: showSavedList ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {showSavedList && (
+            <div style={{ borderTop: '1px solid var(--color-border)' }}>
+              {savedRuns.map(run => {
+                const runChecked = run.checked.filter(Boolean).length
+                const isViewing = viewingRunId === run.id
+                return (
+                  <div
+                    key={run.id}
+                    className="flex items-center gap-2 px-4 py-2.5"
+                    style={{
+                      borderBottom: '1px solid var(--color-border)',
+                      background: isViewing ? 'var(--color-surface-hover)' : 'transparent',
+                    }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-mono text-sm truncate" style={{ color: 'var(--color-ink)' }}>
+                        {isViewing && '👁 '}{run.title}
+                      </p>
+                      <p className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>
+                        {runChecked}/{run.checked.length} 项 · {new Date(run.savedAt).toLocaleString('zh-CN')}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => loadSnapshot(run)}
+                      className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-strong)]"
+                      style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+                    >
+                      查看
+                    </button>
+                    {confirmDeleteRunId === run.id ? (
+                      <>
+                        <button
+                          onClick={() => deleteSnapshot(run.id)}
+                          className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors"
+                          style={{ background: 'var(--color-danger-text, #c00)', color: '#fff', borderRadius: '6px' }}
+                        >
+                          确认
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteRunId(null)}
+                          className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-strong)]"
+                          style={{ color: 'var(--color-ink-muted)' }}
+                        >
+                          取消
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteRunId(run.id)}
+                        className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-strong)]"
+                        style={{ color: 'var(--color-danger-text, #c00)' }}
+                        title="删除快照"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Local cache reminder */}
       <p className="font-mono text-xs text-center mt-4" style={{ color: 'var(--color-ink-faint)' }}>
-        {lastSavedAt
+        {lastSavedAt && !viewingRunId
           ? `💾 已恢复上次进度 (${new Date(lastSavedAt).toLocaleString('zh-CN')})、仅本设备本地保存`
-          : '💾 进度仅保存在本设备本地，方便下次回顾'}
+          : '💾 草稿与快照仅保存在本设备本地'}
       </p>
     </div>
   )
