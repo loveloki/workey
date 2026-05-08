@@ -421,16 +421,25 @@ function ChecklistCard({
 
 /* ── Checklist Use (临时打勾) ──────────────────────────────── */
 
+type ExtraItem = { id: string; text: string; checked: boolean; note: string }
+
 type SavedRun = {
   id: string
   title: string
   checked: boolean[]
   notes: string[]
+  extras?: ExtraItem[]
   itemsHash: string
   savedAt: string
 }
 
-type DraftRun = { checked: boolean[]; notes: string[]; itemsHash: string; updatedAt: string }
+type DraftRun = {
+  checked: boolean[]
+  notes: string[]
+  extras?: ExtraItem[]
+  itemsHash: string
+  updatedAt: string
+}
 
 function loadSavedRuns(checklistId: number, itemsHash: string, length: number): SavedRun[] {
   try {
@@ -482,7 +491,11 @@ function ChecklistUse({
 
   const [checked, setChecked] = useState<boolean[]>(() => draft?.checked ?? parsedItems.map(() => false))
   const [notes, setNotes] = useState<string[]>(() => draft?.notes ?? parsedItems.map(() => ''))
+  const [extras, setExtras] = useState<ExtraItem[]>(() => draft?.extras ?? [])
   const [editingNote, setEditingNote] = useState<number | null>(null)
+  const [editingExtraNote, setEditingExtraNote] = useState<string | null>(null)
+  const [newExtraText, setNewExtraText] = useState('')
+  const newExtraRef = useRef<HTMLInputElement>(null)
   const [lastSavedAt] = useState<string | null>(draft?.updatedAt ?? null)
 
   const [savedRuns, setSavedRuns] = useState<SavedRun[]>(() =>
@@ -496,7 +509,7 @@ function ChecklistUse({
   // Persist working progress (draft) to localStorage
   useEffect(() => {
     try {
-      const hasAny = checked.some(Boolean) || notes.some(n => n.trim() !== '')
+      const hasAny = checked.some(Boolean) || notes.some(n => n.trim() !== '') || extras.length > 0
       if (!hasAny) {
         localStorage.removeItem(draftKey)
         return
@@ -504,12 +517,13 @@ function ChecklistUse({
       const payload: DraftRun = {
         checked,
         notes,
+        extras,
         itemsHash,
         updatedAt: new Date().toISOString(),
       }
       localStorage.setItem(draftKey, JSON.stringify(payload))
     } catch { /* quota or unavailable — ignore */ }
-  }, [checked, notes, draftKey, itemsHash])
+  }, [checked, notes, extras, draftKey, itemsHash])
 
   const saveSnapshot = () => {
     const title = snapshotTitle.trim() || `检查 - ${new Date().toLocaleString('zh-CN')}`
@@ -518,6 +532,7 @@ function ChecklistUse({
       title,
       checked: [...checked],
       notes: [...notes],
+      extras: extras.map(e => ({ ...e })),
       itemsHash,
       savedAt: new Date().toISOString(),
     }
@@ -531,8 +546,10 @@ function ChecklistUse({
   const loadSnapshot = (run: SavedRun) => {
     setChecked([...run.checked])
     setNotes([...run.notes])
+    setExtras((run.extras ?? []).map(e => ({ ...e })))
     setViewingRunId(run.id)
     setEditingNote(null)
+    setEditingExtraNote(null)
   }
 
   const deleteSnapshot = (id: string) => {
@@ -546,9 +563,37 @@ function ChecklistUse({
   const startNewRun = () => {
     setChecked(parsedItems.map(() => false))
     setNotes(parsedItems.map(() => ''))
+    setExtras([])
     setViewingRunId(null)
     setEditingNote(null)
+    setEditingExtraNote(null)
     try { localStorage.removeItem(draftKey) } catch {}
+  }
+
+  const addExtra = () => {
+    const text = newExtraText.trim()
+    if (!text) return
+    setExtras(prev => [...prev, {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      text,
+      checked: false,
+      note: '',
+    }])
+    setNewExtraText('')
+    setTimeout(() => newExtraRef.current?.focus(), 0)
+  }
+
+  const toggleExtra = (id: string) => {
+    setExtras(prev => prev.map(e => e.id === id ? { ...e, checked: !e.checked } : e))
+  }
+
+  const updateExtraNote = (id: string, note: string) => {
+    setExtras(prev => prev.map(e => e.id === id ? { ...e, note } : e))
+  }
+
+  const removeExtra = (id: string) => {
+    setExtras(prev => prev.filter(e => e.id !== id))
+    if (editingExtraNote === id) setEditingExtraNote(null)
   }
 
   const toggle = (idx: number) => {
@@ -559,8 +604,9 @@ function ChecklistUse({
     setNotes(prev => prev.map((v, i) => i === idx ? val : v))
   }
 
-  const checkedCount = checked.filter(Boolean).length
-  const totalCount = parsedItems.length
+  const extrasCheckedCount = extras.filter(e => e.checked).length
+  const checkedCount = checked.filter(Boolean).length + extrasCheckedCount
+  const totalCount = parsedItems.length + extras.length
   const allDone = checkedCount === totalCount && totalCount > 0
   const progress = totalCount > 0 ? (checkedCount / totalCount) * 100 : 0
 
@@ -695,6 +741,118 @@ function ChecklistUse({
               )}
             </div>
           ))}
+
+          {/* Extra (ad-hoc) items */}
+          {extras.length > 0 && (
+            <div className="pt-2 mt-2" style={{ borderTop: '1px dashed var(--color-border)' }}>
+              <p className="font-mono text-xs px-3 py-1" style={{ color: 'var(--color-ink-faint)' }}>
+                临时添加（{extras.length}）
+              </p>
+              {extras.map(extra => (
+                <div key={extra.id} className="rounded-md transition-colors hover:bg-[var(--color-surface-hover)] group" style={{ opacity: extra.checked ? 0.6 : 1 }}>
+                  <div className="flex items-start gap-3 px-3 py-2.5">
+                    <button
+                      onClick={() => toggleExtra(extra.id)}
+                      className="mt-0.5 w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors"
+                      style={{
+                        borderColor: extra.checked ? '#22c55e' : 'var(--color-border-strong, var(--color-border))',
+                        background: extra.checked ? '#22c55e' : 'transparent',
+                        borderStyle: 'dashed',
+                      }}
+                    >
+                      {extra.checked && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </button>
+                    <span
+                      className="font-mono text-sm flex-1 cursor-pointer"
+                      style={{
+                        color: 'var(--color-ink)',
+                        textDecoration: extra.checked ? 'line-through' : 'none',
+                        wordBreak: 'break-word',
+                      }}
+                      onClick={() => toggleExtra(extra.id)}
+                    >
+                      <span className="font-mono text-xs mr-1.5" style={{ color: 'var(--color-ink-faint)' }}>+</span>
+                      {extra.text}
+                    </span>
+                    <button
+                      onClick={() => setEditingExtraNote(editingExtraNote === extra.id ? null : extra.id)}
+                      className="shrink-0 font-mono text-xs px-1.5 py-0.5 rounded transition-colors hover:bg-[var(--color-surface-strong)]"
+                      style={{ color: extra.note ? 'var(--color-ink)' : 'var(--color-ink-faint)' }}
+                      title="添加备注"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 20h9" /><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => removeExtra(extra.id)}
+                      className="shrink-0 font-mono text-xs px-1.5 py-0.5 rounded transition-colors hover:bg-[var(--color-surface-strong)]"
+                      style={{ color: 'var(--color-danger-text, #c00)' }}
+                      title="删除临时项"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  {editingExtraNote === extra.id && (
+                    <div className="pl-11 pr-3 pb-2.5">
+                      <textarea
+                        value={extra.note}
+                        onChange={e => updateExtraNote(extra.id, e.target.value)}
+                        placeholder="输入备注..."
+                        rows={2}
+                        autoFocus
+                        className="font-mono text-xs w-full px-2.5 py-1.5 bg-[var(--color-surface-strong)] resize-none"
+                        style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none', color: 'var(--color-ink-secondary)' }}
+                        onKeyDown={e => { if (e.key === 'Escape') setEditingExtraNote(null) }}
+                      />
+                    </div>
+                  )}
+                  {editingExtraNote !== extra.id && extra.note && (
+                    <div
+                      className="pl-11 pr-3 pb-2.5 cursor-pointer"
+                      onClick={() => setEditingExtraNote(extra.id)}
+                    >
+                      <p className="font-mono text-xs whitespace-pre-wrap" style={{ color: 'var(--color-ink-muted)', wordBreak: 'break-word' }}>
+                        📝 {extra.note}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add extra item input */}
+          <div className="pt-3 mt-2" style={{ borderTop: '1px dashed var(--color-border)' }}>
+            <div className="flex items-center gap-2 px-3">
+              <span className="font-mono text-sm shrink-0" style={{ color: 'var(--color-ink-faint)' }}>+</span>
+              <input
+                ref={newExtraRef}
+                type="text"
+                value={newExtraText}
+                onChange={e => setNewExtraText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.nativeEvent.isComposing || (e as any).keyCode === 229) return
+                  if (e.key === 'Enter') { e.preventDefault(); addExtra() }
+                }}
+                placeholder="临时添加检查项（仅本次进度使用，Enter 添加）"
+                className="font-mono text-sm flex-1 px-2.5 py-1.5 bg-[var(--color-surface-strong)]"
+                style={{ border: '1px dashed var(--color-border)', borderRadius: '6px', outline: 'none' }}
+              />
+              <button
+                onClick={addExtra}
+                disabled={!newExtraText.trim()}
+                className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-40"
+                style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+              >
+                添加
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* All done celebration */}
