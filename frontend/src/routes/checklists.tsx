@@ -163,7 +163,9 @@ function ChecklistForm({
     setItemTexts(prev => prev.map((v, i) => i === idx ? val : v))
   }
 
-  const handleItemKeyDown = (e: React.KeyboardEvent, idx: number) => {
+  const handleItemKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
+    // Skip during IME composition (e.g., Chinese pinyin input)
+    if (e.nativeEvent.isComposing || (e as any).keyCode === 229) return
     if (e.key === 'Enter') {
       e.preventDefault()
       addItem()
@@ -430,9 +432,47 @@ function ChecklistUse({
     try { return JSON.parse(checklist.items) } catch { return [] }
   })()
 
-  const [checked, setChecked] = useState<boolean[]>(() => parsedItems.map(() => false))
-  const [notes, setNotes] = useState<string[]>(() => parsedItems.map(() => ''))
+  const storageKey = `checklist-run:${checklist.id}`
+
+  type CachedRun = { checked: boolean[]; notes: string[]; itemsHash: string; updatedAt: string }
+  const itemsHash = JSON.stringify(parsedItems)
+
+  const loadCache = (): CachedRun | null => {
+    try {
+      const raw = localStorage.getItem(storageKey)
+      if (!raw) return null
+      const parsed = JSON.parse(raw) as CachedRun
+      if (parsed.itemsHash !== itemsHash) return null
+      if (!Array.isArray(parsed.checked) || parsed.checked.length !== parsedItems.length) return null
+      if (!Array.isArray(parsed.notes) || parsed.notes.length !== parsedItems.length) return null
+      return parsed
+    } catch { return null }
+  }
+
+  const cached = loadCache()
+
+  const [checked, setChecked] = useState<boolean[]>(() => cached?.checked ?? parsedItems.map(() => false))
+  const [notes, setNotes] = useState<string[]>(() => cached?.notes ?? parsedItems.map(() => ''))
   const [editingNote, setEditingNote] = useState<number | null>(null)
+  const [lastSavedAt] = useState<string | null>(cached?.updatedAt ?? null)
+
+  // Persist progress to localStorage
+  useEffect(() => {
+    try {
+      const hasAny = checked.some(Boolean) || notes.some(n => n.trim() !== '')
+      if (!hasAny) {
+        localStorage.removeItem(storageKey)
+        return
+      }
+      const payload: CachedRun = {
+        checked,
+        notes,
+        itemsHash,
+        updatedAt: new Date().toISOString(),
+      }
+      localStorage.setItem(storageKey, JSON.stringify(payload))
+    } catch { /* quota or unavailable — ignore */ }
+  }, [checked, notes, storageKey, itemsHash])
 
   const toggle = (idx: number) => {
     setChecked(prev => prev.map((v, i) => i === idx ? !v : v))
@@ -481,7 +521,12 @@ function ChecklistUse({
           </div>
           {checkedCount > 0 && !allDone && (
             <button
-              onClick={() => { setChecked(parsedItems.map(() => false)); setNotes(parsedItems.map(() => '')); setEditingNote(null) }}
+              onClick={() => {
+                setChecked(parsedItems.map(() => false))
+                setNotes(parsedItems.map(() => ''))
+                setEditingNote(null)
+                try { localStorage.removeItem(storageKey) } catch {}
+              }}
               className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
               style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
             >
@@ -589,9 +634,11 @@ function ChecklistUse({
         )}
       </div>
 
-      {/* Reminder that checks are temporary */}
+      {/* Local cache reminder */}
       <p className="font-mono text-xs text-center mt-4" style={{ color: 'var(--color-ink-faint)' }}>
-        ⚡ 打勾状态为临时记录，离开页面后将自动重置
+        {lastSavedAt
+          ? `💾 已恢复上次进度 (${new Date(lastSavedAt).toLocaleString('zh-CN')})、仅本设备本地保存`
+          : '💾 进度仅保存在本设备本地，方便下次回顾'}
       </p>
     </div>
   )
