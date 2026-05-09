@@ -23,14 +23,15 @@ type User struct {
 }
 
 type Attendance struct {
-	ID        int64   `json:"id"`
-	UserID    int64   `json:"user_id"`
-	Date      string  `json:"date"`
-	ClockIn   *string `json:"clock_in"`
-	ClockOut  *string `json:"clock_out"`
-	Status    string  `json:"status"`
-	CreatedAt string  `json:"created_at"`
-	UpdatedAt string  `json:"updated_at"`
+	ID         int64   `json:"id"`
+	UserID     int64   `json:"user_id"`
+	Date       string  `json:"date"`
+	ClockIn    *string `json:"clock_in"`
+	ClockOut   *string `json:"clock_out"`
+	Status     string  `json:"status"`
+	IsOvertime bool    `json:"is_overtime"`
+	CreatedAt  string  `json:"created_at"`
+	UpdatedAt  string  `json:"updated_at"`
 }
 
 type WorkLog struct {
@@ -206,31 +207,41 @@ func handleClockIn(w http.ResponseWriter, r *http.Request) {
 	date := today()
 	now := nowDatetime()
 
+	// Optional body: { is_overtime: bool }
+	var req struct {
+		IsOvertime *bool `json:"is_overtime"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	overtime := 0
+	if req.IsOvertime != nil && *req.IsOvertime {
+		overtime = 1
+	}
+
 	// Check if record exists for today
 	var existingID int64
 	var existingClockIn *string
 	err := db.QueryRow("SELECT id, clock_in FROM attendance WHERE user_id = ? AND date = ?", userID, date).Scan(&existingID, &existingClockIn)
-	
+
 	if err == nil {
 		// Record exists
 		if existingClockIn != nil {
 			jsonError(w, "Already clocked in today", http.StatusConflict)
 			return
 		}
-		// Record exists but clock_in is null (e.g., was on leave). Update it.
 		_, err = db.Exec(
-			"UPDATE attendance SET clock_in = ?, status = 'normal', updated_at = ? WHERE id = ?",
-			now, now, existingID,
+			"UPDATE attendance SET clock_in = ?, status = 'normal', is_overtime = ?, updated_at = ? WHERE id = ?",
+			now, overtime, now, existingID,
 		)
 		if err != nil {
 			jsonError(w, "Failed to clock in", http.StatusInternalServerError)
 			return
 		}
 	} else if err == sql.ErrNoRows {
-		// No record, insert new
 		_, err = db.Exec(
-			"INSERT INTO attendance (user_id, date, clock_in, status, created_at, updated_at) VALUES (?, ?, ?, 'normal', ?, ?)",
-			userID, date, now, now, now,
+			"INSERT INTO attendance (user_id, date, clock_in, status, is_overtime, created_at, updated_at) VALUES (?, ?, ?, 'normal', ?, ?, ?)",
+			userID, date, now, overtime, now, now,
 		)
 		if err != nil {
 			jsonError(w, "Failed to clock in", http.StatusInternalServerError)
@@ -243,6 +254,49 @@ func handleClockIn(w http.ResponseWriter, r *http.Request) {
 
 	attendance := getAttendance(userID, date)
 	jsonOK(w, attendance)
+}
+
+func handleAttendanceOvertime(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" && r.Method != "PUT" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+	var req struct {
+		Date       string `json:"date"`
+		IsOvertime bool   `json:"is_overtime"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Date == "" {
+		jsonError(w, "date is required", http.StatusBadRequest)
+		return
+	}
+
+	overtime := 0
+	if req.IsOvertime {
+		overtime = 1
+	}
+	now := nowDatetime()
+
+	res, err := db.Exec(
+		"UPDATE attendance SET is_overtime = ?, updated_at = ? WHERE user_id = ? AND date = ?",
+		overtime, now, userID, req.Date,
+	)
+	if err != nil {
+		jsonError(w, "Failed to update", http.StatusInternalServerError)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		jsonError(w, "No attendance record on that date", http.StatusNotFound)
+		return
+	}
+
+	jsonOK(w, getAttendance(userID, req.Date))
 }
 
 func handleLeave(w http.ResponseWriter, r *http.Request) {
@@ -342,7 +396,7 @@ func handleAttendanceStats(w http.ResponseWriter, r *http.Request) {
 
 	err := db.QueryRow(`
 		SELECT 
-			COUNT(CASE WHEN status != 'leave' AND (strftime('%w', date) = '0' OR strftime('%w', date) = '6') THEN 1 END) as overtime_days,
+			COUNT(CASE WHEN status != 'leave' AND is_overtime = 1 THEN 1 END) as overtime_days,
 			COUNT(CASE WHEN status = 'leave' THEN 1 END) as leave_days
 		FROM attendance 
 		WHERE user_id = ?
@@ -375,7 +429,7 @@ func handleAttendanceRange(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := db.Query(
-		"SELECT id, user_id, date, clock_in, clock_out, status, created_at, updated_at FROM attendance WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date",
+		"SELECT id, user_id, date, clock_in, clock_out, status, is_overtime, created_at, updated_at FROM attendance WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date",
 		userID, start, end,
 	)
 	if err != nil {
@@ -387,7 +441,9 @@ func handleAttendanceRange(w http.ResponseWriter, r *http.Request) {
 	attendances := []Attendance{}
 		for rows.Next() {
 			var a Attendance
-			rows.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &a.CreatedAt, &a.UpdatedAt)
+			var ov int
+			rows.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &ov, &a.CreatedAt, &a.UpdatedAt)
+			a.IsOvertime = ov == 1
 			attendances = append(attendances, a)
 		}
 		jsonOK(w, map[string]interface{}{"attendances": attendances})
@@ -395,13 +451,15 @@ func handleAttendanceRange(w http.ResponseWriter, r *http.Request) {
 
 func getAttendance(userID int64, date string) *Attendance {
 	var a Attendance
+	var ov int
 	err := db.QueryRow(
-		"SELECT id, user_id, date, clock_in, clock_out, status, created_at, updated_at FROM attendance WHERE user_id = ? AND date = ?",
+		"SELECT id, user_id, date, clock_in, clock_out, status, is_overtime, created_at, updated_at FROM attendance WHERE user_id = ? AND date = ?",
 		userID, date,
-	).Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &a.CreatedAt, &a.UpdatedAt)
+	).Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &ov, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil
 	}
+	a.IsOvertime = ov == 1
 	return &a
 }
 
@@ -1445,7 +1503,7 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 
 	attendances := []Attendance{}
 	rows, err := db.Query(
-		"SELECT id, user_id, date, clock_in, clock_out, status, created_at, updated_at FROM attendance WHERE user_id = ? ORDER BY date",
+		"SELECT id, user_id, date, clock_in, clock_out, status, is_overtime, created_at, updated_at FROM attendance WHERE user_id = ? ORDER BY date",
 		userID,
 	)
 	if err != nil {
@@ -1454,7 +1512,9 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 	}
 	for rows.Next() {
 			var a Attendance
-			rows.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &a.CreatedAt, &a.UpdatedAt)
+			var ov int
+			rows.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &ov, &a.CreatedAt, &a.UpdatedAt)
+			a.IsOvertime = ov == 1
 			attendances = append(attendances, a)
 		}
 		rows.Close()
@@ -1655,9 +1715,13 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 			if status == "" {
 				status = "normal"
 			}
+			overtime := 0
+			if a.IsOvertime {
+				overtime = 1
+			}
 			result, err := db.Exec(
-				"UPDATE attendance SET clock_in = ?, clock_out = ?, status = ?, updated_at = ? WHERE user_id = ? AND date = ?",
-				a.ClockIn, a.ClockOut, status, now, userID, a.Date,
+				"UPDATE attendance SET clock_in = ?, clock_out = ?, status = ?, is_overtime = ?, updated_at = ? WHERE user_id = ? AND date = ?",
+				a.ClockIn, a.ClockOut, status, overtime, now, userID, a.Date,
 			)
 			if err != nil {
 				continue
@@ -1666,8 +1730,8 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 			rowsAffected, _ := result.RowsAffected()
 			if rowsAffected == 0 {
 				_, err = db.Exec(
-					"INSERT INTO attendance (user_id, date, clock_in, clock_out, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-					userID, a.Date, a.ClockIn, a.ClockOut, status, now, now,
+					"INSERT INTO attendance (user_id, date, clock_in, clock_out, status, is_overtime, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+					userID, a.Date, a.ClockIn, a.ClockOut, status, overtime, now, now,
 				)
 				if err != nil {
 					continue

@@ -38,6 +38,7 @@ function ClockWidget() {
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState(false)
   const [now, setNow] = useState(new Date())
+  const [isOvertime, setIsOvertime] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -57,13 +58,25 @@ function ClockWidget() {
   const clockedOut = !!data?.clock_out
   const isLeave = data?.status === 'leave'
 
-  const clockIn = async () => {
+  const clockIn = async (overtime?: boolean) => {
     setActing(true)
     try {
-      const res = await attendance.clockIn()
+      const res = await attendance.clockIn(overtime ?? isOvertime)
       setData(res)
       // After clocking in, go to today's work page
       setTimeout(() => navigate({ to: '/' }), 600)
+    } catch (e: any) {
+      alert(e.message)
+    }
+    setActing(false)
+  }
+
+  const toggleTodayOvertime = async () => {
+    if (!data) return
+    setActing(true)
+    try {
+      const res = await attendance.setOvertime(data.date, !data.is_overtime)
+      setData(res)
     } catch (e: any) {
       alert(e.message)
     }
@@ -106,8 +119,19 @@ function ClockWidget() {
       {/* Big circular button */}
       {!clockedIn && !isLeave ? (
         <div className="flex flex-col items-center gap-6">
+          <label className="flex items-center gap-2 cursor-pointer select-none px-4 py-2 rounded-full" style={{ border: '1px solid var(--color-border)', background: isOvertime ? 'var(--color-surface-strong)' : 'transparent' }}>
+            <input
+              type="checkbox"
+              checked={isOvertime}
+              onChange={e => setIsOvertime(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <span className="font-mono text-sm" style={{ color: isOvertime ? '#dc2626' : 'var(--color-ink-muted)' }}>
+              今天是加班
+            </span>
+          </label>
           <button
-            onClick={clockIn}
+            onClick={() => clockIn()}
             disabled={acting}
             className="group relative"
             style={{ outline: 'none' }}
@@ -214,6 +238,22 @@ function ClockWidget() {
           </>
         )}
       </div>
+
+      {/* Overtime toggle (after clocked in) */}
+      {clockedIn && !isLeave && (
+        <button
+          onClick={toggleTodayOvertime}
+          disabled={acting}
+          className="mt-4 font-mono text-xs px-4 py-2 rounded-full transition-colors disabled:opacity-50"
+          style={{
+            border: '1px solid var(--color-border)',
+            background: data?.is_overtime ? '#fee2e2' : 'transparent',
+            color: data?.is_overtime ? '#dc2626' : 'var(--color-ink-muted)',
+          }}
+        >
+          {data?.is_overtime ? '✓ 加班已标记（点击取消）' : '标记为加班'}
+        </button>
+      )}
 
       {/* Hint */}
       {clockedIn && !clockedOut && (

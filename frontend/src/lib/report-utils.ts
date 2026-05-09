@@ -16,7 +16,8 @@ export function formatDayMarkdown(
     if (att.status === 'leave') {
       lines.push(`> 状态：请假`)
     } else {
-      lines.push(`> 上班 ${formatTime(att.clock_in)}　下班 ${formatTime(att.clock_out)}`)
+      const ot = att.is_overtime ? '（加班）' : ''
+      lines.push(`> 上班 ${formatTime(att.clock_in)}　下班 ${formatTime(att.clock_out)}${ot}`)
     }
     lines.push('')
   }

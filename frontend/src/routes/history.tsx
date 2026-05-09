@@ -541,16 +541,18 @@ function HistoryEntry({ date, entry, getDayMarkdown, onRefresh, preset, fetchDat
           )}
         </div>
         <div className="flex items-center gap-3">
-          {entry.attendance && (() => {
-            const isWeekend = [0, 6].includes(new Date(date + 'T00:00:00').getDay())
-            return (
-              <div className="flex items-center gap-3 font-mono text-xs text-[var(--color-ink-muted)]">
-                {isWeekend && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">加班</span>}
-                <span>上班 {formatTime(entry.attendance.clock_in)}</span>
-                <span>下班 {formatTime(entry.attendance.clock_out)}</span>
-              </div>
-            )
-          })()}
+          {entry.attendance && (
+            <div className="flex items-center gap-3 font-mono text-xs text-[var(--color-ink-muted)]">
+              <OvertimeBadge
+                date={date}
+                isOvertime={!!entry.attendance.is_overtime}
+                isLeave={entry.attendance.status === 'leave'}
+                onChanged={() => fetchData(currentRange.start, currentRange.end)}
+              />
+              <span>上班 {formatTime(entry.attendance.clock_in)}</span>
+              <span>下班 {formatTime(entry.attendance.clock_out)}</span>
+            </div>
+          )}
           <CopyButton getText={() => getDayMarkdown(date)} className="hidden sm:flex" />
         </div>
       </div>
@@ -654,5 +656,37 @@ function HistoryEntry({ date, entry, getDayMarkdown, onRefresh, preset, fetchDat
         </>
       )}
     </div>
+  )
+}
+
+function OvertimeBadge({ date, isOvertime, isLeave, onChanged }: { date: string, isOvertime: boolean, isLeave: boolean, onChanged: () => void }) {
+  const [busy, setBusy] = useState(false)
+  if (isLeave) return null
+  const toggle = async () => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await attendanceApi.setOvertime(date, !isOvertime)
+      onChanged()
+    } catch (e: any) {
+      alert(e.message || '更新失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <button
+      onClick={toggle}
+      disabled={busy}
+      title={isOvertime ? '点击取消加班标记' : '点击标记为加班'}
+      className="px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors disabled:opacity-50"
+      style={{
+        background: isOvertime ? '#fee2e2' : 'transparent',
+        color: isOvertime ? '#dc2626' : 'var(--color-ink-faint)',
+        border: isOvertime ? '1px solid transparent' : '1px dashed var(--color-border)',
+      }}
+    >
+      {isOvertime ? '加班' : '+ 加班'}
+    </button>
   )
 }

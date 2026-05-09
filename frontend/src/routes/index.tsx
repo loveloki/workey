@@ -106,7 +106,7 @@ function Dashboard() {
           {todayData && (
             <div className="flex items-center gap-6 px-6 py-4">
               <div className="flex items-center gap-2">
-                {[0, 6].includes(new Date().getDay()) && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">加班</span>}
+                {todayData?.is_overtime && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">加班</span>}
                 {todayData.status === 'leave' ? (
                   <span className="font-mono text-sm font-bold" style={{ color: 'var(--color-danger-text, #dc2626)' }}>已请假</span>
                 ) : (
@@ -158,7 +158,7 @@ function Dashboard() {
           {todayData && (
             <div className="flex items-center gap-6 px-6 py-4">
               <div className="flex items-center gap-2">
-                {[0, 6].includes(new Date().getDay()) && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">加班</span>}
+                {todayData?.is_overtime && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">加班</span>}
                 {todayData.status === 'leave' ? (
                   <span className="font-mono text-sm font-bold" style={{ color: 'var(--color-danger-text, #dc2626)' }}>已请假</span>
                 ) : (

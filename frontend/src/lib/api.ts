@@ -73,7 +73,14 @@ export const auth = {
 
 // Attendance
 export const attendance = {
-  clockIn: () => request<any>('/api/attendance/clock-in', { method: 'POST' }),
+  clockIn: (isOvertime?: boolean) => request<any>('/api/attendance/clock-in', {
+    method: 'POST',
+    body: JSON.stringify({ is_overtime: !!isOvertime }),
+  }),
+  setOvertime: (date: string, is_overtime: boolean) => request<any>('/api/attendance/overtime', {
+    method: 'POST',
+    body: JSON.stringify({ date, is_overtime }),
+  }),
   clockOut: () => request<any>('/api/attendance/clock-out', { method: 'POST' }),
   leave: () => request<any>('/api/attendance/leave', { method: 'POST' }),
   today: () => request<{ attendance: any }>('/api/attendance/today'),

@@ -64,6 +64,7 @@ func main() {
 	mux.HandleFunc("/api/attendance/today", corsMiddleware(authMiddleware(handleAttendanceToday)))
 	mux.HandleFunc("/api/attendance/range", corsMiddleware(authMiddleware(handleAttendanceRange)))
 	mux.HandleFunc("/api/attendance/stats", corsMiddleware(authMiddleware(handleAttendanceStats)))
+	mux.HandleFunc("/api/attendance/overtime", corsMiddleware(authMiddleware(handleAttendanceOvertime)))
 
 	// Work log routes
 	mux.HandleFunc("/api/work-logs", corsMiddleware(authMiddleware(handleWorkLogs)))
@@ -226,6 +227,39 @@ func migrateDB() {
 		_, err = db.Exec("ALTER TABLE attendance ADD COLUMN status TEXT NOT NULL DEFAULT 'normal'")
 		if err != nil {
 			log.Fatalf("Failed to add status column to attendance: %v", err)
+		}
+	}
+
+	// Migration: add is_overtime column
+	rows2, err := db.Query("PRAGMA table_info(attendance)")
+	if err != nil {
+		log.Fatalf("Failed to get table info: %v", err)
+	}
+	hasOvertime := false
+	for rows2.Next() {
+		var cid int
+		var name, ctype string
+		var notnull int
+		var dflt_value *string
+		var pk int
+		err = rows2.Scan(&cid, &name, &ctype, &notnull, &dflt_value, &pk)
+		if err == nil && name == "is_overtime" {
+			hasOvertime = true
+		}
+	}
+	rows2.Close()
+
+	if !hasOvertime {
+		_, err = db.Exec("ALTER TABLE attendance ADD COLUMN is_overtime INTEGER NOT NULL DEFAULT 0")
+		if err != nil {
+			log.Fatalf("Failed to add is_overtime column: %v", err)
+		}
+		// Backfill: existing weekend non-leave records were treated as overtime — preserve that.
+		_, err = db.Exec(`UPDATE attendance SET is_overtime = 1
+			WHERE status != 'leave'
+			  AND (strftime('%w', date) = '0' OR strftime('%w', date) = '6')`)
+		if err != nil {
+			log.Fatalf("Failed to backfill is_overtime: %v", err)
 		}
 	}
 }
