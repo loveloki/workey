@@ -97,6 +97,7 @@ func main() {
 
 	// Checklist routes
 	mux.HandleFunc("/api/checklists", corsMiddleware(authMiddleware(handleChecklists)))
+	mux.HandleFunc("/api/checklist-snapshots", corsMiddleware(authMiddleware(handleChecklistSnapshots)))
 
 	// History date range
 	mux.HandleFunc("/api/history/date-range", corsMiddleware(authMiddleware(handleHistoryDateRange)))
@@ -170,6 +171,15 @@ func initDB() {
 			items TEXT NOT NULL DEFAULT '[]',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS checklist_snapshots (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL REFERENCES users(id),
+			checklist_id INTEGER NOT NULL,
+			title TEXT NOT NULL DEFAULT '',
+			items_hash TEXT NOT NULL DEFAULT '',
+			data TEXT NOT NULL DEFAULT '{}',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS todos (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,

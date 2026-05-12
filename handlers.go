@@ -1234,8 +1234,8 @@ func handleCreateChecklist(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
 
 	var req struct {
-		Title string   `json:"title"`
-		Items []string `json:"items"`
+		Title string            `json:"title"`
+		Items []json.RawMessage `json:"items"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "Invalid request body", http.StatusBadRequest)
@@ -1248,7 +1248,7 @@ func handleCreateChecklist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Items == nil {
-		req.Items = []string{}
+		req.Items = []json.RawMessage{}
 	}
 	itemsJSON, _ := json.Marshal(req.Items)
 
@@ -1283,8 +1283,8 @@ func handleUpdateChecklist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Title *string  `json:"title"`
-		Items []string `json:"items"`
+		Title *string           `json:"title"`
+		Items []json.RawMessage `json:"items"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "Invalid request body", http.StatusBadRequest)
@@ -1345,6 +1345,114 @@ func handleDeleteChecklist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonOK(w, map[string]string{"message": "Checklist deleted"})
+}
+
+// --- Checklist Snapshot handlers ---
+
+type ChecklistSnapshot struct {
+	ID          int64  `json:"id"`
+	UserID      int64  `json:"user_id"`
+	ChecklistID int64  `json:"checklist_id"`
+	Title       string `json:"title"`
+	ItemsHash   string `json:"items_hash"`
+	Data        string `json:"data"` // JSON: { checked: bool[], notes: string[], extras: [...] }
+	CreatedAt   string `json:"created_at"`
+}
+
+func handleChecklistSnapshots(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		handleGetChecklistSnapshots(w, r)
+	case "POST":
+		handleCreateChecklistSnapshot(w, r)
+	case "DELETE":
+		handleDeleteChecklistSnapshot(w, r)
+	default:
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func handleGetChecklistSnapshots(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+	clID := r.URL.Query().Get("checklist_id")
+	if clID == "" {
+		jsonError(w, "checklist_id is required", http.StatusBadRequest)
+		return
+	}
+	rows, err := db.Query(
+		"SELECT id, user_id, checklist_id, title, items_hash, data, created_at FROM checklist_snapshots WHERE user_id = ? AND checklist_id = ? ORDER BY id DESC",
+		userID, clID,
+	)
+	if err != nil {
+		jsonError(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	snapshots := []ChecklistSnapshot{}
+	for rows.Next() {
+		var s ChecklistSnapshot
+		rows.Scan(&s.ID, &s.UserID, &s.ChecklistID, &s.Title, &s.ItemsHash, &s.Data, &s.CreatedAt)
+		snapshots = append(snapshots, s)
+	}
+	jsonOK(w, map[string]interface{}{"snapshots": snapshots})
+}
+
+func handleCreateChecklistSnapshot(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+	var req struct {
+		ChecklistID int64       `json:"checklist_id"`
+		Title       string      `json:"title"`
+		ItemsHash   string      `json:"items_hash"`
+		Data        interface{} `json:"data"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.ChecklistID == 0 {
+		jsonError(w, "checklist_id is required", http.StatusBadRequest)
+		return
+	}
+	// Verify checklist ownership
+	var owner int64
+	if err := db.QueryRow("SELECT user_id FROM checklists WHERE id = ?", req.ChecklistID).Scan(&owner); err != nil || owner != userID {
+		jsonError(w, "Checklist not found", http.StatusNotFound)
+		return
+	}
+	dataBytes, _ := json.Marshal(req.Data)
+	now := nowDatetime()
+	result, err := db.Exec(
+		"INSERT INTO checklist_snapshots (user_id, checklist_id, title, items_hash, data, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		userID, req.ChecklistID, req.Title, req.ItemsHash, string(dataBytes), now,
+	)
+	if err != nil {
+		jsonError(w, "Failed to save snapshot", http.StatusInternalServerError)
+		return
+	}
+	id, _ := result.LastInsertId()
+	jsonOK(w, map[string]interface{}{"snapshot": ChecklistSnapshot{
+		ID: id, UserID: userID, ChecklistID: req.ChecklistID,
+		Title: req.Title, ItemsHash: req.ItemsHash, Data: string(dataBytes), CreatedAt: now,
+	}})
+}
+
+func handleDeleteChecklistSnapshot(w http.ResponseWriter, r *http.Request) {
+	userID := getUserID(r)
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		jsonError(w, "id is required", http.StatusBadRequest)
+		return
+	}
+	result, err := db.Exec("DELETE FROM checklist_snapshots WHERE id = ? AND user_id = ?", id, userID)
+	if err != nil {
+		jsonError(w, "Failed to delete snapshot", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		jsonError(w, "Snapshot not found", http.StatusNotFound)
+		return
+	}
+	jsonOK(w, map[string]string{"message": "Snapshot deleted"})
 }
 
 // --- Iteration Override handlers ---
@@ -1488,6 +1596,7 @@ type ExportData struct {
 	Lessons            []Lesson            `json:"lessons"`
 	Todos              []Todo              `json:"todos"`
 	Checklists         []Checklist         `json:"checklists"`
+	ChecklistSnapshots []ChecklistSnapshot `json:"checklist_snapshots"`
 	UserSettings       map[string]string   `json:"user_settings"`
 	IterationOverrides []IterationOverride `json:"iteration_overrides"`
 	ExportedAt         string              `json:"exported_at"`
@@ -1583,6 +1692,22 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 	}
 	rows.Close()
 
+	snapshotsList := []ChecklistSnapshot{}
+	rows, err = db.Query(
+		"SELECT id, user_id, checklist_id, title, items_hash, data, created_at FROM checklist_snapshots WHERE user_id = ? ORDER BY id",
+		userID,
+	)
+	if err != nil {
+		jsonError(w, "Failed to export checklist snapshots", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var s ChecklistSnapshot
+		rows.Scan(&s.ID, &s.UserID, &s.ChecklistID, &s.Title, &s.ItemsHash, &s.Data, &s.CreatedAt)
+		snapshotsList = append(snapshotsList, s)
+	}
+	rows.Close()
+
 	userSettings := map[string]string{}
 	rows, err = db.Query("SELECT key, value FROM user_settings WHERE user_id = ?", userID)
 	if err != nil {
@@ -1618,6 +1743,7 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		Lessons:            lessonsList,
 		Todos:              todosList,
 		Checklists:         checklistsList,
+		ChecklistSnapshots: snapshotsList,
 		UserSettings:       userSettings,
 		IterationOverrides: overridesList,
 		ExportedAt:         time.Now().Format(time.RFC3339),
@@ -1674,9 +1800,11 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 
 	// Extract data.json
 	var importData struct {
-		Attendance []Attendance `json:"attendance"`
-		WorkLogs   []WorkLog    `json:"work_logs"`
-		Lessons    []Lesson     `json:"lessons"`
+		Attendance         []Attendance        `json:"attendance"`
+		WorkLogs           []WorkLog           `json:"work_logs"`
+		Lessons            []Lesson            `json:"lessons"`
+		Checklists         []Checklist         `json:"checklists"`
+		ChecklistSnapshots []ChecklistSnapshot `json:"checklist_snapshots"`
 	}
 	foundJSON := false
 
@@ -1791,11 +1919,71 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		lessonCount++
 	}
 
+	// Import checklists. Match by title (existing checklist with same title is updated;
+	// otherwise create new). Maintain mapping from old id -> new id for snapshots.
+	checklistIDMap := map[int64]int64{}
+	checklistCount := 0
+	for _, c := range importData.Checklists {
+		if strings.TrimSpace(c.Title) == "" {
+			continue
+		}
+		items := c.Items
+		if items == "" {
+			items = "[]"
+		}
+		now := nowDatetime()
+		var existingID int64
+		err := db.QueryRow("SELECT id FROM checklists WHERE user_id = ? AND title = ?", userID, c.Title).Scan(&existingID)
+		if err == nil {
+			_, err = db.Exec("UPDATE checklists SET items = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+				items, now, existingID, userID)
+			if err == nil {
+				checklistIDMap[c.ID] = existingID
+				checklistCount++
+			}
+		} else {
+			result, err := db.Exec(
+				"INSERT INTO checklists (user_id, title, items, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+				userID, c.Title, items, now, now,
+			)
+			if err == nil {
+				newID, _ := result.LastInsertId()
+				checklistIDMap[c.ID] = newID
+				checklistCount++
+			}
+		}
+	}
+
+	snapshotCount := 0
+	for _, s := range importData.ChecklistSnapshots {
+		newID, ok := checklistIDMap[s.ChecklistID]
+		if !ok {
+			continue
+		}
+		data := s.Data
+		if data == "" {
+			data = "{}"
+		}
+		created := s.CreatedAt
+		if created == "" {
+			created = nowDatetime()
+		}
+		_, err := db.Exec(
+			"INSERT INTO checklist_snapshots (user_id, checklist_id, title, items_hash, data, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+			userID, newID, s.Title, s.ItemsHash, data, created,
+		)
+		if err == nil {
+			snapshotCount++
+		}
+	}
+
 	jsonOK(w, map[string]interface{}{
-		"message":          "Data imported successfully",
-		"attendance_count": attendanceCount,
-		"work_log_count":   workLogCount,
-		"lesson_count":     lessonCount,
+		"message":           "Data imported successfully",
+		"attendance_count":  attendanceCount,
+		"work_log_count":    workLogCount,
+		"lesson_count":      lessonCount,
+		"checklist_count":   checklistCount,
+		"snapshot_count":    snapshotCount,
 	})
 }
 
@@ -1831,7 +2019,7 @@ func handleDataDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete all user data
-	tables := []string{"attendance", "work_logs", "lessons", "todos", "checklists", "iteration_overrides"}
+	tables := []string{"attendance", "work_logs", "lessons", "todos", "checklist_snapshots", "checklists", "iteration_overrides"}
 	counts := map[string]int64{}
 	for _, table := range tables {
 		result, err := db.Exec("DELETE FROM "+table+" WHERE user_id = ?", userID)

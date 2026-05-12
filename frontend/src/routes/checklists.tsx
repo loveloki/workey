@@ -1,9 +1,29 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
-import { useState, useEffect, useRef } from 'react'
-import { checklists as checklistsApi, type Checklist } from '../lib/api'
+import { useState, useEffect, useRef, useLayoutEffect } from 'react'
+import {
+  checklists as checklistsApi,
+  checklistSnapshots as snapshotsApi,
+  type Checklist,
+  type ChecklistItem,
+  type ChecklistSnapshot,
+} from '../lib/api'
 
 export const Route = createFileRoute('/checklists')({ component: ChecklistsPage })
+
+/* ── parsing helpers (backward-compatible: legacy = string[]) ── */
+function parseItems(raw: string): ChecklistItem[] {
+  try {
+    const arr = JSON.parse(raw)
+    if (!Array.isArray(arr)) return []
+    return arr.map((it: any) =>
+      typeof it === 'string' ? { text: it } : { text: String(it?.text ?? ''), note: it?.note || undefined }
+    )
+  } catch { return [] }
+}
+function itemsHash(items: ChecklistItem[]): string {
+  return JSON.stringify(items.map(i => ({ text: i.text, note: i.note || '' })))
+}
 
 function ChecklistsPage() {
   const { user, loading: authLoading } = useAuth()
@@ -32,6 +52,23 @@ function ChecklistsPage() {
       <ChecklistManager />
     </main>
   )
+}
+
+/* ── Auto-growing textarea hook ─────────────────────────────── */
+function useAutoGrow<T extends HTMLTextAreaElement>(value: string) {
+  const ref = useRef<T | null>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = el.scrollHeight + 'px'
+  }, [value])
+  return ref
+}
+
+function AutoTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const ref = useAutoGrow<HTMLTextAreaElement>(String(props.value ?? ''))
+  return <textarea ref={ref} {...props} style={{ ...(props.style || {}), overflow: 'hidden', resize: 'none' }} />
 }
 
 /* ── Checklist Manager ─────────────────────────────────────── */
@@ -64,7 +101,6 @@ function ChecklistManager() {
     if (activeId === id) setActiveId(null)
   }
 
-  // If using a checklist, show the "use" view
   const activeChecklist = items.find(c => c.id === activeId)
   if (activeChecklist) {
     return (
@@ -77,7 +113,6 @@ function ChecklistManager() {
 
   return (
     <div>
-      {/* Create button */}
       {!showCreate && (
         <button
           onClick={() => setShowCreate(true)}
@@ -88,7 +123,6 @@ function ChecklistManager() {
         </button>
       )}
 
-      {/* Create form */}
       {showCreate && (
         <ChecklistForm
           onSave={handleCreated}
@@ -96,7 +130,6 @@ function ChecklistManager() {
         />
       )}
 
-      {/* List */}
       {loading ? (
         <p className="font-mono text-sm text-center py-8" style={{ color: 'var(--color-ink-muted)' }}>加载中...</p>
       ) : items.length === 0 && !showCreate ? (
@@ -133,12 +166,14 @@ function ChecklistForm({
   onSave,
   onCancel,
 }: {
-  initial?: { title: string; items: string[] }
+  initial?: { title: string; items: ChecklistItem[] }
   onSave: (cl: Checklist) => void
   onCancel: () => void
 }) {
   const [title, setTitle] = useState(initial?.title || '')
-  const [itemTexts, setItemTexts] = useState<string[]>(initial?.items?.length ? initial.items : [''])
+  const [items, setItems] = useState<ChecklistItem[]>(
+    initial?.items?.length ? initial.items.map(i => ({ ...i })) : [{ text: '' }]
+  )
   const [saving, setSaving] = useState(false)
   const [dragIdx, setDragIdx] = useState<number | null>(null)
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
@@ -146,8 +181,8 @@ function ChecklistForm({
   const itemRefs = useRef<(HTMLInputElement | null)[]>([])
 
   const reorder = (from: number, to: number) => {
-    if (from === to || from < 0 || to < 0 || from >= itemTexts.length || to >= itemTexts.length) return
-    setItemTexts(prev => {
+    if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return
+    setItems(prev => {
       const next = [...prev]
       const [m] = next.splice(from, 1)
       next.splice(to, 0, m)
@@ -155,33 +190,29 @@ function ChecklistForm({
     })
   }
 
-  useEffect(() => {
-    titleRef.current?.focus()
-  }, [])
+  useEffect(() => { titleRef.current?.focus() }, [])
 
   const addItem = () => {
-    setItemTexts(prev => [...prev, ''])
-    setTimeout(() => {
-      itemRefs.current[itemTexts.length]?.focus()
-    }, 0)
+    setItems(prev => [...prev, { text: '' }])
+    setTimeout(() => { itemRefs.current[items.length]?.focus() }, 0)
   }
-
   const removeItem = (idx: number) => {
-    if (itemTexts.length <= 1) return
-    setItemTexts(prev => prev.filter((_, i) => i !== idx))
+    if (items.length <= 1) return
+    setItems(prev => prev.filter((_, i) => i !== idx))
   }
-
-  const updateItem = (idx: number, val: string) => {
-    setItemTexts(prev => prev.map((v, i) => i === idx ? val : v))
+  const updateText = (idx: number, val: string) => {
+    setItems(prev => prev.map((it, i) => i === idx ? { ...it, text: val } : it))
+  }
+  const updateNote = (idx: number, val: string) => {
+    setItems(prev => prev.map((it, i) => i === idx ? { ...it, note: val } : it))
   }
 
   const handleItemKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
-    // Skip during IME composition (e.g., Chinese pinyin input)
     if (e.nativeEvent.isComposing || (e as any).keyCode === 229) return
     if (e.key === 'Enter') {
       e.preventDefault()
       addItem()
-    } else if (e.key === 'Backspace' && itemTexts[idx] === '' && itemTexts.length > 1) {
+    } else if (e.key === 'Backspace' && items[idx].text === '' && !items[idx].note && items.length > 1) {
       e.preventDefault()
       removeItem(idx)
       setTimeout(() => {
@@ -193,15 +224,16 @@ function ChecklistForm({
 
   const handleSave = async () => {
     if (!title.trim()) return
-    const filteredItems = itemTexts.filter(t => t.trim() !== '')
-    if (filteredItems.length === 0) return
+    const filtered = items
+      .map(it => ({ text: it.text.trim(), note: (it.note || '').trim() || undefined }))
+      .filter(it => it.text !== '')
+    if (filtered.length === 0) return
     setSaving(true)
     try {
       if (initial) {
-        // This is edit mode - caller handles the update call
-        onSave({ title: title.trim(), items: JSON.stringify(filteredItems) } as any)
+        onSave({ title: title.trim(), items: JSON.stringify(filtered) } as any)
       } else {
-        const { checklist } = await checklistsApi.create(title.trim(), filteredItems)
+        const { checklist } = await checklistsApi.create(title.trim(), filtered)
         onSave(checklist)
       }
     } catch (err: any) {
@@ -229,13 +261,13 @@ function ChecklistForm({
       <p className="font-mono text-xs mb-2" style={{ color: 'var(--color-ink-muted)' }}>检查项目：</p>
 
       <div className="space-y-2 mb-4">
-        {itemTexts.map((text, idx) => {
+        {items.map((it, idx) => {
           const isDragging = dragIdx === idx
           const isDragOver = dragOverIdx === idx && dragIdx !== null && dragIdx !== idx
           return (
             <div
               key={idx}
-              className="flex items-center gap-2"
+              className="flex items-start gap-2"
               onDragOver={e => {
                 if (dragIdx === null) return
                 e.preventDefault()
@@ -265,7 +297,7 @@ function ChecklistForm({
                   try { e.dataTransfer.setData('text/plain', String(idx)) } catch {}
                 }}
                 onDragEnd={() => { setDragIdx(null); setDragOverIdx(null) }}
-                className="font-mono text-sm shrink-0 px-1 select-none transition-colors hover:text-[var(--color-ink)]"
+                className="font-mono text-sm shrink-0 px-1 select-none transition-colors hover:text-[var(--color-ink)] mt-1.5"
                 style={{ color: 'var(--color-ink-faint)', cursor: 'grab', touchAction: 'none' }}
                 title="拖动调整顺序"
                 aria-label="拖动手柄"
@@ -276,48 +308,46 @@ function ChecklistForm({
                   <circle cx="9" cy="19" r="1.6" /><circle cx="15" cy="19" r="1.6" />
                 </svg>
               </button>
-              <span className="font-mono text-xs w-5 text-right shrink-0" style={{ color: 'var(--color-ink-faint)' }}>
+              <span className="font-mono text-xs w-5 text-right shrink-0 mt-2" style={{ color: 'var(--color-ink-faint)' }}>
                 {idx + 1}.
               </span>
-              <input
-                ref={el => { itemRefs.current[idx] = el }}
-                type="text"
-                value={text}
-                onChange={e => updateItem(idx, e.target.value)}
-                onKeyDown={e => handleItemKeyDown(e, idx)}
-                placeholder="输入检查项..."
-                className="font-mono text-sm flex-1 px-3 py-1.5 bg-[var(--color-surface-strong)]"
-                style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
-              />
-              {itemTexts.length > 1 && idx > 0 && (
-                <button
-                  type="button"
-                  onClick={() => reorder(idx, idx - 1)}
-                  className="font-mono text-xs w-6 h-6 rounded hover:bg-[var(--color-surface-hover)] shrink-0 transition-colors"
-                  style={{ color: 'var(--color-ink-faint)' }}
-                  title="上移"
-                  aria-label="上移"
-                >
-                  ↑
-                </button>
-              )}
-              {itemTexts.length > 1 && idx < itemTexts.length - 1 && (
-                <button
-                  type="button"
-                  onClick={() => reorder(idx, idx + 1)}
-                  className="font-mono text-xs w-6 h-6 rounded hover:bg-[var(--color-surface-hover)] shrink-0 transition-colors"
-                  style={{ color: 'var(--color-ink-faint)' }}
-                  title="下移"
-                  aria-label="下移"
-                >
-                  ↓
-                </button>
-              )}
-              {itemTexts.length > 1 && (
+              <div className="flex-1 flex flex-col gap-1">
+                <input
+                  ref={el => { itemRefs.current[idx] = el }}
+                  type="text"
+                  value={it.text}
+                  onChange={e => updateText(idx, e.target.value)}
+                  onKeyDown={e => handleItemKeyDown(e, idx)}
+                  placeholder="输入检查项..."
+                  className="font-mono text-sm w-full px-3 py-1.5 bg-[var(--color-surface-strong)]"
+                  style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
+                />
+                <input
+                  type="text"
+                  value={it.note || ''}
+                  onChange={e => updateNote(idx, e.target.value)}
+                  placeholder="备注（可选，将显示在标题下方）"
+                  className="font-mono text-xs w-full px-3 py-1 bg-[var(--color-surface-strong)]"
+                  style={{ border: '1px dashed var(--color-border)', borderRadius: '6px', outline: 'none', color: 'var(--color-ink-muted)' }}
+                />
+              </div>
+              <div className="flex flex-col gap-0.5">
+                {items.length > 1 && idx > 0 && (
+                  <button type="button" onClick={() => reorder(idx, idx - 1)}
+                    className="font-mono text-xs w-6 h-6 rounded hover:bg-[var(--color-surface-hover)] shrink-0 transition-colors"
+                    style={{ color: 'var(--color-ink-faint)' }} title="上移" aria-label="上移">↑</button>
+                )}
+                {items.length > 1 && idx < items.length - 1 && (
+                  <button type="button" onClick={() => reorder(idx, idx + 1)}
+                    className="font-mono text-xs w-6 h-6 rounded hover:bg-[var(--color-surface-hover)] shrink-0 transition-colors"
+                    style={{ color: 'var(--color-ink-faint)' }} title="下移" aria-label="下移">↓</button>
+                )}
+              </div>
+              {items.length > 1 && (
                 <button
                   type="button"
                   onClick={() => removeItem(idx)}
-                  className="font-mono text-xs px-2 py-1 rounded hover:bg-[var(--color-danger-bg)] shrink-0 transition-colors"
+                  className="font-mono text-xs w-6 h-6 rounded hover:bg-[var(--color-danger-bg)] shrink-0 transition-colors mt-1"
                   style={{ color: 'var(--color-danger-text, #c00)' }}
                 >
                   ✕
@@ -339,7 +369,7 @@ function ChecklistForm({
       <div className="flex items-center gap-2 pt-2" style={{ borderTop: '1px solid var(--color-border)' }}>
         <button
           onClick={handleSave}
-          disabled={saving || !title.trim() || itemTexts.every(t => !t.trim())}
+          disabled={saving || !title.trim() || items.every(t => !t.text.trim())}
           className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
           style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
         >
@@ -376,13 +406,11 @@ function ChecklistCard({
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  const parsedItems: string[] = (() => {
-    try { return JSON.parse(checklist.items) } catch { return [] }
-  })()
+  const parsedItems = parseItems(checklist.items)
 
   const handleEditSave = async (data: any) => {
     try {
-      const items = JSON.parse(data.items)
+      const items: ChecklistItem[] = JSON.parse(data.items)
       const { checklist: updated } = await checklistsApi.update(checklist.id, {
         title: data.title,
         items,
@@ -424,7 +452,6 @@ function ChecklistCard({
         borderRadius: '8px',
       }}
     >
-      {/* Title */}
       <h3 className="font-mono text-base font-medium text-[var(--color-ink)] mb-2 flex items-start justify-between">
         <span className="flex items-center gap-2">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5" style={{ color: 'var(--color-ink-muted)' }}>
@@ -438,13 +465,19 @@ function ChecklistCard({
         </span>
       </h3>
 
-      {/* Preview items */}
       <div className="flex-1 mb-3">
-        <ul className="space-y-1">
-          {parsedItems.slice(0, 4).map((item, idx) => (
-            <li key={idx} className="font-mono text-xs flex items-start gap-2" style={{ color: 'var(--color-ink-muted)' }}>
-              <span className="shrink-0 mt-0.5" style={{ color: 'var(--color-border-strong, var(--color-border))' }}>☐</span>
-              <span className="line-clamp-1">{item}</span>
+        <ul className="space-y-1.5">
+          {parsedItems.slice(0, 4).map((it, idx) => (
+            <li key={idx} className="font-mono text-xs" style={{ color: 'var(--color-ink-muted)' }}>
+              <div className="flex items-start gap-2">
+                <span className="shrink-0 mt-0.5" style={{ color: 'var(--color-border-strong, var(--color-border))' }}>·</span>
+                <span className="line-clamp-1">{it.text}</span>
+              </div>
+              {it.note && (
+                <p className="pl-3.5 line-clamp-1" style={{ fontSize: '10.5px', color: 'var(--color-ink-faint)' }}>
+                  {it.note}
+                </p>
+              )}
             </li>
           ))}
           {parsedItems.length > 4 && (
@@ -455,7 +488,6 @@ function ChecklistCard({
         </ul>
       </div>
 
-      {/* Actions */}
       <div className="flex items-center gap-2 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
         <button
           onClick={onUse}
@@ -502,46 +534,15 @@ function ChecklistCard({
   )
 }
 
-/* ── Checklist Use (临时打勾) ──────────────────────────────── */
+/* ── Checklist Use ─────────────────────────────────────────── */
 
-type ExtraItem = { id: string; text: string; checked: boolean; note: string }
-
-type SavedRun = {
-  id: string
-  title: string
-  checked: boolean[]
-  notes: string[]
-  extras?: ExtraItem[]
-  itemsHash: string
-  savedAt: string
-}
+type ExtraItem = { id: string; text: string; note: string }
 
 type DraftRun = {
-  checked: boolean[]
   notes: string[]
   extras?: ExtraItem[]
   itemsHash: string
   updatedAt: string
-}
-
-function loadSavedRuns(checklistId: number, itemsHash: string, length: number): SavedRun[] {
-  try {
-    const raw = localStorage.getItem(`checklist-runs:${checklistId}`)
-    if (!raw) return []
-    const arr = JSON.parse(raw) as SavedRun[]
-    if (!Array.isArray(arr)) return []
-    return arr.filter(r =>
-      r && r.itemsHash === itemsHash &&
-      Array.isArray(r.checked) && r.checked.length === length &&
-      Array.isArray(r.notes) && r.notes.length === length
-    )
-  } catch { return [] }
-}
-
-function writeSavedRuns(checklistId: number, runs: SavedRun[]) {
-  try {
-    localStorage.setItem(`checklist-runs:${checklistId}`, JSON.stringify(runs))
-  } catch { /* ignore */ }
 }
 
 function ChecklistUse({
@@ -551,20 +552,16 @@ function ChecklistUse({
   checklist: Checklist
   onBack: () => void
 }) {
-  const parsedItems: string[] = (() => {
-    try { return JSON.parse(checklist.items) } catch { return [] }
-  })()
-
+  const parsedItems = parseItems(checklist.items)
   const draftKey = `checklist-run:${checklist.id}`
-  const itemsHash = JSON.stringify(parsedItems)
+  const hash = itemsHash(parsedItems)
 
   const loadDraft = (): DraftRun | null => {
     try {
       const raw = localStorage.getItem(draftKey)
       if (!raw) return null
       const parsed = JSON.parse(raw) as DraftRun
-      if (parsed.itemsHash !== itemsHash) return null
-      if (!Array.isArray(parsed.checked) || parsed.checked.length !== parsedItems.length) return null
+      if (parsed.itemsHash !== hash) return null
       if (!Array.isArray(parsed.notes) || parsed.notes.length !== parsedItems.length) return null
       return parsed
     } catch { return null }
@@ -572,7 +569,6 @@ function ChecklistUse({
 
   const draft = loadDraft()
 
-  const [checked, setChecked] = useState<boolean[]>(() => draft?.checked ?? parsedItems.map(() => false))
   const [notes, setNotes] = useState<string[]>(() => draft?.notes ?? parsedItems.map(() => ''))
   const [extras, setExtras] = useState<ExtraItem[]>(() => draft?.extras ?? [])
   const [editingNote, setEditingNote] = useState<number | null>(null)
@@ -581,70 +577,85 @@ function ChecklistUse({
   const newExtraRef = useRef<HTMLInputElement>(null)
   const [lastSavedAt] = useState<string | null>(draft?.updatedAt ?? null)
 
-  const [savedRuns, setSavedRuns] = useState<SavedRun[]>(() =>
-    loadSavedRuns(checklist.id, itemsHash, parsedItems.length)
-  )
+  const [savedRuns, setSavedRuns] = useState<ChecklistSnapshot[]>([])
+  const [snapshotsLoading, setSnapshotsLoading] = useState(true)
   const [snapshotTitle, setSnapshotTitle] = useState('')
-  const [viewingRunId, setViewingRunId] = useState<string | null>(null)
+  const [viewingRunId, setViewingRunId] = useState<number | null>(null)
   const [showSavedList, setShowSavedList] = useState(false)
-  const [confirmDeleteRunId, setConfirmDeleteRunId] = useState<string | null>(null)
+  const [confirmDeleteRunId, setConfirmDeleteRunId] = useState<number | null>(null)
+  const [saving, setSaving] = useState(false)
 
-  // Persist working progress (draft) to localStorage
+  // Load snapshots from server
+  useEffect(() => {
+    let cancelled = false
+    snapshotsApi.list(checklist.id)
+      .then(({ snapshots }) => { if (!cancelled) setSavedRuns(snapshots) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setSnapshotsLoading(false) })
+    return () => { cancelled = true }
+  }, [checklist.id])
+
+  // Persist draft to localStorage
   useEffect(() => {
     try {
-      const hasAny = checked.some(Boolean) || notes.some(n => n.trim() !== '') || extras.length > 0
-      if (!hasAny) {
-        localStorage.removeItem(draftKey)
-        return
-      }
-      const payload: DraftRun = {
-        checked,
-        notes,
-        extras,
-        itemsHash,
-        updatedAt: new Date().toISOString(),
-      }
+      const hasAny = notes.some(n => n.trim() !== '') || extras.length > 0
+      if (!hasAny) { localStorage.removeItem(draftKey); return }
+      const payload: DraftRun = { notes, extras, itemsHash: hash, updatedAt: new Date().toISOString() }
       localStorage.setItem(draftKey, JSON.stringify(payload))
-    } catch { /* quota or unavailable — ignore */ }
-  }, [checked, notes, extras, draftKey, itemsHash])
+    } catch {}
+  }, [notes, extras, draftKey, hash])
 
-  const saveSnapshot = () => {
+  const saveSnapshot = async () => {
     const title = snapshotTitle.trim() || `检查 - ${new Date().toLocaleString('zh-CN')}`
-    const run: SavedRun = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      title,
-      checked: [...checked],
-      notes: [...notes],
-      extras: extras.map(e => ({ ...e })),
-      itemsHash,
-      savedAt: new Date().toISOString(),
+    setSaving(true)
+    try {
+      const data = {
+        notes: [...notes],
+        extras: extras.map(e => ({ ...e })),
+      }
+      const { snapshot } = await snapshotsApi.create(checklist.id, title, hash, data)
+      setSavedRuns(prev => [snapshot, ...prev])
+      setSnapshotTitle('')
+      setShowSavedList(true)
+    } catch (err: any) {
+      alert('保存失败：' + err.message)
+    } finally {
+      setSaving(false)
     }
-    const next = [run, ...savedRuns]
-    setSavedRuns(next)
-    writeSavedRuns(checklist.id, next)
-    setSnapshotTitle('')
-    setShowSavedList(true)
   }
 
-  const loadSnapshot = (run: SavedRun) => {
-    setChecked([...run.checked])
-    setNotes([...run.notes])
-    setExtras((run.extras ?? []).map(e => ({ ...e })))
-    setViewingRunId(run.id)
-    setEditingNote(null)
-    setEditingExtraNote(null)
+  const loadSnapshot = (run: ChecklistSnapshot) => {
+    try {
+      const data = JSON.parse(run.data)
+      const loadedNotes: string[] = Array.isArray(data.notes) ? data.notes : []
+      const filled: string[] = parsedItems.map((_, i) => loadedNotes[i] ?? '')
+      setNotes(filled)
+      setExtras((data.extras ?? []).map((e: any) => ({
+        id: e.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text: String(e.text || ''),
+        note: String(e.note || ''),
+      })))
+      setViewingRunId(run.id)
+      setEditingNote(null)
+      setEditingExtraNote(null)
+    } catch (err: any) {
+      alert('加载失败：' + err.message)
+    }
   }
 
-  const deleteSnapshot = (id: string) => {
-    const next = savedRuns.filter(r => r.id !== id)
-    setSavedRuns(next)
-    writeSavedRuns(checklist.id, next)
-    if (viewingRunId === id) setViewingRunId(null)
-    setConfirmDeleteRunId(null)
+  const deleteSnapshot = async (id: number) => {
+    try {
+      await snapshotsApi.delete(id)
+      setSavedRuns(prev => prev.filter(r => r.id !== id))
+      if (viewingRunId === id) setViewingRunId(null)
+    } catch (err: any) {
+      alert('删除失败：' + err.message)
+    } finally {
+      setConfirmDeleteRunId(null)
+    }
   }
 
   const startNewRun = () => {
-    setChecked(parsedItems.map(() => false))
     setNotes(parsedItems.map(() => ''))
     setExtras([])
     setViewingRunId(null)
@@ -659,15 +670,10 @@ function ChecklistUse({
     setExtras(prev => [...prev, {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       text,
-      checked: false,
       note: '',
     }])
     setNewExtraText('')
     setTimeout(() => newExtraRef.current?.focus(), 0)
-  }
-
-  const toggleExtra = (id: string) => {
-    setExtras(prev => prev.map(e => e.id === id ? { ...e, checked: !e.checked } : e))
   }
 
   const updateExtraNote = (id: string, note: string) => {
@@ -679,23 +685,20 @@ function ChecklistUse({
     if (editingExtraNote === id) setEditingExtraNote(null)
   }
 
-  const toggle = (idx: number) => {
-    setChecked(prev => prev.map((v, i) => i === idx ? !v : v))
-  }
-
   const updateNote = (idx: number, val: string) => {
     setNotes(prev => prev.map((v, i) => i === idx ? val : v))
   }
 
-  const extrasCheckedCount = extras.filter(e => e.checked).length
-  const checkedCount = checked.filter(Boolean).length + extrasCheckedCount
+  // "Done" means the user wrote something for this item.
+  const isDone = (idx: number) => notes[idx]?.trim() !== ''
+  const isExtraDone = (e: ExtraItem) => e.note.trim() !== ''
+  const checkedCount = notes.filter(n => n.trim() !== '').length + extras.filter(isExtraDone).length
   const totalCount = parsedItems.length + extras.length
   const allDone = checkedCount === totalCount && totalCount > 0
   const progress = totalCount > 0 ? (checkedCount / totalCount) * 100 : 0
 
   return (
     <div>
-      {/* Header */}
       <button
         onClick={onBack}
         className="font-mono text-sm flex items-center gap-1 mb-4 transition-colors hover:text-[var(--color-ink)]"
@@ -721,7 +724,7 @@ function ChecklistUse({
               {checklist.title}
             </h2>
             <p className="font-mono text-xs" style={{ color: 'var(--color-ink-muted)' }}>
-              {checkedCount} / {totalCount} 项已完成
+              {checkedCount} / {totalCount} 项已填写
               {allDone && ' ✅ 全部完成！'}
             </p>
           </div>
@@ -736,7 +739,6 @@ function ChecklistUse({
           )}
         </div>
 
-        {/* Progress bar */}
         <div
           className="w-full h-1.5 rounded-full mb-6 overflow-hidden"
           style={{ background: 'var(--color-border)' }}
@@ -752,164 +754,150 @@ function ChecklistUse({
 
         {/* Items */}
         <div className="space-y-1">
-          {parsedItems.map((item, idx) => (
-            <div key={idx} className="rounded-md transition-colors hover:bg-[var(--color-surface-hover)]" style={{ opacity: checked[idx] ? 0.6 : 1 }}>
-              <div className="flex items-start gap-3 px-3 py-2.5 cursor-pointer">
-                <button
-                  onClick={() => toggle(idx)}
-                  className="mt-0.5 w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors"
-                  style={{
-                    borderColor: checked[idx] ? '#22c55e' : 'var(--color-border-strong, var(--color-border))',
-                    background: checked[idx] ? '#22c55e' : 'transparent',
-                  }}
-                >
-                  {checked[idx] && (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  )}
-                </button>
-                <span
-                  className="font-mono text-sm flex-1"
-                  style={{
-                    color: 'var(--color-ink)',
-                    textDecoration: checked[idx] ? 'line-through' : 'none',
-                    wordBreak: 'break-word',
-                  }}
-                  onClick={() => toggle(idx)}
-                >
-                  {item}
-                </span>
-                <button
-                  onClick={() => setEditingNote(editingNote === idx ? null : idx)}
-                  className="shrink-0 font-mono text-xs px-1.5 py-0.5 rounded transition-colors hover:bg-[var(--color-surface-hover)]"
-                  style={{ color: notes[idx] ? 'var(--color-ink)' : 'var(--color-ink-faint)' }}
-                  title="添加备注"
-                >
-                  {notes[idx] ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 20h9" /><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
-                    </svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 20h9" /><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-              {/* Note area */}
-              {editingNote === idx && (
-                <div className="pl-11 pr-3 pb-2.5">
-                  <textarea
-                    value={notes[idx]}
-                    onChange={e => updateNote(idx, e.target.value)}
-                    placeholder="输入备注..."
-                    rows={2}
-                    autoFocus
-                    className="font-mono text-xs w-full px-2.5 py-1.5 bg-[var(--color-surface-strong)] resize-none"
-                    style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none', color: 'var(--color-ink-secondary)' }}
-                    onKeyDown={e => { if (e.key === 'Escape') setEditingNote(null) }}
-                  />
-                </div>
-              )}
-              {editingNote !== idx && notes[idx] && (
+          {parsedItems.map((it, idx) => {
+            const done = isDone(idx)
+            const editing = editingNote === idx
+            return (
+              <div key={idx} className="rounded-md transition-colors hover:bg-[var(--color-surface-hover)]">
                 <div
-                  className="pl-11 pr-3 pb-2.5 cursor-pointer"
-                  onClick={() => setEditingNote(idx)}
+                  className="flex items-start gap-3 px-3 py-2.5 cursor-pointer"
+                  onClick={() => setEditingNote(editing ? null : idx)}
                 >
-                  <p className="font-mono text-xs whitespace-pre-wrap" style={{ color: 'var(--color-ink-muted)', wordBreak: 'break-word' }}>
-                    📝 {notes[idx]}
-                  </p>
+                  <span
+                    className="mt-0.5 w-5 h-5 rounded flex items-center justify-center shrink-0"
+                    style={{
+                      color: done ? '#22c55e' : 'var(--color-ink-faint)',
+                    }}
+                    aria-hidden
+                  >
+                    {done ? (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    ) : (
+                      <span className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>{idx + 1}</span>
+                    )}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className="font-mono text-sm"
+                      style={{ color: 'var(--color-ink)', wordBreak: 'break-word' }}
+                    >
+                      {it.text}
+                    </p>
+                    {it.note && (
+                      <p
+                        className="font-mono mt-0.5"
+                        style={{
+                          fontSize: '11px',
+                          color: 'var(--color-ink-faint)',
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {it.note}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+                {/* Editor / display for run-time note */}
+                {editing ? (
+                  <div className="pl-11 pr-3 pb-2.5" onClick={e => e.stopPropagation()}>
+                    <AutoTextarea
+                      value={notes[idx]}
+                      onChange={e => updateNote(idx, (e.target as HTMLTextAreaElement).value)}
+                      placeholder="输入备注... (Esc 收起)"
+                      rows={2}
+                      autoFocus
+                      className="font-mono text-xs w-full px-2.5 py-1.5 bg-[var(--color-surface-strong)]"
+                      style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none', color: 'var(--color-ink-secondary)', minHeight: '2.5rem' }}
+                      onKeyDown={e => { if (e.key === 'Escape') setEditingNote(null) }}
+                    />
+                  </div>
+                ) : notes[idx] ? (
+                  <div
+                    className="pl-11 pr-3 pb-2.5 cursor-pointer"
+                    onClick={() => setEditingNote(idx)}
+                  >
+                    <p className="font-mono text-xs whitespace-pre-wrap" style={{ color: 'var(--color-ink-muted)', wordBreak: 'break-word' }}>
+                      📝 {notes[idx]}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
 
-          {/* Extra (ad-hoc) items */}
+          {/* Extras */}
           {extras.length > 0 && (
             <div className="pt-2 mt-2" style={{ borderTop: '1px dashed var(--color-border)' }}>
               <p className="font-mono text-xs px-3 py-1" style={{ color: 'var(--color-ink-faint)' }}>
                 临时添加（{extras.length}）
               </p>
-              {extras.map(extra => (
-                <div key={extra.id} className="rounded-md transition-colors hover:bg-[var(--color-surface-hover)] group" style={{ opacity: extra.checked ? 0.6 : 1 }}>
-                  <div className="flex items-start gap-3 px-3 py-2.5">
-                    <button
-                      onClick={() => toggleExtra(extra.id)}
-                      className="mt-0.5 w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors"
-                      style={{
-                        borderColor: extra.checked ? '#22c55e' : 'var(--color-border-strong, var(--color-border))',
-                        background: extra.checked ? '#22c55e' : 'transparent',
-                        borderStyle: 'dashed',
-                      }}
-                    >
-                      {extra.checked && (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      )}
-                    </button>
-                    <span
-                      className="font-mono text-sm flex-1 cursor-pointer"
-                      style={{
-                        color: 'var(--color-ink)',
-                        textDecoration: extra.checked ? 'line-through' : 'none',
-                        wordBreak: 'break-word',
-                      }}
-                      onClick={() => toggleExtra(extra.id)}
-                    >
-                      <span className="font-mono text-xs mr-1.5" style={{ color: 'var(--color-ink-faint)' }}>+</span>
-                      {extra.text}
-                    </span>
-                    <button
-                      onClick={() => setEditingExtraNote(editingExtraNote === extra.id ? null : extra.id)}
-                      className="shrink-0 font-mono text-xs px-1.5 py-0.5 rounded transition-colors hover:bg-[var(--color-surface-strong)]"
-                      style={{ color: extra.note ? 'var(--color-ink)' : 'var(--color-ink-faint)' }}
-                      title="添加备注"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 20h9" /><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => removeExtra(extra.id)}
-                      className="shrink-0 font-mono text-xs px-1.5 py-0.5 rounded transition-colors hover:bg-[var(--color-surface-strong)]"
-                      style={{ color: 'var(--color-danger-text, #c00)' }}
-                      title="删除临时项"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  {editingExtraNote === extra.id && (
-                    <div className="pl-11 pr-3 pb-2.5">
-                      <textarea
-                        value={extra.note}
-                        onChange={e => updateExtraNote(extra.id, e.target.value)}
-                        placeholder="输入备注..."
-                        rows={2}
-                        autoFocus
-                        className="font-mono text-xs w-full px-2.5 py-1.5 bg-[var(--color-surface-strong)] resize-none"
-                        style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none', color: 'var(--color-ink-secondary)' }}
-                        onKeyDown={e => { if (e.key === 'Escape') setEditingExtraNote(null) }}
-                      />
-                    </div>
-                  )}
-                  {editingExtraNote !== extra.id && extra.note && (
+              {extras.map(extra => {
+                const done = isExtraDone(extra)
+                const editing = editingExtraNote === extra.id
+                return (
+                  <div key={extra.id} className="rounded-md transition-colors hover:bg-[var(--color-surface-hover)] group">
                     <div
-                      className="pl-11 pr-3 pb-2.5 cursor-pointer"
-                      onClick={() => setEditingExtraNote(extra.id)}
+                      className="flex items-start gap-3 px-3 py-2.5 cursor-pointer"
+                      onClick={() => setEditingExtraNote(editing ? null : extra.id)}
                     >
-                      <p className="font-mono text-xs whitespace-pre-wrap" style={{ color: 'var(--color-ink-muted)', wordBreak: 'break-word' }}>
-                        📝 {extra.note}
-                      </p>
+                      <span
+                        className="mt-0.5 w-5 h-5 rounded flex items-center justify-center shrink-0"
+                        style={{ color: done ? '#22c55e' : 'var(--color-ink-faint)' }}
+                        aria-hidden
+                      >
+                        {done ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        ) : '+'}
+                      </span>
+                      <span
+                        className="font-mono text-sm flex-1"
+                        style={{ color: 'var(--color-ink)', wordBreak: 'break-word' }}
+                      >
+                        {extra.text}
+                      </span>
+                      <button
+                        onClick={e => { e.stopPropagation(); removeExtra(extra.id) }}
+                        className="shrink-0 font-mono text-xs px-1.5 py-0.5 rounded transition-colors hover:bg-[var(--color-surface-strong)]"
+                        style={{ color: 'var(--color-danger-text, #c00)' }}
+                        title="删除临时项"
+                      >
+                        ✕
+                      </button>
                     </div>
-                  )}
-                </div>
-              ))}
+                    {editing ? (
+                      <div className="pl-11 pr-3 pb-2.5" onClick={e => e.stopPropagation()}>
+                        <AutoTextarea
+                          value={extra.note}
+                          onChange={e => updateExtraNote(extra.id, (e.target as HTMLTextAreaElement).value)}
+                          placeholder="输入备注..."
+                          rows={2}
+                          autoFocus
+                          className="font-mono text-xs w-full px-2.5 py-1.5 bg-[var(--color-surface-strong)]"
+                          style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none', color: 'var(--color-ink-secondary)', minHeight: '2.5rem' }}
+                          onKeyDown={e => { if (e.key === 'Escape') setEditingExtraNote(null) }}
+                        />
+                      </div>
+                    ) : extra.note ? (
+                      <div
+                        className="pl-11 pr-3 pb-2.5 cursor-pointer"
+                        onClick={() => setEditingExtraNote(extra.id)}
+                      >
+                        <p className="font-mono text-xs whitespace-pre-wrap" style={{ color: 'var(--color-ink-muted)', wordBreak: 'break-word' }}>
+                          📝 {extra.note}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
             </div>
           )}
 
-          {/* Add extra item input */}
+          {/* Add extra */}
           <div className="pt-3 mt-2" style={{ borderTop: '1px dashed var(--color-border)' }}>
             <div className="flex items-center gap-2 px-3">
               <span className="font-mono text-sm shrink-0" style={{ color: 'var(--color-ink-faint)' }}>+</span>
@@ -938,11 +926,10 @@ function ChecklistUse({
           </div>
         </div>
 
-        {/* All done celebration */}
         {allDone && (
           <div className="mt-6 pt-4 text-center" style={{ borderTop: '1px solid var(--color-border)' }}>
             <p className="text-2xl mb-1">🎉</p>
-            <p className="font-mono text-sm" style={{ color: '#22c55e', fontWeight: 500 }}>所有项目均已检查完毕</p>
+            <p className="font-mono text-sm" style={{ color: '#22c55e', fontWeight: 500 }}>所有项目均已填写完毕</p>
           </div>
         )}
       </div>
@@ -953,7 +940,7 @@ function ChecklistUse({
         style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: '8px' }}
       >
         <p className="font-mono text-xs mb-2" style={{ color: 'var(--color-ink-muted)' }}>
-          {viewingRunId ? '📂 正在查看已保存的记录，可修改后另存一份' : '💾 保存当前进度为一份快照，方便后续查看'}
+          {viewingRunId ? '📂 正在查看已保存的记录，可修改后另存一份' : '💾 保存当前进度为一份快照（云端保存）'}
         </p>
         <div className="flex items-center gap-2 flex-wrap">
           <input
@@ -967,17 +954,17 @@ function ChecklistUse({
           />
           <button
             onClick={saveSnapshot}
-            disabled={checkedCount === 0 && notes.every(n => n.trim() === '')}
+            disabled={saving || (checkedCount === 0 && notes.every(n => n.trim() === ''))}
             className="font-mono text-sm px-4 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
             style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
           >
-            保存快照
+            {saving ? '保存中...' : '保存快照'}
           </button>
         </div>
       </div>
 
-      {/* Saved runs */}
-      {savedRuns.length > 0 && (
+      {/* Saved snapshots */}
+      {!snapshotsLoading && savedRuns.length > 0 && (
         <div
           className="rounded-lg mt-4"
           style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: '8px' }}
@@ -995,8 +982,18 @@ function ChecklistUse({
           {showSavedList && (
             <div style={{ borderTop: '1px solid var(--color-border)' }}>
               {savedRuns.map(run => {
-                const runChecked = run.checked.filter(Boolean).length
+                let runNoteCount = 0
+                let runTotal = parsedItems.length
+                try {
+                  const d = JSON.parse(run.data)
+                  if (Array.isArray(d.notes)) runNoteCount += d.notes.filter((n: string) => n && n.trim() !== '').length
+                  if (Array.isArray(d.extras)) {
+                    runTotal += d.extras.length
+                    runNoteCount += d.extras.filter((e: any) => e?.note && e.note.trim() !== '').length
+                  }
+                } catch {}
                 const isViewing = viewingRunId === run.id
+                const isMatch = run.items_hash === hash
                 return (
                   <div
                     key={run.id}
@@ -1009,14 +1006,16 @@ function ChecklistUse({
                     <div className="flex-1 min-w-0">
                       <p className="font-mono text-sm truncate" style={{ color: 'var(--color-ink)' }}>
                         {isViewing && '👁 '}{run.title}
+                        {!isMatch && <span className="ml-2 text-xs" style={{ color: 'var(--color-ink-faint)' }}>（清单已变更）</span>}
                       </p>
                       <p className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>
-                        {runChecked}/{run.checked.length} 项 · {new Date(run.savedAt).toLocaleString('zh-CN')}
+                        {runNoteCount}/{runTotal} 项 · {new Date(run.created_at).toLocaleString('zh-CN')}
                       </p>
                     </div>
                     <button
                       onClick={() => loadSnapshot(run)}
-                      className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-strong)]"
+                      disabled={!isMatch}
+                      className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-strong)] disabled:opacity-40"
                       style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
                     >
                       查看
@@ -1056,11 +1055,10 @@ function ChecklistUse({
         </div>
       )}
 
-      {/* Local cache reminder */}
       <p className="font-mono text-xs text-center mt-4" style={{ color: 'var(--color-ink-faint)' }}>
         {lastSavedAt && !viewingRunId
-          ? `💾 已恢复上次进度 (${new Date(lastSavedAt).toLocaleString('zh-CN')})、仅本设备本地保存`
-          : '💾 草稿与快照仅保存在本设备本地'}
+          ? `💾 已恢复上次草稿 (${new Date(lastSavedAt).toLocaleString('zh-CN')})、草稿保存在本设备本地`
+          : '💾 草稿保存在本设备本地，快照保存到云端'}
       </p>
     </div>
   )

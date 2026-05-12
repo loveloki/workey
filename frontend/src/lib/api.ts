@@ -148,30 +148,56 @@ export interface Todo {
 }
 
 // Checklists
+export interface ChecklistItem {
+  text: string
+  note?: string
+}
 export interface Checklist {
   id: number
   user_id: number
   title: string
-  items: string // JSON array of strings
+  items: string // JSON array of ChecklistItem (legacy: strings)
   created_at: string
   updated_at: string
+}
+
+export interface ChecklistSnapshot {
+  id: number
+  user_id: number
+  checklist_id: number
+  title: string
+  items_hash: string
+  data: string // JSON: { checked: bool[], notes: string[], extras: [...] }
+  created_at: string
 }
 
 export const checklists = {
   list: () =>
     request<{ checklists: Checklist[] }>('/api/checklists'),
-  create: (title: string, items: string[]) =>
+  create: (title: string, items: ChecklistItem[]) =>
     request<{ checklist: Checklist }>('/api/checklists', {
       method: 'POST',
       body: JSON.stringify({ title, items }),
     }),
-  update: (id: number, data: { title?: string; items?: string[] }) =>
+  update: (id: number, data: { title?: string; items?: ChecklistItem[] }) =>
     request<{ checklist: Checklist }>(`/api/checklists?id=${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
   delete: (id: number) =>
     request<{ message: string }>(`/api/checklists?id=${id}`, { method: 'DELETE' }),
+}
+
+export const checklistSnapshots = {
+  list: (checklistId: number) =>
+    request<{ snapshots: ChecklistSnapshot[] }>(`/api/checklist-snapshots?checklist_id=${checklistId}`),
+  create: (checklistId: number, title: string, itemsHash: string, data: any) =>
+    request<{ snapshot: ChecklistSnapshot }>('/api/checklist-snapshots', {
+      method: 'POST',
+      body: JSON.stringify({ checklist_id: checklistId, title, items_hash: itemsHash, data }),
+    }),
+  delete: (id: number) =>
+    request<{ message: string }>(`/api/checklist-snapshots?id=${id}`, { method: 'DELETE' }),
 }
 
 // Passkeys
