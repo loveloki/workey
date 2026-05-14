@@ -101,18 +101,6 @@ export const workLogs = {
     request<{ work_logs: any[] }>(`/api/work-logs/range?start=${start}&end=${end}`),
 }
 
-// Lessons
-export const lessons = {
-  save: (date: string, content: string) =>
-    request<{ lesson: any }>('/api/lessons', {
-      method: 'POST',
-      body: JSON.stringify({ date, content }),
-    }),
-  today: () => request<{ lesson: any }>('/api/lessons/today'),
-  range: (start: string, end: string) =>
-    request<{ lessons: any[] }>(`/api/lessons/range?start=${start}&end=${end}`),
-}
-
 // Todos
 export const todos = {
   list: (all = false) =>
@@ -356,7 +344,7 @@ export const settings = {
     return res.blob()
   },
   deleteData: (password: string) =>
-    request<{ message: string; attendance_count: number; work_log_count: number; lesson_count: number; todo_count: number }>('/api/data/delete', {
+    request<{ message: string; attendance_count: number; work_log_count: number; todo_count: number }>('/api/data/delete', {
       method: 'DELETE',
       body: JSON.stringify({ password }),
     }),

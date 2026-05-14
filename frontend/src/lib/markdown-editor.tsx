@@ -30,6 +30,21 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: Markd
     })
   }, [value, onChange])
 
+  // Append text to the end of the document (used for list insertion)
+  const appendAtEnd = useCallback((text: string) => {
+    const trimmedEnd = value.replace(/\s+$/, '')
+    const sep = trimmedEnd.length === 0 ? '' : '\n'
+    const newVal = trimmedEnd + sep + text
+    onChange(newVal)
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current
+      if (ta) {
+        ta.selectionStart = ta.selectionEnd = newVal.length
+        ta.focus()
+      }
+    })
+  }, [value, onChange])
+
   // Toolbar formatting helpers
   const wrapSelection = useCallback((before: string, after: string) => {
     const ta = textareaRef.current
@@ -60,7 +75,7 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: Markd
         <ToolbarBtn title="斜体" onClick={() => wrapSelection('*', '*')}><i>I</i></ToolbarBtn>
         <ToolbarBtn title="代码" onClick={() => wrapSelection('`', '`')}>&lt;/&gt;</ToolbarBtn>
         <ToolbarBtn title="链接" onClick={() => wrapSelection('[', '](url)')}>🔗</ToolbarBtn>
-        <ToolbarBtn title="列表" onClick={() => insertAtCursor('\n- ')}>•</ToolbarBtn>
+        <ToolbarBtn title="列表" onClick={() => appendAtEnd('- ')}>•</ToolbarBtn>
         <div className="flex-1" />
         <button
           onClick={() => setPreview(!preview)}

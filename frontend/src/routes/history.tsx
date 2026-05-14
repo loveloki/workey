@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect } from 'react'
-import { workLogs as workLogsApi, attendance as attendanceApi, lessons as lessonsApi, todos as todosApi, history as historyApi, iterationOverrides as overridesApi, type Todo } from '../lib/api'
+import { workLogs as workLogsApi, attendance as attendanceApi, todos as todosApi, history as historyApi, iterationOverrides as overridesApi, type Todo } from '../lib/api'
 import { getDateRange, formatDate, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration, makeIterationConfig, type IterationConfig, type IterationOverrideMap } from '../lib/date-utils'
 import { settings as settingsApi } from '../lib/api'
 import { MarkdownContent, MarkdownEditor } from '../lib/markdown-editor'
@@ -156,7 +156,6 @@ function HistoryPage() {
   const [currentFetchRange, setCurrentFetchRange] = useState({ start: '', end: '' })
   const [logs, setLogs] = useState<any[]>([])
   const [attendances, setAttendances] = useState<any[]>([])
-  const [lessonsList, setLessonsList] = useState<any[]>([])
   const [completedTodos, setCompletedTodos] = useState<Todo[]>([])
   const [fetching, setFetching] = useState(false)
   // Iteration config from settings
@@ -257,15 +256,13 @@ function HistoryPage() {
     setCurrentFetchRange({ start, end })
     setFetching(true)
     try {
-      const [logsRes, attRes, lessonsRes, todosRes] = await Promise.all([
+      const [logsRes, attRes, todosRes] = await Promise.all([
         workLogsApi.range(start, end),
         attendanceApi.range(start, end),
-        lessonsApi.range(start, end),
         todosApi.completedRange(start, end),
       ])
       setLogs(logsRes.work_logs)
       setAttendances(attRes.attendances)
-      setLessonsList(lessonsRes.lessons)
       setCompletedTodos(todosRes.todos || [])
     } catch (e) {
       console.error(e)
@@ -296,8 +293,8 @@ function HistoryPage() {
     todosByDate.set(d, arr)
   })
 
-  // Merge logs, attendance, lessons and todos by date
-  const dateMap = new Map<string, { attendance?: any; log?: any; lesson?: any; todos: Todo[] }>()
+  // Merge logs, attendance and todos by date
+  const dateMap = new Map<string, { attendance?: any; log?: any; todos: Todo[] }>()
   attendances.forEach(a => {
     const entry = dateMap.get(a.date) || { todos: [] }
     entry.attendance = a
@@ -306,11 +303,6 @@ function HistoryPage() {
   logs.forEach(l => {
     const entry = dateMap.get(l.date) || { todos: [] }
     entry.log = l
-    dateMap.set(l.date, entry)
-  })
-  lessonsList.forEach(l => {
-    const entry = dateMap.get(l.date) || { todos: [] }
-    entry.lesson = l
     dateMap.set(l.date, entry)
   })
   todosByDate.forEach((todos, date) => {
@@ -328,7 +320,6 @@ function HistoryPage() {
       entry.attendance,
       entry.log?.content || '',
       entry.todos,
-      entry.lesson?.content || '',
     )
   }
 
@@ -494,25 +485,20 @@ function HistoryPage() {
   )
 }
 
-function HistoryEntry({ date, entry, getDayMarkdown, onRefresh, preset, fetchData, currentRange }: { date: string, entry: any, getDayMarkdown: (d: string) => string, onRefresh: () => void, preset: string, fetchData: (s: string, e: string) => void, currentRange: { start: string, end: string } }) {
+function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: { date: string, entry: any, getDayMarkdown: (d: string) => string, onRefresh?: () => void, preset?: string, fetchData: (s: string, e: string) => void, currentRange: { start: string, end: string } }) {
   const [isEditing, setIsEditing] = useState(false)
   const [logContent, setLogContent] = useState('')
-  const [lessonContent, setLessonContent] = useState('')
   const [saving, setSaving] = useState(false)
 
   const handleEdit = () => {
-    setLogContent(entry.log?.content || '')
-    setLessonContent(entry.lesson?.content || '')
+    setLogContent((entry.log?.content || '').replace(/^\s+/, ''))
     setIsEditing(true)
   }
 
   const handleSave = async () => {
     setSaving(true)
     try {
-      await Promise.all([
-        workLogsApi.save(date, logContent),
-        lessonsApi.save(date, lessonContent)
-      ])
+      await workLogsApi.save(date, logContent)
       setIsEditing(false)
       fetchData(currentRange.start, currentRange.end)
     } catch (e: any) {
@@ -566,15 +552,6 @@ function HistoryEntry({ date, entry, getDayMarkdown, onRefresh, preset, fetchDat
               onChange={setLogContent}
               placeholder="记录工作内容..."
               rows={8}
-            />
-          </div>
-          <div>
-            <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">经验教训</p>
-            <MarkdownEditor
-              value={lessonContent}
-              onChange={setLessonContent}
-              placeholder="记录经验教训、反思与收获..."
-              rows={4}
             />
           </div>
           <div className="flex items-center gap-3 pt-2">
@@ -645,14 +622,6 @@ function HistoryEntry({ date, entry, getDayMarkdown, onRefresh, preset, fetchDat
             </div>
           )}
 
-          {entry.lesson && entry.lesson.content && (
-            <div className="mt-3 border-t border-dashed border-[var(--color-border)] pt-3">
-              <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">§ 经验教训 §</p>
-              <div className="markdown-body text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>
-                <MarkdownContent content={entry.lesson.content} />
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>

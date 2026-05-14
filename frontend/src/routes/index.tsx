@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { attendance, workLogs, lessons as lessonsApi, todos as todosApi, type Todo } from '../lib/api'
+import { attendance, workLogs, todos as todosApi, type Todo } from '../lib/api'
 import { formatTime, getToday } from '../lib/date-utils'
 import { MarkdownEditor } from '../lib/markdown-editor'
 import { formatDayMarkdown } from '../lib/report-utils'
@@ -63,18 +63,16 @@ function Dashboard() {
 
   const copyTodayReport = useCallback(async () => {
     const today = getToday()
-    const [attRes, logRes, todosRes, lessonRes] = await Promise.all([
+    const [attRes, logRes, todosRes] = await Promise.all([
       attendance.today(),
       workLogs.today(),
       todosApi.completedToday(),
-      lessonsApi.today(),
     ])
     return formatDayMarkdown(
       today,
       attRes.attendance,
       logRes.work_log?.content || '',
       todosRes.todos || [],
-      lessonRes.lesson?.content || '',
     )
   }, [])
 
@@ -139,8 +137,6 @@ function Dashboard() {
           <WorkLogSection />
           <div style={{ borderTop: '1px dashed var(--color-border)' }} />
           <CompletedTodosSection />
-          <div style={{ borderTop: '1px dashed var(--color-border)' }} />
-          <LessonSection />
         </div>
 
         {/* Right: Today's created todos sidebar */}
@@ -196,8 +192,6 @@ function Dashboard() {
           <WorkLogSection />
           <div style={{ borderTop: '1px dashed var(--color-border)' }} />
           <CompletedTodosSection />
-          <div style={{ borderTop: '1px dashed var(--color-border)' }} />
-          <LessonSection />
         </div>
       </div>
     </main>
@@ -212,7 +206,7 @@ function WorkLogSection() {
 
   useEffect(() => {
     workLogs.today().then(d => {
-      if (d.work_log) setContent(d.work_log.content)
+      if (d.work_log) setContent((d.work_log.content || '').replace(/^\s+/, ''))
     }).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
@@ -242,63 +236,6 @@ function WorkLogSection() {
               onChange={setContent}
               placeholder="记录今天的工作内容..."
               rows={10}
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={save}
-              disabled={saving}
-              className="rounded-md px-5 py-2.5 font-mono text-sm hover:bg-[var(--color-solid-hover)] disabled:opacity-50"
-              style={{ background: 'var(--color-solid)', color: 'var(--color-solid-text)' }}
-            >
-              {saving ? '保存中...' : '保存'}
-            </button>
-            {saved && <span className="text-sm" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>✓ 已保存</span>}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-function LessonSection() {
-  const [content, setContent] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    lessonsApi.today().then(d => {
-      if (d.lesson) setContent(d.lesson.content)
-    }).catch(() => {}).finally(() => setLoading(false))
-  }, [])
-
-  const save = async () => {
-    setSaving(true)
-    try {
-      await lessonsApi.save(getToday(), content)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch (e: any) {
-      alert(e.message)
-    }
-    setSaving(false)
-  }
-
-  return (
-    <div className="px-6 py-5">
-      <p className="mb-4 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">§ 经验教训 §</p>
-
-      {loading ? (
-        <p className="text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
-      ) : (
-        <>
-          <div className="mb-4">
-            <MarkdownEditor
-              value={content}
-              onChange={setContent}
-              placeholder="记录今天的经验教训、反思与收获..."
-              rows={6}
             />
           </div>
           <div className="flex items-center gap-3">

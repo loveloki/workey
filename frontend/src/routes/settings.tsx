@@ -917,7 +917,6 @@ function DeleteDataSection() {
       const parts = []
       if (result.attendance_count) parts.push(`${result.attendance_count} 条考勤`)
       if (result.work_log_count) parts.push(`${result.work_log_count} 条工作日志`)
-      if (result.lesson_count) parts.push(`${result.lesson_count} 条经验教训`)
       if (result.todo_count) parts.push(`${result.todo_count} 条待办`)
       setMsg(`已删除：${parts.join('，') || '无数据'}`)
       setIsError(false)
@@ -940,7 +939,7 @@ function DeleteDataSection() {
   return (
     <Card title="危险操作">
       <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-danger-text)' }}>
-        删除所有数据（考勤、工作日志、经验教训、待办事项），此操作不可恢复。
+        删除所有数据（考勤、工作日志、待办事项），此操作不可恢复。
       </p>
 
       {step === 'idle' && (
