@@ -1,21 +1,25 @@
 package main
 
 import (
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"strings"
+	"strconv"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// --- Password hashing ---
+// JWT token 有效期
+const jwtExpiration = 72 * time.Hour
+
+// Claims 自定义 JWT claims，包含用户 ID（存储在 Subject 中）
+type Claims struct {
+	jwt.RegisteredClaims
+}
+
+// --- 密码哈希 ---
 
 func hashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -26,89 +30,54 @@ func checkPassword(password, hash string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
 
-// --- Simple JWT implementation (HMAC-SHA256) ---
+// --- JWT ---
 
-type jwtHeader struct {
-	Alg string `json:"alg"`
-	Typ string `json:"typ"`
-}
-
-type jwtClaims struct {
-	Sub int64 `json:"sub"`
-	Exp int64 `json:"exp"`
-	Iat int64 `json:"iat"`
-}
-
-func base64URLEncode(data []byte) string {
-	return strings.TrimRight(base64.URLEncoding.EncodeToString(data), "=")
-}
-
-func base64URLDecode(s string) ([]byte, error) {
-	// Add padding back
-	switch len(s) % 4 {
-	case 2:
-		s += "=="
-	case 3:
-		s += "="
-	}
-	return base64.URLEncoding.DecodeString(s)
-}
-
+// createJWT 使用 HS256 算法创建 JWT token
 func createJWT(userID int64) (string, error) {
-	header := jwtHeader{Alg: "HS256", Typ: "JWT"}
-	claims := jwtClaims{
-		Sub: userID,
-		Iat: time.Now().Unix(),
-		Exp: time.Now().Add(72 * time.Hour).Unix(),
+	now := time.Now()
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   strconv.FormatInt(userID, 10),
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(jwtExpiration)),
+		},
 	}
 
-	hJSON, _ := json.Marshal(header)
-	cJSON, _ := json.Marshal(claims)
-
-	unsigned := base64URLEncode(hJSON) + "." + base64URLEncode(cJSON)
-
-	mac := hmac.New(sha256.New, jwtSecret)
-	mac.Write([]byte(unsigned))
-	sig := base64URLEncode(mac.Sum(nil))
-
-	return unsigned + "." + sig, nil
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtSecret)
 }
 
-func validateJWT(token string) (int64, int64, error) {
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return 0, 0, errors.New("invalid token format")
-	}
-
-	// Verify signature
-	unsigned := parts[0] + "." + parts[1]
-	mac := hmac.New(sha256.New, jwtSecret)
-	mac.Write([]byte(unsigned))
-	expectedSig := base64URLEncode(mac.Sum(nil))
-
-	if !hmac.Equal([]byte(parts[2]), []byte(expectedSig)) {
-		return 0, 0, errors.New("invalid signature")
-	}
-
-	// Decode claims
-	claimsJSON, err := base64URLDecode(parts[1])
+// validateJWT 验证 token 并返回用户 ID 和过期时间戳
+func validateJWT(tokenString string) (int64, int64, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return jwtSecret, nil
+	})
 	if err != nil {
-		return 0, 0, fmt.Errorf("invalid claims: %w", err)
+		return 0, 0, err
 	}
 
-	var claims jwtClaims
-	if err := json.Unmarshal(claimsJSON, &claims); err != nil {
-		return 0, 0, fmt.Errorf("invalid claims JSON: %w", err)
+	claims, ok := token.Claims.(*Claims)
+	if !ok || !token.Valid {
+		return 0, 0, errors.New("invalid token")
 	}
 
-	if time.Now().Unix() > claims.Exp {
-		return 0, 0, errors.New("token expired")
+	userID, err := strconv.ParseInt(claims.Subject, 10, 64)
+	if err != nil {
+		return 0, 0, errors.New("invalid subject in token")
 	}
 
-	return claims.Sub, claims.Exp, nil
+	var exp int64
+	if claims.ExpiresAt != nil {
+		exp = claims.ExpiresAt.Time.Unix()
+	}
+
+	return userID, exp, nil
 }
 
-// --- Random string ---
+// --- 工具函数 ---
 
 func generateRandomString(n int) string {
 	b := make([]byte, n)
