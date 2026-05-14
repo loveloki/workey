@@ -1,123 +1,159 @@
 package main
 
 import (
-	"crypto"
-	"crypto/ecdsa"
-	"crypto/elliptic"
+	"bytes"
 	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"database/sql"
-	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"math/big"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/webauthn"
 )
 
-// --- Challenge Store ---
+// --- WebAuthn 用户接口实现 ---
 
-type challengeEntry struct {
-	Challenge []byte
+// WebAuthnUser 实现 webauthn.User 接口，用于 WebAuthn 注册和认证
+type WebAuthnUser struct {
+	id          int64
+	name        string
+	credentials []webauthn.Credential
+}
+
+func (u *WebAuthnUser) WebAuthnID() []byte {
+	return []byte(fmt.Sprintf("%d", u.id))
+}
+
+func (u *WebAuthnUser) WebAuthnName() string {
+	return u.name
+}
+
+func (u *WebAuthnUser) WebAuthnDisplayName() string {
+	return u.name
+}
+
+func (u *WebAuthnUser) WebAuthnCredentials() []webauthn.Credential {
+	return u.credentials
+}
+
+// --- WebAuthn 实例管理（按 rpID 缓存）---
+
+var (
+	waInstances   = map[string]*webauthn.WebAuthn{}
+	waInstancesMu sync.Mutex
+)
+
+// getWebAuthn 根据请求的 Host 创建或获取缓存的 WebAuthn 实例
+func getWebAuthn(r *http.Request) (*webauthn.WebAuthn, error) {
+	rpID := getRPID(r)
+	origin := getOrigin(r)
+
+	waInstancesMu.Lock()
+	defer waInstancesMu.Unlock()
+
+	if wa, ok := waInstances[rpID]; ok {
+		return wa, nil
+	}
+
+	wa, err := webauthn.New(&webauthn.Config{
+		RPID:          rpID,
+		RPDisplayName: "Workey",
+		RPOrigins:     []string{origin},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	waInstances[rpID] = wa
+	return wa, nil
+}
+
+// --- Session 存储（用于 Begin/Finish 之间传递挑战数据）---
+
+type sessionEntry struct {
+	Session   *webauthn.SessionData
 	ExpiresAt time.Time
 }
 
 var (
-	registerChallenges = make(map[int64]challengeEntry)  // keyed by userID
-	authChallenges     = make(map[string]challengeEntry) // keyed by challengeId
-	challengeMu        sync.Mutex
+	registerSessions = map[int64]sessionEntry{}
+	authSessions     = map[string]sessionEntry{}
+	sessionMu        sync.Mutex
 )
 
-const challengeTimeout = 5 * time.Minute
+const sessionTimeout = 5 * time.Minute
 
-func generateChallenge() ([]byte, error) {
-	b := make([]byte, 32)
-	_, err := rand.Read(b)
-	return b, err
-}
-
-func storeRegisterChallenge(userID int64, challenge []byte) {
-	challengeMu.Lock()
-	defer challengeMu.Unlock()
-	cleanExpiredChallenges()
-	registerChallenges[userID] = challengeEntry{
-		Challenge: challenge,
-		ExpiresAt: time.Now().Add(challengeTimeout),
+func storeRegisterSession(userID int64, session *webauthn.SessionData) {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
+	cleanExpiredSessions()
+	registerSessions[userID] = sessionEntry{
+		Session:   session,
+		ExpiresAt: time.Now().Add(sessionTimeout),
 	}
 }
 
-func getRegisterChallenge(userID int64) ([]byte, bool) {
-	challengeMu.Lock()
-	defer challengeMu.Unlock()
-	entry, ok := registerChallenges[userID]
+func getRegisterSession(userID int64) (*webauthn.SessionData, bool) {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
+	entry, ok := registerSessions[userID]
 	if !ok {
 		return nil, false
 	}
-	delete(registerChallenges, userID)
+	delete(registerSessions, userID)
 	if time.Now().After(entry.ExpiresAt) {
 		return nil, false
 	}
-	return entry.Challenge, true
+	return entry.Session, true
 }
 
-func generateChallengeID() (string, error) {
-	b := make([]byte, 16)
-	_, err := rand.Read(b)
-	if err != nil {
-		return "", err
-	}
-	return base64URLEncode(b), nil
-}
-
-func storeAuthChallenge(challengeID string, challenge []byte) {
-	challengeMu.Lock()
-	defer challengeMu.Unlock()
-	cleanExpiredChallenges()
-	authChallenges[challengeID] = challengeEntry{
-		Challenge: challenge,
-		ExpiresAt: time.Now().Add(challengeTimeout),
+func storeAuthSession(challengeID string, session *webauthn.SessionData) {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
+	cleanExpiredSessions()
+	authSessions[challengeID] = sessionEntry{
+		Session:   session,
+		ExpiresAt: time.Now().Add(sessionTimeout),
 	}
 }
 
-func getAuthChallenge(challengeID string) ([]byte, bool) {
-	challengeMu.Lock()
-	defer challengeMu.Unlock()
-	entry, ok := authChallenges[challengeID]
+func getAuthSession(challengeID string) (*webauthn.SessionData, bool) {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
+	entry, ok := authSessions[challengeID]
 	if !ok {
 		return nil, false
 	}
-	delete(authChallenges, challengeID)
+	delete(authSessions, challengeID)
 	if time.Now().After(entry.ExpiresAt) {
 		return nil, false
 	}
-	return entry.Challenge, true
+	return entry.Session, true
 }
 
-func cleanExpiredChallenges() {
+func cleanExpiredSessions() {
 	now := time.Now()
-	for k, v := range registerChallenges {
+	for k, v := range registerSessions {
 		if now.After(v.ExpiresAt) {
-			delete(registerChallenges, k)
+			delete(registerSessions, k)
 		}
 	}
-	for k, v := range authChallenges {
+	for k, v := range authSessions {
 		if now.After(v.ExpiresAt) {
-			delete(authChallenges, k)
+			delete(authSessions, k)
 		}
 	}
 }
 
-// --- Helper: derive origin and rpID from request ---
+// --- 辅助函数 ---
 
 func getRPID(r *http.Request) string {
 	host := r.Host
-	// Strip port if present
 	if idx := strings.LastIndex(host, ":"); idx != -1 {
-		// Make sure it's not an IPv6 address bracket
 		if !strings.Contains(host[idx:], "]") {
 			host = host[:idx]
 		}
@@ -135,7 +171,55 @@ func getOrigin(r *http.Request) string {
 	return scheme + "://" + host
 }
 
-// --- Routes ---
+func generateChallengeID() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	return base64URLEncode(b)
+}
+
+// loadWebAuthnUser 从数据库加载用户及其已注册的凭证
+func loadWebAuthnUser(userID int64) (*WebAuthnUser, error) {
+	var username string
+	err := db.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&username)
+	if err != nil {
+		return nil, err
+	}
+
+	creds := loadCredentials(userID)
+	return &WebAuthnUser{
+		id:          userID,
+		name:        username,
+		credentials: creds,
+	}, nil
+}
+
+// loadCredentials 从数据库加载指定用户的所有凭证
+func loadCredentials(userID int64) []webauthn.Credential {
+	rows, err := db.Query("SELECT credential_id, public_key, sign_count FROM passkeys WHERE user_id = ?", userID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var creds []webauthn.Credential
+	for rows.Next() {
+		var credID, pubKey []byte
+		var signCount int64
+		if err := rows.Scan(&credID, &pubKey, &signCount); err != nil {
+			continue
+		}
+		creds = append(creds, webauthn.Credential{
+			ID:        credID,
+			PublicKey: pubKey,
+			Authenticator: webauthn.Authenticator{
+				SignCount: uint32(signCount),
+			},
+		})
+	}
+	return creds
+}
+
+// --- 路由 ---
 
 func passkeyRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/passkeys/register/begin", corsMiddleware(authMiddleware(handlePasskeyRegisterBegin)))
@@ -145,7 +229,6 @@ func passkeyRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/passkeys", corsMiddleware(authMiddleware(handlePasskeys)))
 }
 
-// handlePasskeys dispatches GET and DELETE for /api/passkeys
 func handlePasskeys(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -157,7 +240,7 @@ func handlePasskeys(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// --- Register Begin ---
+// --- 注册流程 ---
 
 func handlePasskeyRegisterBegin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
@@ -167,74 +250,38 @@ func handlePasskeyRegisterBegin(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserID(r)
 
-	var username string
-	err := db.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&username)
+	wa, err := getWebAuthn(r)
+	if err != nil {
+		jsonError(w, "WebAuthn configuration error", http.StatusInternalServerError)
+		return
+	}
+
+	waUser, err := loadWebAuthnUser(userID)
 	if err != nil {
 		jsonError(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	challenge, err := generateChallenge()
+	rrk := true
+	creation, session, err := wa.BeginRegistration(waUser,
+		webauthn.WithAuthenticatorSelection(protocol.AuthenticatorSelection{
+			AuthenticatorAttachment: protocol.Platform,
+			ResidentKey:             protocol.ResidentKeyRequirementRequired,
+			RequireResidentKey:      &rrk,
+			UserVerification:        protocol.VerificationPreferred,
+		}),
+		webauthn.WithConveyancePreference(protocol.PreferNoAttestation),
+	)
 	if err != nil {
-		jsonError(w, "Failed to generate challenge", http.StatusInternalServerError)
+		jsonError(w, "Failed to begin registration: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	storeRegisterChallenge(userID, challenge)
+	storeRegisterSession(userID, session)
 
-	rpID := getRPID(r)
-
-	// Get existing credential IDs to exclude
-	rows, err := db.Query("SELECT credential_id FROM passkeys WHERE user_id = ?", userID)
-	if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	excludeCredentials := []map[string]interface{}{}
-	for rows.Next() {
-		var credID []byte
-		rows.Scan(&credID)
-		excludeCredentials = append(excludeCredentials, map[string]interface{}{
-			"type": "public-key",
-			"id":   base64URLEncode(credID),
-		})
-	}
-
-	// userID as bytes for user.id field
-	userIDBytes := fmt.Sprintf("%d", userID)
-
-	response := map[string]interface{}{
-		"challenge": base64URLEncode(challenge),
-		"rp": map[string]string{
-			"name": "Workey",
-			"id":   rpID,
-		},
-		"user": map[string]interface{}{
-			"id":          base64URLEncode([]byte(userIDBytes)),
-			"name":        username,
-			"displayName": username,
-		},
-		"pubKeyCredParams": []map[string]interface{}{
-			{"type": "public-key", "alg": -7},   // ES256
-			{"type": "public-key", "alg": -257}, // RS256
-		},
-		"authenticatorSelection": map[string]interface{}{
-			"authenticatorAttachment": "platform",
-			"residentKey":             "required",
-			"requireResidentKey":      true,
-			"userVerification":        "preferred",
-		},
-		"timeout":              60000,
-		"attestation":          "none",
-		"excludeCredentials":   excludeCredentials,
-	}
-
-	jsonOK(w, response)
+	// 返回 PublicKeyCredentialCreationOptions（不含 publicKey 包装层），与前端 API 兼容
+	jsonOK(w, creation.Response)
 }
-
-// --- Register Finish ---
 
 func handlePasskeyRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
@@ -244,172 +291,60 @@ func handlePasskeyRegisterFinish(w http.ResponseWriter, r *http.Request) {
 
 	userID := getUserID(r)
 
-	var req struct {
-		Name     string `json:"name"`
-		ID       string `json:"id"`
-		RawID    string `json:"rawId"`
-		Type     string `json:"type"`
-		Response struct {
-			AttestationObject string `json:"attestationObject"`
-			ClientDataJSON    string `json:"clientDataJSON"`
-		} `json:"response"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.Type != "public-key" {
-		jsonError(w, "Invalid credential type", http.StatusBadRequest)
-		return
-	}
-
-	if req.Name == "" {
-		req.Name = "Passkey"
-	}
-
-	// Decode clientDataJSON
-	clientDataBytes, err := base64URLDecode(req.Response.ClientDataJSON)
+	// 读取请求体（需要多次使用）
+	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
-		jsonError(w, "Invalid clientDataJSON encoding", http.StatusBadRequest)
+		jsonError(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
 
-	var clientData struct {
-		Type      string `json:"type"`
-		Challenge string `json:"challenge"`
-		Origin    string `json:"origin"`
+	// 提取 name 字段
+	var extra struct {
+		Name string `json:"name"`
 	}
-	if err := json.Unmarshal(clientDataBytes, &clientData); err != nil {
-		jsonError(w, "Invalid clientDataJSON", http.StatusBadRequest)
-		return
-	}
-
-	if clientData.Type != "webauthn.create" {
-		jsonError(w, "Invalid ceremony type", http.StatusBadRequest)
-		return
+	json.Unmarshal(bodyBytes, &extra)
+	if extra.Name == "" {
+		extra.Name = "Passkey"
 	}
 
-	// Validate origin
-	expectedOrigin := getOrigin(r)
-	if clientData.Origin != expectedOrigin {
-		jsonError(w, "Origin mismatch", http.StatusBadRequest)
-		return
-	}
-
-	// Validate challenge
-	storedChallenge, ok := getRegisterChallenge(userID)
+	// 获取注册 session
+	session, ok := getRegisterSession(userID)
 	if !ok {
 		jsonError(w, "Challenge expired or not found", http.StatusBadRequest)
 		return
 	}
 
-	challengeBytes, err := base64URLDecode(clientData.Challenge)
+	// 解析 WebAuthn 凭证创建响应
+	parsedResponse, err := protocol.ParseCredentialCreationResponseBody(bytes.NewReader(bodyBytes))
 	if err != nil {
-		jsonError(w, "Invalid challenge encoding", http.StatusBadRequest)
+		jsonError(w, "Invalid credential response: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if !bytesEqual(challengeBytes, storedChallenge) {
-		jsonError(w, "Challenge mismatch", http.StatusBadRequest)
-		return
-	}
-
-	// Decode attestation object
-	attObjBytes, err := base64URLDecode(req.Response.AttestationObject)
+	wa, err := getWebAuthn(r)
 	if err != nil {
-		jsonError(w, "Invalid attestationObject encoding", http.StatusBadRequest)
+		jsonError(w, "WebAuthn configuration error", http.StatusInternalServerError)
 		return
 	}
 
-	attObj, err := parseCBORMap(attObjBytes)
+	waUser, err := loadWebAuthnUser(userID)
 	if err != nil {
-		jsonError(w, "Invalid attestation object: "+err.Error(), http.StatusBadRequest)
+		jsonError(w, "User not found", http.StatusNotFound)
 		return
 	}
 
-	authDataRaw, ok := attObj["authData"]
-	if !ok {
-		jsonError(w, "Missing authData in attestation object", http.StatusBadRequest)
-		return
-	}
-	authData, ok := authDataRaw.([]byte)
-	if !ok {
-		jsonError(w, "Invalid authData type", http.StatusBadRequest)
-		return
-	}
-
-	// Parse authData
-	// rpIdHash (32) + flags (1) + signCount (4) = 37 bytes minimum
-	if len(authData) < 37 {
-		jsonError(w, "authData too short", http.StatusBadRequest)
-		return
-	}
-
-	rpIDHash := authData[:32]
-	flags := authData[32]
-	signCount := binary.BigEndian.Uint32(authData[33:37])
-
-	// Verify RP ID hash
-	expectedRPIDHash := sha256.Sum256([]byte(getRPID(r)))
-	if !bytesEqual(rpIDHash, expectedRPIDHash[:]) {
-		jsonError(w, "RP ID hash mismatch", http.StatusBadRequest)
-		return
-	}
-
-	// Check AT (attested credential data) flag (bit 6)
-	if flags&0x40 == 0 {
-		jsonError(w, "No attested credential data in authData", http.StatusBadRequest)
-		return
-	}
-
-	// Parse attested credential data (after the 37 fixed bytes)
-	if len(authData) < 37+16+2 {
-		jsonError(w, "authData too short for attested credential data", http.StatusBadRequest)
-		return
-	}
-
-	// AAGUID (16 bytes)
-	// aaguid := authData[37:53]  // not needed
-
-	// Credential ID length (2 bytes big-endian)
-	credIDLen := int(binary.BigEndian.Uint16(authData[53:55]))
-	if len(authData) < 55+credIDLen {
-		jsonError(w, "authData too short for credential ID", http.StatusBadRequest)
-		return
-	}
-
-	credentialID := authData[55 : 55+credIDLen]
-
-	// Public key in COSE format starts after credential ID
-	pubKeyBytes := authData[55+credIDLen:]
-
-	// Parse COSE public key
-	coseKey, err := parseCBORMap(pubKeyBytes)
+	// 验证凭证并创建
+	credential, err := wa.CreateCredential(waUser, *session, parsedResponse)
 	if err != nil {
-		jsonError(w, "Invalid COSE key: "+err.Error(), http.StatusBadRequest)
+		jsonError(w, "Registration verification failed: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Serialize the COSE key for storage
-	pubKeyStored, err := marshalCOSEKey(coseKey)
-	if err != nil {
-		jsonError(w, "Failed to serialize public key: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Verify we can actually parse it back as a usable key
-	_, err = parseCOSEPublicKey(coseKey)
-	if err != nil {
-		jsonError(w, "Unsupported public key type: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Store in DB
+	// 存储到数据库
 	now := nowDatetime()
 	result, dbErr := db.Exec(
 		"INSERT INTO passkeys (user_id, name, credential_id, public_key, sign_count, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-		userID, req.Name, credentialID, pubKeyStored, signCount, now,
+		userID, extra.Name, credential.ID, credential.PublicKey, credential.Authenticator.SignCount, now,
 	)
 	if dbErr != nil {
 		if strings.Contains(dbErr.Error(), "UNIQUE") {
@@ -425,15 +360,13 @@ func handlePasskeyRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]interface{}{
 		"passkey": map[string]interface{}{
 			"id":         passkeyID,
-			"name":       req.Name,
+			"name":       extra.Name,
 			"created_at": now,
 		},
 	})
-
-	_ = signCount // stored in DB
 }
 
-// --- Auth Begin ---
+// --- 认证流程 ---
 
 func handlePasskeyAuthBegin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
@@ -441,32 +374,30 @@ func handlePasskeyAuthBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	challenge, err := generateChallenge()
+	wa, err := getWebAuthn(r)
 	if err != nil {
-		jsonError(w, "Failed to generate challenge", http.StatusInternalServerError)
+		jsonError(w, "WebAuthn configuration error", http.StatusInternalServerError)
 		return
 	}
 
-	challengeID, err := generateChallengeID()
+	assertion, session, err := wa.BeginDiscoverableLogin()
 	if err != nil {
-		jsonError(w, "Failed to generate challenge ID", http.StatusInternalServerError)
+		jsonError(w, "Failed to begin authentication: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	storeAuthChallenge(challengeID, challenge)
+	challengeID := generateChallengeID()
+	storeAuthSession(challengeID, session)
 
-	rpID := getRPID(r)
-
+	// 返回与前端兼容的格式（包含 challengeId）
 	jsonOK(w, map[string]interface{}{
-		"challenge":        base64URLEncode(challenge),
+		"challenge":        assertion.Response.Challenge,
 		"challengeId":      challengeID,
-		"rpId":             rpID,
-		"timeout":          60000,
-		"userVerification": "preferred",
+		"rpId":             assertion.Response.RelyingPartyID,
+		"timeout":          assertion.Response.Timeout,
+		"userVerification": assertion.Response.UserVerification,
 	})
 }
-
-// --- Auth Finish ---
 
 func handlePasskeyAuthFinish(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
@@ -474,217 +405,82 @@ func handlePasskeyAuthFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
+	// 读取请求体
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		jsonError(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	// 提取 challengeId
+	var extra struct {
 		ChallengeID string `json:"challengeId"`
-		ID          string `json:"id"`
-		RawID       string `json:"rawId"`
-		Type        string `json:"type"`
-		Response    struct {
-			AuthenticatorData string `json:"authenticatorData"`
-			ClientDataJSON    string `json:"clientDataJSON"`
-			Signature         string `json:"signature"`
-			UserHandle        string `json:"userHandle"`
-		} `json:"response"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.Type != "public-key" {
-		jsonError(w, "Invalid credential type", http.StatusBadRequest)
-		return
-	}
-
-	req.ChallengeID = strings.TrimSpace(req.ChallengeID)
-
-	if req.ChallengeID == "" {
+	json.Unmarshal(bodyBytes, &extra)
+	extra.ChallengeID = strings.TrimSpace(extra.ChallengeID)
+	if extra.ChallengeID == "" {
 		jsonError(w, "challengeId is required", http.StatusBadRequest)
 		return
 	}
 
-	// Decode clientDataJSON
-	clientDataBytes, err := base64URLDecode(req.Response.ClientDataJSON)
-	if err != nil {
-		jsonError(w, "Invalid clientDataJSON encoding", http.StatusBadRequest)
-		return
-	}
-
-	var clientData struct {
-		Type      string `json:"type"`
-		Challenge string `json:"challenge"`
-		Origin    string `json:"origin"`
-	}
-	if err := json.Unmarshal(clientDataBytes, &clientData); err != nil {
-		jsonError(w, "Invalid clientDataJSON", http.StatusBadRequest)
-		return
-	}
-
-	if clientData.Type != "webauthn.get" {
-		jsonError(w, "Invalid ceremony type", http.StatusBadRequest)
-		return
-	}
-
-	// Validate origin
-	expectedOrigin := getOrigin(r)
-	if clientData.Origin != expectedOrigin {
-		jsonError(w, "Origin mismatch", http.StatusBadRequest)
-		return
-	}
-
-	// Validate challenge using challengeId
-	storedChallenge, ok := getAuthChallenge(req.ChallengeID)
+	// 查找认证 session
+	session, ok := getAuthSession(extra.ChallengeID)
 	if !ok {
 		jsonError(w, "Challenge expired or not found", http.StatusBadRequest)
 		return
 	}
 
-	challengeBytes, err := base64URLDecode(clientData.Challenge)
+	// 解析 WebAuthn 断言响应
+	parsedResponse, err := protocol.ParseCredentialRequestResponseBody(bytes.NewReader(bodyBytes))
 	if err != nil {
-		jsonError(w, "Invalid challenge encoding", http.StatusBadRequest)
+		jsonError(w, "Invalid assertion response: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if !bytesEqual(challengeBytes, storedChallenge) {
-		jsonError(w, "Challenge mismatch", http.StatusBadRequest)
-		return
-	}
-
-	// Decode credential ID
-	credentialID, err := base64URLDecode(req.RawID)
+	wa, err := getWebAuthn(r)
 	if err != nil {
-		jsonError(w, "Invalid rawId encoding", http.StatusBadRequest)
+		jsonError(w, "WebAuthn configuration error", http.StatusInternalServerError)
 		return
 	}
 
-	// Look up passkey by credential_id
-	var userID int64
-	var passkeyID int64
-	var pubKeyStored []byte
-	var storedSignCount int64
-
-	err = db.QueryRow(
-		"SELECT id, user_id, public_key, sign_count FROM passkeys WHERE credential_id = ?",
-		credentialID,
-	).Scan(&passkeyID, &userID, &pubKeyStored, &storedSignCount)
-	if err == sql.ErrNoRows {
-		jsonError(w, "Passkey not found", http.StatusUnauthorized)
-		return
-	} else if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
-	}
-
-	// Verify userHandle if provided by authenticator (security check)
-	if req.Response.UserHandle != "" {
-		userHandleBytes, decErr := base64URLDecode(req.Response.UserHandle)
-		if decErr != nil {
-			jsonError(w, "Invalid userHandle encoding", http.StatusBadRequest)
-			return
+	// 使用可发现登录验证，通过凭证 ID 查找用户
+	handler := func(rawID, userHandle []byte) (webauthn.User, error) {
+		// 根据凭证 ID 查找用户
+		var userID int64
+		err := db.QueryRow("SELECT user_id FROM passkeys WHERE credential_id = ?", rawID).Scan(&userID)
+		if err != nil {
+			return nil, fmt.Errorf("passkey not found")
 		}
-		if string(userHandleBytes) != fmt.Sprintf("%d", userID) {
-			jsonError(w, "User handle mismatch", http.StatusUnauthorized)
-			return
-		}
+		return loadWebAuthnUser(userID)
 	}
 
-	// Decode authenticator data
-	authDataBytes, err := base64URLDecode(req.Response.AuthenticatorData)
+	waUser, credential, err := wa.ValidatePasskeyLogin(handler, *session, parsedResponse)
 	if err != nil {
-		jsonError(w, "Invalid authenticatorData encoding", http.StatusBadRequest)
+		jsonError(w, "Authentication failed: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	if len(authDataBytes) < 37 {
-		jsonError(w, "authenticatorData too short", http.StatusBadRequest)
-		return
-	}
-
-	// Verify RP ID hash
-	rpIDHash := authDataBytes[:32]
-	expectedRPIDHash := sha256.Sum256([]byte(getRPID(r)))
-	if !bytesEqual(rpIDHash, expectedRPIDHash[:]) {
-		jsonError(w, "RP ID hash mismatch", http.StatusBadRequest)
-		return
-	}
-
-	// Check UP (user present) flag (bit 0)
-	flags := authDataBytes[32]
-	if flags&0x01 == 0 {
-		jsonError(w, "User not present", http.StatusBadRequest)
-		return
-	}
-
-	newSignCount := binary.BigEndian.Uint32(authDataBytes[33:37])
-
-	// Check sign count (if both are non-zero, new must be greater)
-	if storedSignCount > 0 && newSignCount > 0 && uint32(storedSignCount) >= newSignCount {
-		jsonError(w, "Sign count regression detected (possible cloned authenticator)", http.StatusBadRequest)
-		return
-	}
-
-	// Decode signature
-	signatureBytes, err := base64URLDecode(req.Response.Signature)
-	if err != nil {
-		jsonError(w, "Invalid signature encoding", http.StatusBadRequest)
-		return
-	}
-
-	// Reconstruct signed data: authenticatorData + SHA256(clientDataJSON)
-	clientDataHash := sha256.Sum256(clientDataBytes)
-	signedData := append(authDataBytes, clientDataHash[:]...)
-
-	// Parse stored public key
-	coseKey, err := parseCBORMap(pubKeyStored)
-	if err != nil {
-		jsonError(w, "Failed to parse stored public key", http.StatusInternalServerError)
-		return
-	}
-
-	pubKey, err := parseCOSEPublicKey(coseKey)
-	if err != nil {
-		jsonError(w, "Failed to parse public key: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Verify signature
-	verified := false
-	switch key := pubKey.(type) {
-	case *ecdsa.PublicKey:
-		hash := sha256.Sum256(signedData)
-		verified = ecdsa.VerifyASN1(key, hash[:], signatureBytes)
-	case *rsa.PublicKey:
-		hash := sha256.Sum256(signedData)
-		err := rsa.VerifyPKCS1v15(key, crypto.SHA256, hash[:], signatureBytes)
-		verified = (err == nil)
-	default:
-		jsonError(w, "Unsupported key type", http.StatusInternalServerError)
-		return
-	}
-
-	if !verified {
-		jsonError(w, "Signature verification failed", http.StatusUnauthorized)
-		return
-	}
-
-	// Update sign count and last_used_at
+	// 更新签名计数和最近使用时间
 	now := nowDatetime()
-	db.Exec("UPDATE passkeys SET sign_count = ?, last_used_at = ? WHERE id = ?", newSignCount, now, passkeyID)
+	db.Exec("UPDATE passkeys SET sign_count = ?, last_used_at = ? WHERE credential_id = ?",
+		credential.Authenticator.SignCount, now, credential.ID)
 
-	// Create JWT and return user info
-	token, err := createJWT(userID)
+	// 获取用户 ID 并创建 JWT
+	waUserImpl := waUser.(*WebAuthnUser)
+	token, err := createJWT(waUserImpl.id)
 	if err != nil {
 		jsonError(w, "Failed to create token", http.StatusInternalServerError)
 		return
 	}
 
 	var user User
-	db.QueryRow("SELECT id, username, created_at FROM users WHERE id = ?", userID).Scan(&user.ID, &user.Username, &user.CreatedAt)
+	db.QueryRow("SELECT id, username, created_at FROM users WHERE id = ?", waUserImpl.id).
+		Scan(&user.ID, &user.Username, &user.CreatedAt)
 
 	jsonOK(w, map[string]interface{}{"token": token, "user": user})
 }
 
-// --- List Passkeys ---
+// --- 列表和删除 ---
 
 func handlePasskeyList(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
@@ -716,8 +512,6 @@ func handlePasskeyList(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]interface{}{"passkeys": passkeys})
 }
 
-// --- Delete Passkey ---
-
 func handlePasskeyDelete(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
 	id := r.URL.Query().Get("id")
@@ -740,443 +534,3 @@ func handlePasskeyDelete(w http.ResponseWriter, r *http.Request) {
 
 	jsonOK(w, map[string]string{"message": "Passkey deleted"})
 }
-
-// --- Minimal CBOR Parser ---
-// Supports the subset needed for WebAuthn attestation objects and COSE keys:
-// - Maps (major type 5)
-// - Byte strings (major type 2)
-// - Text strings (major type 3)
-// - Unsigned integers (major type 0)
-// - Negative integers (major type 1)
-// - Simple values / booleans (major type 7)
-// - Arrays (major type 4)
-
-type cborReader struct {
-	data []byte
-	pos  int
-}
-
-func newCBORReader(data []byte) *cborReader {
-	return &cborReader{data: data, pos: 0}
-}
-
-func (r *cborReader) remaining() int {
-	return len(r.data) - r.pos
-}
-
-func (r *cborReader) readByte() (byte, error) {
-	if r.pos >= len(r.data) {
-		return 0, errors.New("cbor: unexpected end of data")
-	}
-	b := r.data[r.pos]
-	r.pos++
-	return b, nil
-}
-
-func (r *cborReader) readBytes(n int) ([]byte, error) {
-	if r.pos+n > len(r.data) {
-		return nil, errors.New("cbor: unexpected end of data")
-	}
-	b := r.data[r.pos : r.pos+n]
-	r.pos += n
-	return b, nil
-}
-
-func (r *cborReader) readArgument(additional byte) (uint64, error) {
-	if additional < 24 {
-		return uint64(additional), nil
-	}
-	switch additional {
-	case 24:
-		b, err := r.readByte()
-		if err != nil {
-			return 0, err
-		}
-		return uint64(b), nil
-	case 25:
-		bs, err := r.readBytes(2)
-		if err != nil {
-			return 0, err
-		}
-		return uint64(binary.BigEndian.Uint16(bs)), nil
-	case 26:
-		bs, err := r.readBytes(4)
-		if err != nil {
-			return 0, err
-		}
-		return uint64(binary.BigEndian.Uint32(bs)), nil
-	case 27:
-		bs, err := r.readBytes(8)
-		if err != nil {
-			return 0, err
-		}
-		return binary.BigEndian.Uint64(bs), nil
-	default:
-		return 0, fmt.Errorf("cbor: unsupported additional info %d", additional)
-	}
-}
-
-func (r *cborReader) readItem() (interface{}, error) {
-	initial, err := r.readByte()
-	if err != nil {
-		return nil, err
-	}
-
-	major := initial >> 5
-	additional := initial & 0x1f
-
-	switch major {
-	case 0: // Unsigned integer
-		val, err := r.readArgument(additional)
-		if err != nil {
-			return nil, err
-		}
-		return int64(val), nil
-
-	case 1: // Negative integer
-		val, err := r.readArgument(additional)
-		if err != nil {
-			return nil, err
-		}
-		return int64(-1) - int64(val), nil
-
-	case 2: // Byte string
-		length, err := r.readArgument(additional)
-		if err != nil {
-			return nil, err
-		}
-		bs, err := r.readBytes(int(length))
-		if err != nil {
-			return nil, err
-		}
-		// Make a copy to avoid referencing underlying array
-		copy := make([]byte, len(bs))
-		for i := range bs {
-			copy[i] = bs[i]
-		}
-		return copy, nil
-
-	case 3: // Text string
-		length, err := r.readArgument(additional)
-		if err != nil {
-			return nil, err
-		}
-		bs, err := r.readBytes(int(length))
-		if err != nil {
-			return nil, err
-		}
-		return string(bs), nil
-
-	case 4: // Array
-		length, err := r.readArgument(additional)
-		if err != nil {
-			return nil, err
-		}
-		arr := make([]interface{}, 0, int(length))
-		for i := uint64(0); i < length; i++ {
-			item, err := r.readItem()
-			if err != nil {
-				return nil, err
-			}
-			arr = append(arr, item)
-		}
-		return arr, nil
-
-	case 5: // Map
-		length, err := r.readArgument(additional)
-		if err != nil {
-			return nil, err
-		}
-		m := make(map[interface{}]interface{}, int(length))
-		for i := uint64(0); i < length; i++ {
-			key, err := r.readItem()
-			if err != nil {
-				return nil, err
-			}
-			val, err := r.readItem()
-			if err != nil {
-				return nil, err
-			}
-			m[key] = val
-		}
-		return m, nil
-
-	case 7: // Simple values and floats
-		switch additional {
-		case 20:
-			return false, nil
-		case 21:
-			return true, nil
-		case 22:
-			return nil, nil
-		default:
-			// Skip floats and other simple values
-			if additional == 25 {
-				_, err := r.readBytes(2)
-				return nil, err
-			} else if additional == 26 {
-				_, err := r.readBytes(4)
-				return nil, err
-			} else if additional == 27 {
-				_, err := r.readBytes(8)
-				return nil, err
-			}
-			return int64(additional), nil
-		}
-
-	default:
-		return nil, fmt.Errorf("cbor: unsupported major type %d", major)
-	}
-}
-
-// parseCBORMap parses CBOR data and returns a map with string/int keys normalized to a common format.
-// For WebAuthn, attestation object keys are strings, COSE key labels are integers.
-func parseCBORMap(data []byte) (map[interface{}]interface{}, error) {
-	reader := newCBORReader(data)
-	item, err := reader.readItem()
-	if err != nil {
-		return nil, err
-	}
-	m, ok := item.(map[interface{}]interface{})
-	if !ok {
-		return nil, errors.New("cbor: expected map at top level")
-	}
-	return m, nil
-}
-
-// --- Minimal CBOR Encoder (for storing COSE keys) ---
-
-func cborEncodeUint(major byte, val uint64) []byte {
-	majorShifted := major << 5
-	if val < 24 {
-		return []byte{majorShifted | byte(val)}
-	} else if val <= 0xff {
-		return []byte{majorShifted | 24, byte(val)}
-	} else if val <= 0xffff {
-		buf := make([]byte, 3)
-		buf[0] = majorShifted | 25
-		binary.BigEndian.PutUint16(buf[1:], uint16(val))
-		return buf
-	} else if val <= 0xffffffff {
-		buf := make([]byte, 5)
-		buf[0] = majorShifted | 26
-		binary.BigEndian.PutUint32(buf[1:], uint32(val))
-		return buf
-	}
-	buf := make([]byte, 9)
-	buf[0] = majorShifted | 27
-	binary.BigEndian.PutUint64(buf[1:], val)
-	return buf
-}
-
-func cborEncodeInt(val int64) []byte {
-	if val >= 0 {
-		return cborEncodeUint(0, uint64(val))
-	}
-	// Negative: encode as major type 1, value = -1 - val
-	return cborEncodeUint(1, uint64(-1-val))
-}
-
-func cborEncodeByteString(data []byte) []byte {
-	header := cborEncodeUint(2, uint64(len(data)))
-	return append(header, data...)
-}
-
-func cborEncodeTextString(s string) []byte {
-	header := cborEncodeUint(3, uint64(len(s)))
-	return append(header, []byte(s)...)
-}
-
-func cborEncodeItem(val interface{}) ([]byte, error) {
-	switch v := val.(type) {
-	case int64:
-		return cborEncodeInt(v), nil
-	case int:
-		return cborEncodeInt(int64(v)), nil
-	case uint64:
-		return cborEncodeUint(0, v), nil
-	case []byte:
-		return cborEncodeByteString(v), nil
-	case string:
-		return cborEncodeTextString(v), nil
-	case bool:
-		if v {
-			return []byte{0xf5}, nil // true
-		}
-		return []byte{0xf4}, nil // false
-	case nil:
-		return []byte{0xf6}, nil // null
-	case map[interface{}]interface{}:
-		return cborEncodeMap(v)
-	case []interface{}:
-		header := cborEncodeUint(4, uint64(len(v)))
-		for _, item := range v {
-			encoded, err := cborEncodeItem(item)
-			if err != nil {
-				return nil, err
-			}
-			header = append(header, encoded...)
-		}
-		return header, nil
-	default:
-		return nil, fmt.Errorf("cbor encode: unsupported type %T", val)
-	}
-}
-
-func cborEncodeMap(m map[interface{}]interface{}) ([]byte, error) {
-	header := cborEncodeUint(5, uint64(len(m)))
-	for k, v := range m {
-		kEncoded, err := cborEncodeItem(k)
-		if err != nil {
-			return nil, err
-		}
-		vEncoded, err := cborEncodeItem(v)
-		if err != nil {
-			return nil, err
-		}
-		header = append(header, kEncoded...)
-		header = append(header, vEncoded...)
-	}
-	return header, nil
-}
-
-func marshalCOSEKey(coseKey map[interface{}]interface{}) ([]byte, error) {
-	return cborEncodeMap(coseKey)
-}
-
-// --- COSE Key Parsing ---
-
-// COSE key labels
-const (
-	coseKeyLabelKty int64 = 1
-	coseKeyLabelAlg int64 = 3
-	coseKeyLabelCrv int64 = -1
-	coseKeyLabelX   int64 = -2
-	coseKeyLabelY   int64 = -3
-	coseKeyLabelN   int64 = -1 // RSA modulus
-	coseKeyLabelE   int64 = -2 // RSA exponent
-)
-
-// COSE key types
-const (
-	coseKtyEC2 int64 = 2 // Elliptic Curve with x,y
-	coseKtyRSA int64 = 3 // RSA
-)
-
-// COSE algorithms
-const (
-	coseAlgES256 int64 = -7
-	coseAlgRS256 int64 = -257
-)
-
-func getCOSEIntKey(m map[interface{}]interface{}, key int64) (int64, bool) {
-	val, ok := m[key]
-	if !ok {
-		return 0, false
-	}
-	switch v := val.(type) {
-	case int64:
-		return v, true
-	case int:
-		return int64(v), true
-	case uint64:
-		return int64(v), true
-	default:
-		return 0, false
-	}
-}
-
-func getCOSEBytesKey(m map[interface{}]interface{}, key int64) ([]byte, bool) {
-	val, ok := m[key]
-	if !ok {
-		return nil, false
-	}
-	bs, ok := val.([]byte)
-	return bs, ok
-}
-
-func parseCOSEPublicKey(coseKey map[interface{}]interface{}) (interface{}, error) {
-	kty, ok := getCOSEIntKey(coseKey, coseKeyLabelKty)
-	if !ok {
-		return nil, errors.New("missing key type (kty)")
-	}
-
-	switch kty {
-	case coseKtyEC2:
-		return parseCOSEEC2Key(coseKey)
-	case coseKtyRSA:
-		return parseCOSERSAKey(coseKey)
-	default:
-		return nil, fmt.Errorf("unsupported key type: %d", kty)
-	}
-}
-
-func parseCOSEEC2Key(coseKey map[interface{}]interface{}) (*ecdsa.PublicKey, error) {
-	xBytes, ok := getCOSEBytesKey(coseKey, coseKeyLabelX)
-	if !ok {
-		return nil, errors.New("missing x coordinate")
-	}
-	yBytes, ok := getCOSEBytesKey(coseKey, coseKeyLabelY)
-	if !ok {
-		return nil, errors.New("missing y coordinate")
-	}
-
-	// Determine curve from crv parameter (default P-256 for ES256)
-	curve := elliptic.P256()
-	crv, hasCrv := getCOSEIntKey(coseKey, coseKeyLabelCrv)
-	if hasCrv {
-		switch crv {
-		case 1: // P-256
-			curve = elliptic.P256()
-		case 2: // P-384
-			curve = elliptic.P384()
-		case 3: // P-521
-			curve = elliptic.P521()
-		default:
-			return nil, fmt.Errorf("unsupported curve: %d", crv)
-		}
-	}
-
-	x := new(big.Int).SetBytes(xBytes)
-	y := new(big.Int).SetBytes(yBytes)
-
-	pubKey := &ecdsa.PublicKey{
-		Curve: curve,
-		X:     x,
-		Y:     y,
-	}
-
-	// Validate the point is on the curve
-	if !curve.IsOnCurve(x, y) {
-		return nil, errors.New("EC point is not on the curve")
-	}
-
-	return pubKey, nil
-}
-
-func parseCOSERSAKey(coseKey map[interface{}]interface{}) (*rsa.PublicKey, error) {
-	// For RSA, n is at label -1, e is at label -2
-	nBytes, ok := getCOSEBytesKey(coseKey, int64(-1)) // n
-	if !ok {
-		return nil, errors.New("missing RSA modulus (n)")
-	}
-	eBytes, ok := getCOSEBytesKey(coseKey, int64(-2)) // e
-	if !ok {
-		return nil, errors.New("missing RSA exponent (e)")
-	}
-
-	n := new(big.Int).SetBytes(nBytes)
-	e := new(big.Int).SetBytes(eBytes)
-
-	if !e.IsInt64() || e.Int64() > int64(1<<31-1) {
-		return nil, errors.New("RSA exponent too large")
-	}
-
-	pubKey := &rsa.PublicKey{
-		N: n,
-		E: int(e.Int64()),
-	}
-
-	return pubKey, nil
-}
-
