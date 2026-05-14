@@ -1,0 +1,441 @@
+package main
+
+import (
+	"archive/zip"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+)
+
+// 数据导出/导入/删除 handler
+
+func handleDataExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+
+	attendances := []Attendance{}
+	rows, err := db.Query(
+		"SELECT id, user_id, date, clock_in, clock_out, status, is_overtime, created_at, updated_at FROM attendance WHERE user_id = ? ORDER BY date",
+		userID,
+	)
+	if err != nil {
+		jsonError(w, "Failed to export attendance", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var a Attendance
+		var ov int
+		rows.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &ov, &a.CreatedAt, &a.UpdatedAt)
+		a.IsOvertime = ov == 1
+		attendances = append(attendances, a)
+	}
+	rows.Close()
+
+	workLogsList := []WorkLog{}
+	rows, err = db.Query(
+		"SELECT id, user_id, date, content, created_at, updated_at FROM work_logs WHERE user_id = ? ORDER BY date",
+		userID,
+	)
+	if err != nil {
+		jsonError(w, "Failed to export work logs", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var wl WorkLog
+		rows.Scan(&wl.ID, &wl.UserID, &wl.Date, &wl.Content, &wl.CreatedAt, &wl.UpdatedAt)
+		workLogsList = append(workLogsList, wl)
+	}
+	rows.Close()
+
+	lessonsList := []Lesson{}
+	rows, err = db.Query(
+		"SELECT id, user_id, date, content, created_at, updated_at FROM lessons WHERE user_id = ? ORDER BY date",
+		userID,
+	)
+	if err != nil {
+		jsonError(w, "Failed to export lessons", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var l Lesson
+		rows.Scan(&l.ID, &l.UserID, &l.Date, &l.Content, &l.CreatedAt, &l.UpdatedAt)
+		lessonsList = append(lessonsList, l)
+	}
+	rows.Close()
+
+	todosList := []Todo{}
+	rows, err = db.Query(
+		"SELECT id, user_id, content, url, done, created_at, updated_at FROM todos WHERE user_id = ? ORDER BY id",
+		userID,
+	)
+	if err != nil {
+		jsonError(w, "Failed to export todos", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var t Todo
+		rows.Scan(&t.ID, &t.UserID, &t.Content, &t.URL, &t.Done, &t.CreatedAt, &t.UpdatedAt)
+		todosList = append(todosList, t)
+	}
+	rows.Close()
+
+	checklistsList := []Checklist{}
+	rows, err = db.Query(
+		"SELECT id, user_id, title, items, created_at, updated_at FROM checklists WHERE user_id = ? ORDER BY id",
+		userID,
+	)
+	if err != nil {
+		jsonError(w, "Failed to export checklists", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var c Checklist
+		rows.Scan(&c.ID, &c.UserID, &c.Title, &c.Items, &c.CreatedAt, &c.UpdatedAt)
+		checklistsList = append(checklistsList, c)
+	}
+	rows.Close()
+
+	snapshotsList := []ChecklistSnapshot{}
+	rows, err = db.Query(
+		"SELECT id, user_id, checklist_id, title, items_hash, data, created_at FROM checklist_snapshots WHERE user_id = ? ORDER BY id",
+		userID,
+	)
+	if err != nil {
+		jsonError(w, "Failed to export checklist snapshots", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var s ChecklistSnapshot
+		rows.Scan(&s.ID, &s.UserID, &s.ChecklistID, &s.Title, &s.ItemsHash, &s.Data, &s.CreatedAt)
+		snapshotsList = append(snapshotsList, s)
+	}
+	rows.Close()
+
+	userSettings := map[string]string{}
+	rows, err = db.Query("SELECT key, value FROM user_settings WHERE user_id = ?", userID)
+	if err != nil {
+		jsonError(w, "Failed to export user settings", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var k, v string
+		rows.Scan(&k, &v)
+		userSettings[k] = v
+	}
+	rows.Close()
+
+	overridesList := []IterationOverride{}
+	rows, err = db.Query(
+		"SELECT id, user_id, iteration_number, start_date, end_date, created_at, updated_at FROM iteration_overrides WHERE user_id = ? ORDER BY iteration_number",
+		userID,
+	)
+	if err != nil {
+		jsonError(w, "Failed to export iteration overrides", http.StatusInternalServerError)
+		return
+	}
+	for rows.Next() {
+		var o IterationOverride
+		rows.Scan(&o.ID, &o.UserID, &o.IterationNumber, &o.StartDate, &o.EndDate, &o.CreatedAt, &o.UpdatedAt)
+		overridesList = append(overridesList, o)
+	}
+	rows.Close()
+
+	exportData := ExportData{
+		Attendance:         attendances,
+		WorkLogs:           workLogsList,
+		Lessons:            lessonsList,
+		Todos:              todosList,
+		Checklists:         checklistsList,
+		ChecklistSnapshots: snapshotsList,
+		UserSettings:       userSettings,
+		IterationOverrides: overridesList,
+		ExportedAt:         time.Now().Format(time.RFC3339),
+	}
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	jsonBytes, _ := json.MarshalIndent(exportData, "", "  ")
+	fw, _ := zw.Create("data.json")
+	fw.Write(jsonBytes)
+
+	zw.Close()
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition",
+		fmt.Sprintf(`attachment; filename="workey-export-%s.zip"`, time.Now().Format("2006-01-02")))
+	w.Write(buf.Bytes())
+}
+
+func handleDataImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+
+	if err := r.ParseMultipartForm(50 << 20); err != nil {
+		jsonError(w, "File too large (max 50MB)", http.StatusBadRequest)
+		return
+	}
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		jsonError(w, "No file provided", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	zipBytes, err := io.ReadAll(file)
+	if err != nil {
+		jsonError(w, "Failed to read file", http.StatusBadRequest)
+		return
+	}
+
+	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+	if err != nil {
+		jsonError(w, "Invalid zip file", http.StatusBadRequest)
+		return
+	}
+
+	var importData struct {
+		Attendance         []Attendance        `json:"attendance"`
+		WorkLogs           []WorkLog           `json:"work_logs"`
+		Lessons            []Lesson            `json:"lessons"`
+		Checklists         []Checklist         `json:"checklists"`
+		ChecklistSnapshots []ChecklistSnapshot `json:"checklist_snapshots"`
+	}
+	foundJSON := false
+
+	for _, f := range zr.File {
+		if f.Name == "data.json" {
+			rc, err := f.Open()
+			if err != nil {
+				jsonError(w, "Failed to read data.json", http.StatusBadRequest)
+				return
+			}
+			if err := json.NewDecoder(rc).Decode(&importData); err != nil {
+				rc.Close()
+				jsonError(w, "Invalid data.json format", http.StatusBadRequest)
+				return
+			}
+			rc.Close()
+			foundJSON = true
+		}
+	}
+
+	if !foundJSON {
+		jsonError(w, "data.json not found in zip", http.StatusBadRequest)
+		return
+	}
+
+	attendanceCount := 0
+	workLogCount := 0
+
+	for _, a := range importData.Attendance {
+		if a.Date == "" {
+			continue
+		}
+		now := nowDatetime()
+		status := a.Status
+		if status == "" {
+			status = "normal"
+		}
+		overtime := 0
+		if a.IsOvertime {
+			overtime = 1
+		}
+		result, err := db.Exec(
+			"UPDATE attendance SET clock_in = ?, clock_out = ?, status = ?, is_overtime = ?, updated_at = ? WHERE user_id = ? AND date = ?",
+			a.ClockIn, a.ClockOut, status, overtime, now, userID, a.Date,
+		)
+		if err != nil {
+			continue
+		}
+
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			_, err = db.Exec(
+				"INSERT INTO attendance (user_id, date, clock_in, clock_out, status, is_overtime, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+				userID, a.Date, a.ClockIn, a.ClockOut, status, overtime, now, now,
+			)
+			if err != nil {
+				continue
+			}
+		}
+		attendanceCount++
+	}
+
+	for _, wl := range importData.WorkLogs {
+		if wl.Date == "" {
+			continue
+		}
+		now := nowDatetime()
+		result, err := db.Exec(
+			"UPDATE work_logs SET content = ?, updated_at = ? WHERE user_id = ? AND date = ?",
+			wl.Content, now, userID, wl.Date,
+		)
+		if err != nil {
+			continue
+		}
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			_, err = db.Exec(
+				"INSERT INTO work_logs (user_id, date, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+				userID, wl.Date, wl.Content, now, now,
+			)
+			if err != nil {
+				continue
+			}
+		}
+		workLogCount++
+	}
+
+	lessonCount := 0
+	for _, l := range importData.Lessons {
+		if l.Date == "" {
+			continue
+		}
+		now := nowDatetime()
+		result, err := db.Exec(
+			"UPDATE lessons SET content = ?, updated_at = ? WHERE user_id = ? AND date = ?",
+			l.Content, now, userID, l.Date,
+		)
+		if err != nil {
+			continue
+		}
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			_, err = db.Exec(
+				"INSERT INTO lessons (user_id, date, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+				userID, l.Date, l.Content, now, now,
+			)
+			if err != nil {
+				continue
+			}
+		}
+		lessonCount++
+	}
+
+	checklistIDMap := map[int64]int64{}
+	checklistCount := 0
+	for _, c := range importData.Checklists {
+		if strings.TrimSpace(c.Title) == "" {
+			continue
+		}
+		items := c.Items
+		if items == "" {
+			items = "[]"
+		}
+		now := nowDatetime()
+		var existingID int64
+		err := db.QueryRow("SELECT id FROM checklists WHERE user_id = ? AND title = ?", userID, c.Title).Scan(&existingID)
+		if err == nil {
+			_, err = db.Exec("UPDATE checklists SET items = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+				items, now, existingID, userID)
+			if err == nil {
+				checklistIDMap[c.ID] = existingID
+				checklistCount++
+			}
+		} else {
+			result, err := db.Exec(
+				"INSERT INTO checklists (user_id, title, items, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+				userID, c.Title, items, now, now,
+			)
+			if err == nil {
+				newID, _ := result.LastInsertId()
+				checklistIDMap[c.ID] = newID
+				checklistCount++
+			}
+		}
+	}
+
+	snapshotCount := 0
+	for _, s := range importData.ChecklistSnapshots {
+		newID, ok := checklistIDMap[s.ChecklistID]
+		if !ok {
+			continue
+		}
+		data := s.Data
+		if data == "" {
+			data = "{}"
+		}
+		created := s.CreatedAt
+		if created == "" {
+			created = nowDatetime()
+		}
+		_, err := db.Exec(
+			"INSERT INTO checklist_snapshots (user_id, checklist_id, title, items_hash, data, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+			userID, newID, s.Title, s.ItemsHash, data, created,
+		)
+		if err == nil {
+			snapshotCount++
+		}
+	}
+
+	jsonOK(w, map[string]interface{}{
+		"message":          "Data imported successfully",
+		"attendance_count": attendanceCount,
+		"work_log_count":   workLogCount,
+		"lesson_count":     lessonCount,
+		"checklist_count":  checklistCount,
+		"snapshot_count":   snapshotCount,
+	})
+}
+
+func handleDataDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "DELETE" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID := getUserID(r)
+
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Password == "" {
+		jsonError(w, "Password is required to delete data", http.StatusBadRequest)
+		return
+	}
+
+	var passwordHash string
+	err := db.QueryRow("SELECT password_hash FROM users WHERE id = ?", userID).Scan(&passwordHash)
+	if err != nil {
+		jsonError(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	if !checkPassword(req.Password, passwordHash) {
+		jsonError(w, "Password is incorrect", http.StatusUnauthorized)
+		return
+	}
+
+	tables := []string{"attendance", "work_logs", "lessons", "todos", "checklist_snapshots", "checklists", "iteration_overrides"}
+	counts := map[string]int64{}
+	for _, table := range tables {
+		result, err := db.Exec("DELETE FROM "+table+" WHERE user_id = ?", userID)
+		if err != nil {
+			jsonError(w, "Failed to delete "+table, http.StatusInternalServerError)
+			return
+		}
+		n, _ := result.RowsAffected()
+		counts[table] = n
+	}
+
+	jsonOK(w, map[string]interface{}{
+		"message":          "All data deleted successfully",
+		"attendance_count": counts["attendance"],
+		"work_log_count":   counts["work_logs"],
+		"lesson_count":     counts["lessons"],
+		"todo_count":       counts["todos"],
+	})
+}

@@ -19,24 +19,6 @@ import (
 	"time"
 )
 
-// --- Passkey DB ---
-
-func initPasskeyDB() {
-	query := `CREATE TABLE IF NOT EXISTS passkeys (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user_id INTEGER NOT NULL REFERENCES users(id),
-		name TEXT NOT NULL,
-		credential_id BLOB NOT NULL UNIQUE,
-		public_key BLOB NOT NULL,
-		sign_count INTEGER NOT NULL DEFAULT 0,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		last_used_at DATETIME
-	)`
-	if _, err := db.Exec(query); err != nil {
-		fmt.Printf("Warning: failed to create passkeys table: %v\n", err)
-	}
-}
-
 // --- Challenge Store ---
 
 type challengeEntry struct {
@@ -1198,16 +1180,3 @@ func parseCOSERSAKey(coseKey map[interface{}]interface{}) (*rsa.PublicKey, error
 	return pubKey, nil
 }
 
-// --- Utility ---
-
-func bytesEqual(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
