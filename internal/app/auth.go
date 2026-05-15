@@ -81,6 +81,8 @@ func validateJWT(tokenString string) (int64, int64, error) {
 
 func generateRandomString(n int) string {
 	b := make([]byte, n)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand: " + err.Error())
+	}
 	return hex.EncodeToString(b)
 }

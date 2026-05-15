@@ -1,8 +1,8 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -11,6 +11,8 @@ import (
 // HTTP 中间件和 JSON 工具函数
 
 type contextKey string
+
+const userIDKey contextKey = "userID"
 
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -48,9 +50,8 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}
 
-		// 将用户 ID 存入请求头以便后续 handler 读取
-		r.Header.Set("X-User-ID", fmt.Sprintf("%d", userID))
-		next(w, r)
+		ctx := context.WithValue(r.Context(), userIDKey, userID)
+		next(w, r.WithContext(ctx))
 	}
 }
 
@@ -66,7 +67,6 @@ func jsonOK(w http.ResponseWriter, data interface{}) {
 }
 
 func getUserID(r *http.Request) int64 {
-	var id int64
-	fmt.Sscanf(r.Header.Get("X-User-ID"), "%d", &id)
+	id, _ := r.Context().Value(userIDKey).(int64)
 	return id
 }

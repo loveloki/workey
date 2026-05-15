@@ -1,10 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { auth as authApi, setToken, clearToken, isLoggedIn, ApiError } from './api'
-
-interface User {
-  id: number
-  username: string
-}
+import type { User } from './models.gen'
 
 interface AuthContextType {
   user: User | null

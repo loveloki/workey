@@ -29,15 +29,6 @@ type WorkLog struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-type Lesson struct {
-	ID        int64  `json:"id"`
-	UserID    int64  `json:"user_id"`
-	Date      string `json:"date"`
-	Content   string `json:"content"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
-}
-
 type Todo struct {
 	ID        int64  `json:"id"`
 	UserID    int64  `json:"user_id"`
@@ -88,7 +79,6 @@ type Passkey struct {
 type ExportData struct {
 	Attendance         []Attendance        `json:"attendance"`
 	WorkLogs           []WorkLog           `json:"work_logs"`
-	Lessons            []Lesson            `json:"lessons"`
 	Todos              []Todo              `json:"todos"`
 	Checklists         []Checklist         `json:"checklists"`
 	ChecklistSnapshots []ChecklistSnapshot `json:"checklist_snapshots"`

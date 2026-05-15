@@ -6,7 +6,6 @@ export function formatDayMarkdown(
   _att: Attendance | null,
   logContent: string,
   completedTodos: Todo[],
-  _lessonContent?: string,
 ): string {
   const lines: string[] = []
   if (logContent.trim()) {

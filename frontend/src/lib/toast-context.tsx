@@ -49,23 +49,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {/* Toast 容器 - 固定在屏幕底部中央 */}
       {items.length > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 pointer-events-none">
-          {items.map(item => (
+          {items.map(item => {
+            const typeStyles: Record<ToastType, string> = {
+              error: 'bg-[var(--color-danger-bg)] border-[var(--color-danger-border)] text-[var(--color-danger-text)]',
+              success: 'bg-[var(--color-success-bg)] border-[var(--color-success-border)] text-[var(--color-success-text)]',
+              info: 'bg-[var(--color-surface-strong)] border-[var(--color-border)] text-[var(--color-ink)]',
+            }
+            return (
             <div
               key={item.id}
-              className="pointer-events-auto animate-slide-up flex items-center gap-2 rounded-lg px-4 py-3 shadow-lg font-mono text-sm max-w-[min(90vw,420px)]"
-              style={{
-                background: item.type === 'error' ? 'var(--color-danger-bg, #fef2f2)'
-                  : item.type === 'success' ? 'var(--color-success-bg, #f0fdf4)'
-                  : 'var(--color-surface-strong)',
-                border: `1px solid ${
-                  item.type === 'error' ? 'var(--color-danger-border, #fca5a5)'
-                    : item.type === 'success' ? 'var(--color-success-border, #86efac)'
-                    : 'var(--color-border)'
-                }`,
-                color: item.type === 'error' ? 'var(--color-danger-text, #dc2626)'
-                  : item.type === 'success' ? 'var(--color-success-text, #166534)'
-                  : 'var(--color-ink)',
-              }}
+              className={`pointer-events-auto animate-slide-up flex items-center gap-2 rounded-lg px-4 py-3 shadow-lg font-mono text-sm max-w-[min(90vw,420px)] border ${typeStyles[item.type]}`}
             >
               <span className="shrink-0">
                 {item.type === 'error' ? '✕' : item.type === 'success' ? '✓' : 'ℹ'}
@@ -78,7 +71,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 ×
               </button>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </ToastContext.Provider>

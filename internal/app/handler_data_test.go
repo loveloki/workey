@@ -55,7 +55,6 @@ func TestHandleDataExport(t *testing.T) {
 		assert.Len(t, data.WorkLogs, 1)
 		assert.Equal(t, "测试日志", data.WorkLogs[0].Content)
 		assert.Len(t, data.Attendance, 1)
-		assert.Len(t, data.Lessons, 1)
 		assert.Len(t, data.Todos, 1)
 		assert.Len(t, data.Checklists, 1)
 		assert.Equal(t, "dark", data.UserSettings["theme"])
@@ -167,7 +166,6 @@ func TestHandleDataImport(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 		assert.Equal(t, 1, resp.AttendanceCount)
 		assert.Equal(t, 1, resp.WorkLogCount)
-		assert.Equal(t, 1, resp.LessonCount)
 	})
 
 	t.Run("无效 ZIP 文件", func(t *testing.T) {

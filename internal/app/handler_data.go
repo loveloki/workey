@@ -30,6 +30,7 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Failed to export attendance", http.StatusInternalServerError)
 		return
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var a Attendance
 		var ov int
@@ -37,7 +38,6 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		a.IsOvertime = ov == 1
 		attendances = append(attendances, a)
 	}
-	rows.Close()
 
 	workLogsList := []WorkLog{}
 	rows, err = db.Query(
@@ -48,28 +48,12 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Failed to export work logs", http.StatusInternalServerError)
 		return
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var wl WorkLog
 		rows.Scan(&wl.ID, &wl.UserID, &wl.Date, &wl.Content, &wl.CreatedAt, &wl.UpdatedAt)
 		workLogsList = append(workLogsList, wl)
 	}
-	rows.Close()
-
-	lessonsList := []Lesson{}
-	rows, err = db.Query(
-		"SELECT id, user_id, date, content, created_at, updated_at FROM lessons WHERE user_id = ? ORDER BY date",
-		userID,
-	)
-	if err != nil {
-		jsonError(w, "Failed to export lessons", http.StatusInternalServerError)
-		return
-	}
-	for rows.Next() {
-		var l Lesson
-		rows.Scan(&l.ID, &l.UserID, &l.Date, &l.Content, &l.CreatedAt, &l.UpdatedAt)
-		lessonsList = append(lessonsList, l)
-	}
-	rows.Close()
 
 	todosList := []Todo{}
 	rows, err = db.Query(
@@ -80,6 +64,7 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Failed to export todos", http.StatusInternalServerError)
 		return
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var t Todo
 		var done int
@@ -87,7 +72,6 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		t.Done = done != 0
 		todosList = append(todosList, t)
 	}
-	rows.Close()
 
 	checklistsList := []Checklist{}
 	rows, err = db.Query(
@@ -98,12 +82,12 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Failed to export checklists", http.StatusInternalServerError)
 		return
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var c Checklist
 		rows.Scan(&c.ID, &c.UserID, &c.Title, &c.Items, &c.CreatedAt, &c.UpdatedAt)
 		checklistsList = append(checklistsList, c)
 	}
-	rows.Close()
 
 	snapshotsList := []ChecklistSnapshot{}
 	rows, err = db.Query(
@@ -114,12 +98,12 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Failed to export checklist snapshots", http.StatusInternalServerError)
 		return
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var s ChecklistSnapshot
 		rows.Scan(&s.ID, &s.UserID, &s.ChecklistID, &s.Title, &s.ItemsHash, &s.Data, &s.CreatedAt)
 		snapshotsList = append(snapshotsList, s)
 	}
-	rows.Close()
 
 	userSettings := map[string]string{}
 	rows, err = db.Query("SELECT key, value FROM user_settings WHERE user_id = ?", userID)
@@ -127,12 +111,12 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Failed to export user settings", http.StatusInternalServerError)
 		return
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var k, v string
 		rows.Scan(&k, &v)
 		userSettings[k] = v
 	}
-	rows.Close()
 
 	overridesList := []IterationOverride{}
 	rows, err = db.Query(
@@ -143,17 +127,16 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Failed to export iteration overrides", http.StatusInternalServerError)
 		return
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var o IterationOverride
 		rows.Scan(&o.ID, &o.UserID, &o.IterationNumber, &o.StartDate, &o.EndDate, &o.CreatedAt, &o.UpdatedAt)
 		overridesList = append(overridesList, o)
 	}
-	rows.Close()
 
 	exportData := ExportData{
 		Attendance:         attendances,
 		WorkLogs:           workLogsList,
-		Lessons:            lessonsList,
 		Todos:              todosList,
 		Checklists:         checklistsList,
 		ChecklistSnapshots: snapshotsList,
@@ -211,7 +194,6 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 	var importData struct {
 		Attendance         []Attendance        `json:"attendance"`
 		WorkLogs           []WorkLog           `json:"work_logs"`
-		Lessons            []Lesson            `json:"lessons"`
 		Todos              []Todo              `json:"todos"`
 		Checklists         []Checklist         `json:"checklists"`
 		ChecklistSnapshots []ChecklistSnapshot `json:"checklist_snapshots"`
@@ -302,32 +284,6 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		workLogCount++
-	}
-
-	lessonCount := 0
-	for _, l := range importData.Lessons {
-		if l.Date == "" {
-			continue
-		}
-		now := nowDatetime()
-		result, err := db.Exec(
-			"UPDATE lessons SET content = ?, updated_at = ? WHERE user_id = ? AND date = ?",
-			l.Content, now, userID, l.Date,
-		)
-		if err != nil {
-			continue
-		}
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected == 0 {
-			_, err = db.Exec(
-				"INSERT INTO lessons (user_id, date, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-				userID, l.Date, l.Content, now, now,
-			)
-			if err != nil {
-				continue
-			}
-		}
-		lessonCount++
 	}
 
 	checklistIDMap := map[int64]int64{}
@@ -448,9 +404,10 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		Message:         "Data imported successfully",
 		AttendanceCount: attendanceCount,
 		WorkLogCount:    workLogCount,
-		LessonCount:     lessonCount,
+		TodoCount:       todoCount,
 		ChecklistCount:  checklistCount,
 		SnapshotCount:   snapshotCount,
+		OverrideCount:   overrideCount,
 	})
 }
 
@@ -482,7 +439,7 @@ func handleDataDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tables := []string{"attendance", "work_logs", "lessons", "todos", "checklist_snapshots", "checklists", "iteration_overrides"}
+	tables := []string{"attendance", "work_logs", "todos", "checklist_snapshots", "checklists", "iteration_overrides"}
 	counts := map[string]int64{}
 	for _, table := range tables {
 		result, err := db.Exec("DELETE FROM "+table+" WHERE user_id = ?", userID)
@@ -498,7 +455,6 @@ func handleDataDelete(w http.ResponseWriter, r *http.Request) {
 		Message:         "All data deleted successfully",
 		AttendanceCount: counts["attendance"],
 		WorkLogCount:    counts["work_logs"],
-		LessonCount:     counts["lessons"],
 		TodoCount:       counts["todos"],
 	})
 }

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"database/sql"
 	"encoding/json"
 	"net/http"
 )
@@ -22,57 +21,36 @@ func handleSettings(w http.ResponseWriter, r *http.Request) {
 func handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
 
-	var timezone string
-	err := db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'timezone'", userID).Scan(&timezone)
-	if err == sql.ErrNoRows {
-		timezone = "+8"
-	} else if err != nil {
+	// 默认值
+	values := map[string]string{
+		"timezone":                "+8",
+		"kanban_url":              "https://www.fizzy.do/",
+		"theme":                   "light",
+		"iteration_start_date":    "2019-09-02",
+		"iteration_duration_days": "14",
+	}
+
+	// 一次查询获取所有设置
+	rows, err := db.Query("SELECT key, value FROM user_settings WHERE user_id = ?", userID)
+	if err != nil {
 		jsonError(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
+	defer rows.Close()
 
-	var kanbanURL string
-	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'kanban_url'", userID).Scan(&kanbanURL)
-	if err == sql.ErrNoRows {
-		kanbanURL = "https://www.fizzy.do/"
-	} else if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
-	}
-
-	var theme string
-	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'theme'", userID).Scan(&theme)
-	if err == sql.ErrNoRows {
-		theme = "light"
-	} else if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
-	}
-
-	var iterationStartDate string
-	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'iteration_start_date'", userID).Scan(&iterationStartDate)
-	if err == sql.ErrNoRows {
-		iterationStartDate = "2019-09-02"
-	} else if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
-	}
-
-	var iterationDurationDays string
-	err = db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'iteration_duration_days'", userID).Scan(&iterationDurationDays)
-	if err == sql.ErrNoRows {
-		iterationDurationDays = "14"
-	} else if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err == nil {
+			values[key] = value
+		}
 	}
 
 	jsonOK(w, SettingsResponse{
-		Timezone:              timezone,
-		KanbanURL:             kanbanURL,
-		Theme:                 theme,
-		IterationStartDate:    iterationStartDate,
-		IterationDurationDays: iterationDurationDays,
+		Timezone:              values["timezone"],
+		KanbanURL:             values["kanban_url"],
+		Theme:                 values["theme"],
+		IterationStartDate:    values["iteration_start_date"],
+		IterationDurationDays: values["iteration_duration_days"],
 	})
 }
 

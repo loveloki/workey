@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -71,9 +72,9 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 
 	userID := createTestUser(t, "testuser", "password123")
 
-	var capturedUserID string
+	var capturedUserID int64
 	handler := authMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		capturedUserID = r.Header.Get("X-User-ID")
+		capturedUserID = getUserID(r)
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -86,12 +87,13 @@ func TestAuthMiddleware_ValidToken(t *testing.T) {
 	handler(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.NotEmpty(t, capturedUserID)
+	assert.Equal(t, userID, capturedUserID)
 }
 
 func TestGetUserID(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("X-User-ID", "42")
+	ctx := context.WithValue(req.Context(), userIDKey, int64(42))
+	req = req.WithContext(ctx)
 	assert.Equal(t, int64(42), getUserID(req))
 }
 

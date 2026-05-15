@@ -46,16 +46,6 @@ type WorkLogListResponse struct {
 	WorkLogs []WorkLog `json:"work_logs"`
 }
 
-// ─── Lessons ────────────────────────────────────────────────
-
-type LessonResponse struct {
-	Lesson *Lesson `json:"lesson"`
-}
-
-type LessonListResponse struct {
-	Lessons []Lesson `json:"lessons"`
-}
-
 // ─── Todos ──────────────────────────────────────────────────
 
 type TodoResponse struct {
@@ -142,15 +132,15 @@ type DataImportResponse struct {
 	Message         string `json:"message"`
 	AttendanceCount int    `json:"attendance_count"`
 	WorkLogCount    int    `json:"work_log_count"`
-	LessonCount     int    `json:"lesson_count"`
+	TodoCount       int    `json:"todo_count"`
 	ChecklistCount  int    `json:"checklist_count"`
 	SnapshotCount   int    `json:"snapshot_count"`
+	OverrideCount   int    `json:"override_count"`
 }
 
 type DataDeleteResponse struct {
 	Message         string `json:"message"`
 	AttendanceCount int64  `json:"attendance_count"`
 	WorkLogCount    int64  `json:"work_log_count"`
-	LessonCount     int64  `json:"lesson_count"`
 	TodoCount       int64  `json:"todo_count"`
 }

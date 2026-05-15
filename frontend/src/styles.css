@@ -69,6 +69,11 @@
   --color-danger-border: hsl(359, 90%, 90%); /* red-6 */
   --color-danger-strong: hsl(355, 49%, 15%); /* red-12 */
 
+  /* Success — Radix Green light */
+  --color-success-bg: hsl(136, 50%, 97%);
+  --color-success-border: hsl(145, 60%, 75%);
+  --color-success-text: hsl(153, 53%, 24%);
+
   /* Semantic mappings */
   --sea-ink: var(--color-ink);
   --sea-ink-soft: var(--color-ink-muted);
@@ -121,6 +126,11 @@
     --color-danger-border: hsl(356, 32%, 24%); /* red-dark-6 */
     --color-danger-strong: hsl(351, 89%, 96%); /* red-dark-12 */
 
+    /* Success — Radix Green dark */
+    --color-success-bg: hsl(146, 30%, 12%);
+    --color-success-border: hsl(145, 25%, 25%);
+    --color-success-text: hsl(142, 60%, 71%);
+
     --sea-ink: var(--color-ink);
     --sea-ink-soft: var(--color-ink-muted);
     --line: var(--color-border);
@@ -169,6 +179,11 @@
   --color-danger-bg: hsl(357, 37%, 12%);  /* red-dark-2 */
   --color-danger-border: hsl(356, 32%, 24%); /* red-dark-6 */
   --color-danger-strong: hsl(351, 89%, 96%); /* red-dark-12 */
+
+  /* Success — Radix Green dark */
+  --color-success-bg: hsl(146, 30%, 12%);
+  --color-success-border: hsl(145, 25%, 25%);
+  --color-success-text: hsl(142, 60%, 71%);
 
   --sea-ink: var(--color-ink);
   --sea-ink-soft: var(--color-ink-muted);

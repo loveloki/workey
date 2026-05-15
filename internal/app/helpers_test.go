@@ -53,11 +53,3 @@ func TestBase64URLDecode(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
-
-func TestBytesEqual(t *testing.T) {
-	assert.True(t, bytesEqual([]byte{1, 2, 3}, []byte{1, 2, 3}))
-	assert.False(t, bytesEqual([]byte{1, 2, 3}, []byte{1, 2, 4}))
-	assert.False(t, bytesEqual([]byte{1, 2}, []byte{1, 2, 3}))
-	assert.True(t, bytesEqual([]byte{}, []byte{}))
-	assert.True(t, bytesEqual(nil, nil))
-}

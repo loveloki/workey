@@ -27,14 +27,6 @@ export interface WorkLog {
   created_at: string;
   updated_at: string;
 }
-export interface Lesson {
-  id: number /* int64 */;
-  user_id: number /* int64 */;
-  date: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
-}
 export interface Todo {
   id: number /* int64 */;
   user_id: number /* int64 */;
@@ -82,7 +74,6 @@ export interface Passkey {
 export interface ExportData {
   attendance: Attendance[];
   work_logs: WorkLog[];
-  lessons: Lesson[];
   todos: Todo[];
   checklists: Checklist[];
   checklist_snapshots: ChecklistSnapshot[];
@@ -120,12 +111,6 @@ export interface WorkLogResponse {
 }
 export interface WorkLogListResponse {
   work_logs: WorkLog[];
-}
-export interface LessonResponse {
-  lesson?: Lesson;
-}
-export interface LessonListResponse {
-  lessons: Lesson[];
 }
 export interface TodoResponse {
   todo: Todo;
@@ -187,14 +172,14 @@ export interface DataImportResponse {
   message: string;
   attendance_count: number /* int */;
   work_log_count: number /* int */;
-  lesson_count: number /* int */;
+  todo_count: number /* int */;
   checklist_count: number /* int */;
   snapshot_count: number /* int */;
+  override_count: number /* int */;
 }
 export interface DataDeleteResponse {
   message: string;
   attendance_count: number /* int64 */;
   work_log_count: number /* int64 */;
-  lesson_count: number /* int64 */;
   todo_count: number /* int64 */;
 }

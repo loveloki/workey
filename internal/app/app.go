@@ -38,8 +38,12 @@ func Run() {
 	}
 	defer db.Close()
 
-	db.Exec("PRAGMA journal_mode=WAL")
-	db.Exec("PRAGMA foreign_keys=ON")
+	if _, err = db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		log.Fatal("Failed to set WAL mode:", err)
+	}
+	if _, err = db.Exec("PRAGMA foreign_keys=ON"); err != nil {
+		log.Fatal("Failed to enable foreign keys:", err)
+	}
 
 	initDB()
 	initPasskeyDB()
@@ -74,11 +78,6 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/work-logs", corsMiddleware(authMiddleware(handleWorkLogs)))
 	mux.HandleFunc("/api/work-logs/today", corsMiddleware(authMiddleware(handleWorkLogToday)))
 	mux.HandleFunc("/api/work-logs/range", corsMiddleware(authMiddleware(handleWorkLogRange)))
-
-	// 经验教训
-	mux.HandleFunc("/api/lessons", corsMiddleware(authMiddleware(handleLessons)))
-	mux.HandleFunc("/api/lessons/today", corsMiddleware(authMiddleware(handleLessonToday)))
-	mux.HandleFunc("/api/lessons/range", corsMiddleware(authMiddleware(handleLessonRange)))
 
 	// 待办事项
 	mux.HandleFunc("/api/todos/created-today", corsMiddleware(authMiddleware(handleCreatedTodayTodos)))

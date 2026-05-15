@@ -1,8 +1,8 @@
 package app
 
 import (
+	"context"
 	"database/sql"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -50,7 +50,7 @@ func createTestUser(t *testing.T, username, password string) int64 {
 	return id
 }
 
-// createAuthenticatedRequest 创建带有有效 JWT token 和 X-User-ID 头的 HTTP 请求
+// createAuthenticatedRequest 创建带有用户 ID context 的 HTTP 请求
 func createAuthenticatedRequest(t *testing.T, method, url string, body string, userID int64) *http.Request {
 	t.Helper()
 	var req *http.Request
@@ -66,8 +66,8 @@ func createAuthenticatedRequest(t *testing.T, method, url string, body string, u
 		t.Fatalf("failed to create JWT: %v", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("X-User-ID", fmt.Sprintf("%d", userID))
-	return req
+	ctx := context.WithValue(req.Context(), userIDKey, userID)
+	return req.WithContext(ctx)
 }
 
 func init() {
