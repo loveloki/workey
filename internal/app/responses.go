@@ -123,6 +123,19 @@ type PasskeyListResponse struct {
 	Passkeys []Passkey `json:"passkeys"`
 }
 
+type PasskeyRegisterResponse struct {
+	Passkey Passkey `json:"passkey"`
+}
+
+// PasskeyAuthBeginResponse 返回 WebAuthn 认证挑战参数
+type PasskeyAuthBeginResponse struct {
+	Challenge        interface{} `json:"challenge" tstype:"string"`
+	ChallengeID      string      `json:"challengeId"`
+	RPID             string      `json:"rpId"`
+	Timeout          int         `json:"timeout"`
+	UserVerification string      `json:"userVerification"`
+}
+
 // ─── Data ───────────────────────────────────────────────────
 
 type DataImportResponse struct {

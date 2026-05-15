@@ -47,15 +47,16 @@ var (
 	waInstancesMu sync.Mutex
 )
 
-// getWebAuthn 根据请求的 Host 创建或获取缓存的 WebAuthn 实例
+// getWebAuthn 根据请求的 Host 和 Origin 创建或获取缓存的 WebAuthn 实例
 func getWebAuthn(r *http.Request) (*webauthn.WebAuthn, error) {
 	rpID := getRPID(r)
 	origin := getOrigin(r)
+	cacheKey := rpID + "|" + origin
 
 	waInstancesMu.Lock()
 	defer waInstancesMu.Unlock()
 
-	if wa, ok := waInstances[rpID]; ok {
+	if wa, ok := waInstances[cacheKey]; ok {
 		return wa, nil
 	}
 
@@ -68,7 +69,7 @@ func getWebAuthn(r *http.Request) (*webauthn.WebAuthn, error) {
 		return nil, err
 	}
 
-	waInstances[rpID] = wa
+	waInstances[cacheKey] = wa
 	return wa, nil
 }
 
@@ -357,11 +358,11 @@ func handlePasskeyRegisterFinish(w http.ResponseWriter, r *http.Request) {
 
 	passkeyID, _ := result.LastInsertId()
 
-	jsonOK(w, map[string]interface{}{
-		"passkey": map[string]interface{}{
-			"id":         passkeyID,
-			"name":       extra.Name,
-			"created_at": now,
+	jsonOK(w, PasskeyRegisterResponse{
+		Passkey: Passkey{
+			ID:        passkeyID,
+			Name:      extra.Name,
+			CreatedAt: now,
 		},
 	})
 }
@@ -389,13 +390,12 @@ func handlePasskeyAuthBegin(w http.ResponseWriter, r *http.Request) {
 	challengeID := generateChallengeID()
 	storeAuthSession(challengeID, session)
 
-	// 返回与前端兼容的格式（包含 challengeId）
-	jsonOK(w, map[string]interface{}{
-		"challenge":        assertion.Response.Challenge,
-		"challengeId":      challengeID,
-		"rpId":             assertion.Response.RelyingPartyID,
-		"timeout":          assertion.Response.Timeout,
-		"userVerification": assertion.Response.UserVerification,
+	jsonOK(w, PasskeyAuthBeginResponse{
+		Challenge:        assertion.Response.Challenge,
+		ChallengeID:      challengeID,
+		RPID:             assertion.Response.RelyingPartyID,
+		Timeout:          assertion.Response.Timeout,
+		UserVerification: string(assertion.Response.UserVerification),
 	})
 }
 
@@ -477,7 +477,7 @@ func handlePasskeyAuthFinish(w http.ResponseWriter, r *http.Request) {
 	db.QueryRow("SELECT id, username, created_at FROM users WHERE id = ?", waUserImpl.id).
 		Scan(&user.ID, &user.Username, &user.CreatedAt)
 
-	jsonOK(w, map[string]interface{}{"token": token, "user": user})
+	jsonOK(w, AuthResponse{Token: token, User: user})
 }
 
 // --- 列表和删除 ---
@@ -525,5 +525,5 @@ func handlePasskeyDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonOK(w, map[string]string{"message": "Passkey deleted"})
+	jsonOK(w, MessageResponse{Message: "Passkey deleted"})
 }

@@ -11,8 +11,8 @@ import (
 // 系统信息和历史日期范围 handler
 
 func handleSystemVersion(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	if r.Method != "GET" {
+		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 

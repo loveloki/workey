@@ -82,7 +82,9 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 	}
 	for rows.Next() {
 		var t Todo
-		rows.Scan(&t.ID, &t.UserID, &t.Content, &t.URL, &t.Done, &t.CreatedAt, &t.UpdatedAt)
+		var done int
+		rows.Scan(&t.ID, &t.UserID, &t.Content, &t.URL, &done, &t.CreatedAt, &t.UpdatedAt)
+		t.Done = done != 0
 		todosList = append(todosList, t)
 	}
 	rows.Close()
@@ -210,8 +212,11 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		Attendance         []Attendance        `json:"attendance"`
 		WorkLogs           []WorkLog           `json:"work_logs"`
 		Lessons            []Lesson            `json:"lessons"`
+		Todos              []Todo              `json:"todos"`
 		Checklists         []Checklist         `json:"checklists"`
 		ChecklistSnapshots []ChecklistSnapshot `json:"checklist_snapshots"`
+		UserSettings       map[string]string   `json:"user_settings"`
+		IterationOverrides []IterationOverride `json:"iteration_overrides"`
 	}
 	foundJSON := false
 
@@ -379,6 +384,64 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			snapshotCount++
 		}
+	}
+
+	// 导入待办事项（按 content+url 去重，update or insert）
+	todoCount := 0
+	for _, t := range importData.Todos {
+		if strings.TrimSpace(t.Content) == "" && strings.TrimSpace(t.URL) == "" {
+			continue
+		}
+		now := nowDatetime()
+		doneInt := 0
+		if t.Done {
+			doneInt = 1
+		}
+		_, err := db.Exec(
+			"INSERT INTO todos (user_id, content, url, done, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+			userID, t.Content, t.URL, doneInt, now, now,
+		)
+		if err == nil {
+			todoCount++
+		}
+	}
+
+	// 导入用户设置
+	for key, value := range importData.UserSettings {
+		if value == "" {
+			continue
+		}
+		db.Exec(
+			"INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
+			userID, key, value,
+		)
+	}
+
+	// 导入迭代周期覆盖
+	overrideCount := 0
+	for _, o := range importData.IterationOverrides {
+		if o.StartDate == "" || o.EndDate == "" {
+			continue
+		}
+		now := nowDatetime()
+		result, err := db.Exec(
+			"UPDATE iteration_overrides SET start_date = ?, end_date = ?, updated_at = ? WHERE user_id = ? AND iteration_number = ?",
+			o.StartDate, o.EndDate, now, userID, o.IterationNumber,
+		)
+		if err != nil {
+			continue
+		}
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected == 0 {
+			_, err = db.Exec(
+				"INSERT INTO iteration_overrides (user_id, iteration_number, start_date, end_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+				userID, o.IterationNumber, o.StartDate, o.EndDate, now, now,
+			)
+			if err != nil {
+				continue
+			}
+		}
+		overrideCount++
 	}
 
 	jsonOK(w, DataImportResponse{

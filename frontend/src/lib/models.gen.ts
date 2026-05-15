@@ -170,6 +170,19 @@ export interface VersionRangeResponse {
 export interface PasskeyListResponse {
   passkeys: Passkey[];
 }
+export interface PasskeyRegisterResponse {
+  passkey: Passkey;
+}
+/**
+ * PasskeyAuthBeginResponse 返回 WebAuthn 认证挑战参数
+ */
+export interface PasskeyAuthBeginResponse {
+  challenge: string;
+  challengeId: string;
+  rpId: string;
+  timeout: number /* int */;
+  userVerification: string;
+}
 export interface DataImportResponse {
   message: string;
   attendance_count: number /* int */;

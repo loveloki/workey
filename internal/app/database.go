@@ -9,6 +9,12 @@ import (
 
 func initDB() {
 	queries := []string{
+		`CREATE TABLE IF NOT EXISTS users (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			username TEXT UNIQUE NOT NULL,
+			password_hash TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 		`CREATE TABLE IF NOT EXISTS settings (
 			key TEXT PRIMARY KEY,
 			value TEXT NOT NULL
@@ -19,12 +25,6 @@ func initDB() {
 			value TEXT NOT NULL,
 			PRIMARY KEY(user_id, key),
 			FOREIGN KEY(user_id) REFERENCES users(id)
-		)`,
-		`CREATE TABLE IF NOT EXISTS users (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			username TEXT UNIQUE NOT NULL,
-			password_hash TEXT NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS attendance (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
