@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { attendance, workLogs, todos as todosApi, type Todo } from '../lib/api'
+import { attendance, workLogs, todos as todosApi, type Todo, type Attendance } from '../lib/api'
 import { formatTime, getToday } from '../lib/date-utils'
 import { MarkdownEditor } from '../lib/markdown-editor'
 import { formatDayMarkdown } from '../lib/report-utils'
@@ -39,7 +39,7 @@ function CopyButton({ getText, className = '' }: { getText: () => Promise<string
 function Dashboard() {
   const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
-  const [todayData, setTodayData] = useState<any>(null)
+  const [todayData, setTodayData] = useState<Attendance | null>(null)
   const [checking, setChecking] = useState(true)
 
   useEffect(() => {
@@ -216,8 +216,8 @@ function WorkLogSection() {
       await workLogs.save(getToday(), content)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
-    } catch (e: any) {
-      alert(e.message)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '保存失败')
     }
     setSaving(false)
   }
@@ -407,8 +407,8 @@ function AddTodoForm({ onAdd }: { onAdd: (content: string, url: string) => Promi
       setUrl('')
       setShowUrl(false)
       inputRef.current?.focus()
-    } catch (err: any) {
-      alert(err.message)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '操作失败')
     } finally {
       setAdding(false)
     }
@@ -492,8 +492,8 @@ function TodoItemInteractive({
     try {
       await onUpdate({ content: editContent.trim(), url: editUrl.trim() })
       setEditing(false)
-    } catch (err: any) {
-      alert(err.message)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '保存失败')
     } finally {
       setSaving(false)
     }

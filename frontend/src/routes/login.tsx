@@ -32,8 +32,8 @@ function LoginPage() {
         await login(username, password)
       }
       navigate({ to: '/' })
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : '操作失败')
     }
     setSubmitting(false)
   }
@@ -62,8 +62,8 @@ function LoginPage() {
       const result = await passkeys.authFinish(options.challengeId, credential)
       loginWithToken(result.token, result.user)
       navigate({ to: '/' })
-    } catch (e: any) {
-      setError(e.message || '通行密钥登录失败')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : '通行密钥登录失败')
     }
     setPasskeyLoading(false)
   }

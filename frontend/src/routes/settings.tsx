@@ -66,8 +66,8 @@ function ThemeSection() {
       await settings.save({ theme: value })
       setMsg('已保存')
       setTimeout(() => setMsg(''), 2000)
-    } catch (e: any) {
-      setMsg(e.message || '保存失败')
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : '保存失败')
     } finally {
       setSaving(false)
     }
@@ -158,8 +158,8 @@ function TimezoneSection() {
       await settings.save({ timezone })
       setMsg('已保存')
       setTimeout(() => setMsg(''), 2000)
-    } catch (e: any) {
-      setMsg(e.message || '保存失败')
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : '保存失败')
     } finally {
       setSaving(false)
     }
@@ -260,7 +260,7 @@ function IterationSection() {
       setViewCenter(getCurrentIteration(cfg, overrides))
       setMsg('已保存')
       setTimeout(() => setMsg(''), 2000)
-    } catch (e: any) { setMsg(e.message || '保存失败') }
+    } catch (e: unknown) { setMsg(e instanceof Error ? e.message : '保存失败') }
     finally { setSaving(false) }
   }
 
@@ -294,7 +294,7 @@ function IterationSection() {
       setOverrides(prev => ({ ...prev, [editingIter!]: { start: editStart, end: editEnd } }))
       setEditingIter(null)
       setEditError('')
-    } catch (e: any) { setEditError(e.message || '保存失败') }
+    } catch (e: unknown) { setEditError(e instanceof Error ? e.message : '保存失败') }
   }
 
   const removeOverride = async (iterNum: number) => {
@@ -305,7 +305,7 @@ function IterationSection() {
         delete next[iterNum]
         return next
       })
-    } catch (e: any) { console.error(e) }
+    } catch (e: unknown) { console.error(e) }
   }
 
   const daysBetween = (a: string, b: string) => {
@@ -497,8 +497,8 @@ function KanbanUrlSection() {
       await settings.save({ kanban_url: url })
       setMsg('已保存')
       setTimeout(() => setMsg(''), 2000)
-    } catch (e: any) {
-      setMsg(e.message || '保存失败')
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : '保存失败')
     } finally {
       setSaving(false)
     }
@@ -615,8 +615,8 @@ function PasskeySection() {
       setIsError(false)
       setName('')
       await loadPasskeys()
-    } catch (e: any) {
-      setMsg(e.message || '添加通行密钥失败')
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : '添加通行密钥失败')
       setIsError(true)
     } finally {
       setAdding(false)
@@ -629,8 +629,8 @@ function PasskeySection() {
       setPasskeyList((prev) => prev.filter((p) => p.id !== id))
       setMsg('通行密钥已删除')
       setIsError(false)
-    } catch (e: any) {
-      setMsg(e.message || '删除失败')
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : '删除失败')
       setIsError(true)
     }
   }
@@ -748,8 +748,8 @@ function PasswordSection() {
       setOldPw('')
       setNewPw('')
       setConfirmPw('')
-    } catch (e: any) {
-      setMsg(e.message || '修改失败')
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : '修改失败')
       setIsError(true)
     } finally {
       setSaving(false)
@@ -822,8 +822,8 @@ function DataSection() {
       URL.revokeObjectURL(url)
       setMsg('导出成功')
       setIsError(false)
-    } catch (e: any) {
-      setMsg(e.message || '导出失败')
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : '导出失败')
       setIsError(true)
     } finally {
       setExporting(false)
@@ -847,8 +847,8 @@ function DataSection() {
       if (result.work_log_count) parts.push(`${result.work_log_count} 条工作日志`)
       setMsg(`导入成功：${parts.join('，') || '无新数据'}`)
       setIsError(false)
-    } catch (e: any) {
-      setMsg(e.message || '导入失败')
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : '导入失败')
       setIsError(true)
     } finally {
       setImporting(false)
@@ -922,8 +922,8 @@ function DeleteDataSection() {
       setIsError(false)
       setStep('idle')
       setPassword('')
-    } catch (e: any) {
-      setMsg(e.message || '删除失败')
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : '删除失败')
       setIsError(true)
     } finally {
       setDeleting(false)

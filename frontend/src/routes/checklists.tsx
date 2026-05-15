@@ -16,8 +16,8 @@ function parseItems(raw: string): ChecklistItem[] {
   try {
     const arr = JSON.parse(raw)
     if (!Array.isArray(arr)) return []
-    return arr.map((it: any) =>
-      typeof it === 'string' ? { text: it } : { text: String(it?.text ?? ''), note: it?.note || undefined }
+    return arr.map((it: unknown) =>
+      typeof it === 'string' ? { text: it } : { text: String((it as Record<string, unknown>)?.text ?? ''), note: ((it as Record<string, unknown>)?.note as string) || undefined }
     )
   } catch { return [] }
 }
@@ -87,8 +87,8 @@ function ChecklistManager() {
 
   useEffect(() => { load() }, [])
 
-  const handleCreated = (cl: Checklist) => {
-    setItems(prev => [cl, ...prev])
+  const handleCreated = (cl: Checklist | Pick<Checklist, 'title' | 'items'>) => {
+    setItems(prev => [cl as Checklist, ...prev])
     setShowCreate(false)
   }
 
@@ -167,7 +167,7 @@ function ChecklistForm({
   onCancel,
 }: {
   initial?: { title: string; items: ChecklistItem[] }
-  onSave: (cl: Checklist) => void
+  onSave: (cl: Checklist | Pick<Checklist, 'title' | 'items'>) => void
   onCancel: () => void
 }) {
   const [title, setTitle] = useState(initial?.title || '')
@@ -208,7 +208,7 @@ function ChecklistForm({
   }
 
   const handleItemKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
-    if (e.nativeEvent.isComposing || (e as any).keyCode === 229) return
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (e.key === 'Enter') {
       e.preventDefault()
       addItem()
@@ -231,13 +231,13 @@ function ChecklistForm({
     setSaving(true)
     try {
       if (initial) {
-        onSave({ title: title.trim(), items: JSON.stringify(filtered) } as any)
+        onSave({ title: title.trim(), items: JSON.stringify(filtered) })
       } else {
         const { checklist } = await checklistsApi.create(title.trim(), filtered)
         onSave(checklist)
       }
-    } catch (err: any) {
-      alert(err.message)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '操作失败')
     } finally {
       setSaving(false)
     }
@@ -408,7 +408,7 @@ function ChecklistCard({
 
   const parsedItems = parseItems(checklist.items)
 
-  const handleEditSave = async (data: any) => {
+  const handleEditSave = async (data: Checklist | { title: string; items: string }) => {
     try {
       const items: ChecklistItem[] = JSON.parse(data.items)
       const { checklist: updated } = await checklistsApi.update(checklist.id, {
@@ -417,8 +417,8 @@ function ChecklistCard({
       })
       onUpdated(updated)
       setEditing(false)
-    } catch (err: any) {
-      alert(err.message)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '保存失败')
     }
   }
 
@@ -426,8 +426,8 @@ function ChecklistCard({
     try {
       await checklistsApi.delete(checklist.id)
       onDeleted()
-    } catch (err: any) {
-      alert(err.message)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '操作失败')
     }
   }
 
@@ -617,8 +617,8 @@ function ChecklistUse({
       setSavedRuns(prev => [snapshot, ...prev])
       setSnapshotTitle('')
       setShowSavedList(true)
-    } catch (err: any) {
-      alert('保存失败：' + err.message)
+    } catch (e: unknown) {
+      alert('保存失败：' + (e instanceof Error ? e.message : '未知错误'))
     } finally {
       setSaving(false)
     }
@@ -630,7 +630,7 @@ function ChecklistUse({
       const loadedNotes: string[] = Array.isArray(data.notes) ? data.notes : []
       const filled: string[] = parsedItems.map((_, i) => loadedNotes[i] ?? '')
       setNotes(filled)
-      setExtras((data.extras ?? []).map((e: any) => ({
+      setExtras((data.extras ?? []).map((e: { id?: string; text?: string; note?: string }) => ({
         id: e.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         text: String(e.text || ''),
         note: String(e.note || ''),
@@ -638,8 +638,8 @@ function ChecklistUse({
       setViewingRunId(run.id)
       setEditingNote(null)
       setEditingExtraNote(null)
-    } catch (err: any) {
-      alert('加载失败：' + err.message)
+    } catch (e: unknown) {
+      alert('加载失败：' + (e instanceof Error ? e.message : '未知错误'))
     }
   }
 
@@ -648,8 +648,8 @@ function ChecklistUse({
       await snapshotsApi.delete(id)
       setSavedRuns(prev => prev.filter(r => r.id !== id))
       if (viewingRunId === id) setViewingRunId(null)
-    } catch (err: any) {
-      alert('删除失败：' + err.message)
+    } catch (e: unknown) {
+      alert('删除失败：' + (e instanceof Error ? e.message : '未知错误'))
     } finally {
       setConfirmDeleteRunId(null)
     }
@@ -907,7 +907,7 @@ function ChecklistUse({
                 value={newExtraText}
                 onChange={e => setNewExtraText(e.target.value)}
                 onKeyDown={e => {
-                  if (e.nativeEvent.isComposing || (e as any).keyCode === 229) return
+                  if (e.nativeEvent.isComposing || e.keyCode === 229) return
                   if (e.key === 'Enter') { e.preventDefault(); addExtra() }
                 }}
                 placeholder="临时添加检查项（仅本次进度使用，Enter 添加）"
@@ -989,7 +989,7 @@ function ChecklistUse({
                   if (Array.isArray(d.notes)) runNoteCount += d.notes.filter((n: string) => n && n.trim() !== '').length
                   if (Array.isArray(d.extras)) {
                     runTotal += d.extras.length
-                    runNoteCount += d.extras.filter((e: any) => e?.note && e.note.trim() !== '').length
+                    runNoteCount += d.extras.filter((e: { note?: string }) => e?.note && e.note.trim() !== '').length
                   }
                 } catch {}
                 const isViewing = viewingRunId === run.id

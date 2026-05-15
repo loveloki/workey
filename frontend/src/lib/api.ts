@@ -1,5 +1,17 @@
 const API_BASE = ''
 
+// ─── API 错误类型 ───────────────────────────────────────────────
+
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
+
+// ─── Token 管理 ─────────────────────────────────────────────────
+
 function getToken(): string | null {
   return localStorage.getItem('token')
 }
@@ -15,6 +27,8 @@ export function clearToken() {
 export function isLoggedIn(): boolean {
   return !!getToken()
 }
+
+// ─── 通用请求函数 ───────────────────────────────────────────────
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
@@ -33,27 +47,23 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   if (res.status === 401) {
-    const err = new Error('Unauthorized')
-    ;(err as any).status = 401
-    throw err
+    throw new ApiError('Unauthorized', 401)
   }
 
   const text = await res.text()
-  let data: any = {}
+  let data: Record<string, unknown> = {}
   if (text) {
     try {
       data = JSON.parse(text)
-    } catch (e) {
+    } catch {
       data = { error: 'Invalid response format' }
     }
   }
 
   if (!res.ok) {
-    const err = new Error(data.error || 'Request failed')
-    ;(err as any).status = res.status
-    throw err
+    throw new ApiError((data.error as string) || 'Request failed', res.status)
   }
-  return data
+  return data as T
 }
 
 // Auth
@@ -71,34 +81,65 @@ export const auth = {
   me: () => request<{ user: { id: number; username: string } }>('/api/auth/me'),
 }
 
-// Attendance
+// ─── 数据模型 ───────────────────────────────────────────────────
+
+export interface Attendance {
+  id: number
+  user_id: number
+  date: string
+  clock_in: string | null
+  clock_out: string | null
+  status: string
+  is_overtime: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface WorkLog {
+  id: number
+  user_id: number
+  date: string
+  content: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AttendanceStats {
+  global_overtime_days: number
+  global_leave_days: number
+  global_remaining: number
+}
+
+// ─── Attendance API ─────────────────────────────────────────────
+
 export const attendance = {
-  clockIn: (isOvertime?: boolean) => request<any>('/api/attendance/clock-in', {
+  clockIn: (isOvertime?: boolean) => request<{ attendance: Attendance }>('/api/attendance/clock-in', {
     method: 'POST',
     body: JSON.stringify({ is_overtime: !!isOvertime }),
   }),
-  setOvertime: (date: string, is_overtime: boolean) => request<any>('/api/attendance/overtime', {
+  setOvertime: (date: string, is_overtime: boolean) => request<{ attendance: Attendance }>('/api/attendance/overtime', {
     method: 'POST',
     body: JSON.stringify({ date, is_overtime }),
   }),
-  clockOut: () => request<any>('/api/attendance/clock-out', { method: 'POST' }),
-  leave: () => request<any>('/api/attendance/leave', { method: 'POST' }),
-  today: () => request<{ attendance: any }>('/api/attendance/today'),
+  clockOut: () => request<{ attendance: Attendance }>('/api/attendance/clock-out', { method: 'POST' }),
+  leave: () => request<{ attendance: Attendance }>('/api/attendance/leave', { method: 'POST' }),
+  today: () => request<{ attendance: Attendance | null }>('/api/attendance/today'),
   range: (start: string, end: string) =>
-    request<{ attendances: any[] }>(`/api/attendance/range?start=${start}&end=${end}`),
-  stats: () => request<{ global_overtime_days: number; global_leave_days: number; global_remaining: number }>('/api/attendance/stats'),
+    request<{ attendances: Attendance[] }>(`/api/attendance/range?start=${start}&end=${end}`),
+  stats: () => request<AttendanceStats>('/api/attendance/stats'),
 }
 
-// Work Logs
+// ─── Work Logs API ──────────────────────────────────────────────
+
 export const workLogs = {
   save: (date: string, content: string) =>
-    request<{ work_log: any }>('/api/work-logs', {
+    request<{ work_log: WorkLog }>('/api/work-logs', {
       method: 'POST',
       body: JSON.stringify({ date, content }),
     }),
-  today: () => request<{ work_log: any }>('/api/work-logs/today'),
+  today: () => request<{ work_log: WorkLog | null }>('/api/work-logs/today'),
   range: (start: string, end: string) =>
-    request<{ work_logs: any[] }>(`/api/work-logs/range?start=${start}&end=${end}`),
+    request<{ work_logs: WorkLog[] }>(`/api/work-logs/range?start=${start}&end=${end}`),
 }
 
 // Todos
@@ -176,10 +217,16 @@ export const checklists = {
     request<{ message: string }>(`/api/checklists?id=${id}`, { method: 'DELETE' }),
 }
 
+export interface SnapshotData {
+  checked?: boolean[]
+  notes?: string[]
+  extras?: { id?: string; text: string; checked?: boolean; note?: string }[]
+}
+
 export const checklistSnapshots = {
   list: (checklistId: number) =>
     request<{ snapshots: ChecklistSnapshot[] }>(`/api/checklist-snapshots?checklist_id=${checklistId}`),
-  create: (checklistId: number, title: string, itemsHash: string, data: any) =>
+  create: (checklistId: number, title: string, itemsHash: string, data: SnapshotData) =>
     request<{ snapshot: ChecklistSnapshot }>('/api/checklist-snapshots', {
       method: 'POST',
       body: JSON.stringify({ checklist_id: checklistId, title, items_hash: itemsHash, data }),

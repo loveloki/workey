@@ -96,8 +96,8 @@ function TodoList() {
       setNewContent('')
       setNewUrl('')
       inputRef.current?.focus()
-    } catch (err: any) {
-      alert(err.message)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '添加失败')
     } finally {
       setAdding(false)
     }
@@ -241,8 +241,8 @@ function TodoItem({
     try {
       await onUpdate({ content: editContent.trim(), url: editUrl.trim() })
       setEditing(false)
-    } catch (err: any) {
-      alert(err.message)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '保存失败')
     } finally {
       setSaving(false)
     }

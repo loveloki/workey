@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect } from 'react'
-import { workLogs as workLogsApi, attendance as attendanceApi, todos as todosApi, history as historyApi, iterationOverrides as overridesApi, type Todo } from '../lib/api'
+import { workLogs as workLogsApi, attendance as attendanceApi, todos as todosApi, history as historyApi, iterationOverrides as overridesApi, type Todo, type Attendance, type WorkLog } from '../lib/api'
 import { getDateRange, formatDate, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration, makeIterationConfig, type IterationConfig, type IterationOverrideMap } from '../lib/date-utils'
 import { settings as settingsApi } from '../lib/api'
 import { MarkdownContent, MarkdownEditor } from '../lib/markdown-editor'
@@ -154,8 +154,8 @@ function HistoryPage() {
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
   const [currentFetchRange, setCurrentFetchRange] = useState({ start: '', end: '' })
-  const [logs, setLogs] = useState<any[]>([])
-  const [attendances, setAttendances] = useState<any[]>([])
+  const [logs, setLogs] = useState<WorkLog[]>([])
+  const [attendances, setAttendances] = useState<Attendance[]>([])
   const [completedTodos, setCompletedTodos] = useState<Todo[]>([])
   const [fetching, setFetching] = useState(false)
   // Iteration config from settings
@@ -294,7 +294,7 @@ function HistoryPage() {
   })
 
   // Merge logs, attendance and todos by date
-  const dateMap = new Map<string, { attendance?: any; log?: any; todos: Todo[] }>()
+  const dateMap = new Map<string, { attendance?: Attendance; log?: WorkLog; todos: Todo[] }>()
   attendances.forEach(a => {
     const entry = dateMap.get(a.date) || { todos: [] }
     entry.attendance = a
@@ -317,7 +317,7 @@ function HistoryPage() {
     const entry = dateMap.get(date)!
     return formatDayMarkdown(
       date,
-      entry.attendance,
+      entry.attendance ?? null,
       entry.log?.content || '',
       entry.todos,
     )
@@ -485,7 +485,13 @@ function HistoryPage() {
   )
 }
 
-function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: { date: string, entry: any, getDayMarkdown: (d: string) => string, onRefresh?: () => void, preset?: string, fetchData: (s: string, e: string) => void, currentRange: { start: string, end: string } }) {
+interface HistoryEntryData {
+  attendance?: Attendance
+  log?: WorkLog
+  todos: Todo[]
+}
+
+function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: { date: string, entry: HistoryEntryData, getDayMarkdown: (d: string) => string, onRefresh?: () => void, preset?: string, fetchData: (s: string, e: string) => void, currentRange: { start: string, end: string } }) {
   const [isEditing, setIsEditing] = useState(false)
   const [logContent, setLogContent] = useState('')
   const [saving, setSaving] = useState(false)
@@ -501,8 +507,8 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
       await workLogsApi.save(date, logContent)
       setIsEditing(false)
       fetchData(currentRange.start, currentRange.end)
-    } catch (e: any) {
-      alert('保存失败: ' + (e.message || '未知错误'))
+    } catch (e: unknown) {
+      alert('保存失败: ' + (e instanceof Error ? e.message : '未知错误'))
     } finally {
       setSaving(false)
     }
@@ -587,7 +593,7 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
             <div className="mt-3 border-t border-dashed border-[var(--color-border)] pt-3">
               <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">§ 已完成待办 §</p>
               <div className="space-y-1">
-                {entry.todos.map((todo: any) => (
+                {entry.todos.map((todo) => (
                   <div key={todo.id} className="flex items-start gap-2 px-1">
                     <div
                       className="w-3.5 h-3.5 mt-0.5 rounded flex items-center justify-center shrink-0"
@@ -637,8 +643,8 @@ function OvertimeBadge({ date, isOvertime, isLeave, onChanged }: { date: string,
     try {
       await attendanceApi.setOvertime(date, !isOvertime)
       onChanged()
-    } catch (e: any) {
-      alert(e.message || '更新失败')
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '更新失败')
     } finally {
       setBusy(false)
     }

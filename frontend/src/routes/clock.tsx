@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect, useCallback } from 'react'
-import { attendance } from '../lib/api'
+import { attendance, type Attendance } from '../lib/api'
 import { formatTime } from '../lib/date-utils'
 
 export const Route = createFileRoute('/clock')({ component: ClockPage })
@@ -34,7 +34,7 @@ function ClockPage() {
 }
 
 function ClockWidget() {
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<Attendance | null>(null)
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState(false)
   const [now, setNow] = useState(new Date())
@@ -62,11 +62,11 @@ function ClockWidget() {
     setActing(true)
     try {
       const res = await attendance.clockIn(overtime ?? isOvertime)
-      setData(res)
+      setData(res.attendance)
       // After clocking in, go to today's work page
       setTimeout(() => navigate({ to: '/' }), 600)
-    } catch (e: any) {
-      alert(e.message)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '操作失败')
     }
     setActing(false)
   }
@@ -76,9 +76,9 @@ function ClockWidget() {
     setActing(true)
     try {
       const res = await attendance.setOvertime(data.date, !data.is_overtime)
-      setData(res)
-    } catch (e: any) {
-      alert(e.message)
+      setData(res.attendance)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '操作失败')
     }
     setActing(false)
   }
@@ -87,9 +87,9 @@ function ClockWidget() {
     setActing(true)
     try {
       const res = await attendance.clockOut()
-      setData(res)
-    } catch (e: any) {
-      alert(e.message)
+      setData(res.attendance)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '操作失败')
     }
     setActing(false)
   }
@@ -98,9 +98,9 @@ function ClockWidget() {
     setActing(true)
     try {
       const res = await attendance.leave()
-      setData(res)
-    } catch (e: any) {
-      alert(e.message)
+      setData(res.attendance)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '操作失败')
     }
     setActing(false)
   }
@@ -179,7 +179,7 @@ function ClockWidget() {
             </span>
           </div>
           <button
-            onClick={clockIn}
+            onClick={() => clockIn()}
             disabled={acting}
             className="font-mono text-sm px-6 py-2 rounded-full transition-colors active:scale-95 disabled:opacity-50"
             style={{ 
