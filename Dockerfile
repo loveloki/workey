@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN pnpm build
 
 # ── Stage 2: Build Go binary ──────────────────────────────
-FROM golang:1.21-alpine AS backend
+FROM golang:1.25-alpine AS backend
 RUN apk add --no-cache git
 WORKDIR /app
 COPY go.mod go.sum ./
