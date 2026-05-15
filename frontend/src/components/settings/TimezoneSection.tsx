@@ -54,7 +54,7 @@ export function TimezoneSection() {
 
   return (
     <Card title="时区设置">
-      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
+      <p className="text-sm mb-4 font-serif text-[var(--color-ink-muted)]">
         设置你的工作时区，影响打卡时间的显示。
       </p>
       {isSuccess && (
@@ -62,8 +62,7 @@ export function TimezoneSection() {
           <select
             value={timezone}
             onChange={e => setTimezone(e.target.value)}
-            className="font-mono text-sm px-3 py-2 rounded-md bg-[var(--color-surface-strong)] w-full sm:w-auto"
-            style={{ border: '1px solid var(--color-border)', borderRadius: '6px' }}
+            className="font-mono text-sm px-3 py-2 rounded-md bg-[var(--color-surface-strong)] w-full sm:w-auto border border-[var(--color-border)]"
           >
             {TIMEZONE_OPTIONS.map(opt => (
               <option key={opt.value} value={opt.value}>
@@ -74,13 +73,14 @@ export function TimezoneSection() {
           <button
             onClick={save}
             disabled={saveMut.isPending}
-            className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
-            style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
+            className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 bg-[var(--color-solid)]"
           >
             {saveMut.isPending ? '保存中...' : '保存'}
           </button>
           {msg && (
-            <span className="font-mono text-sm" style={{ color: msg === '已保存' ? 'var(--color-ink-muted)' : 'var(--color-danger-text)' }}>
+            <span
+              className={`font-mono text-sm ${msg === '已保存' ? 'text-[var(--color-ink-muted)]' : 'text-[var(--color-danger-text)]'}`}
+            >
               {msg}
             </span>
           )}

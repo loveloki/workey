@@ -96,12 +96,12 @@ export function PasskeySection() {
 
   return (
     <Card title="通行密钥">
-      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
+      <p className="text-sm mb-4 font-serif text-[var(--color-ink-muted)]">
         通行密钥让你无需输入密码即可登录，支持指纹、面容识别等方式。
       </p>
 
       {isLoading ? (
-        <p className="font-mono text-sm" style={{ color: 'var(--color-ink-muted)' }}>
+        <p className="font-mono text-sm text-[var(--color-ink-muted)]">
           加载中...
         </p>
       ) : (
@@ -111,25 +111,19 @@ export function PasskeySection() {
               {passkeyList.map(pk => (
                 <div
                   key={pk.id}
-                  className="flex items-center justify-between py-2.5 px-3 rounded-md"
-                  style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+                  className="flex items-center justify-between py-2.5 px-3 rounded-md bg-[var(--color-surface)] border border-[var(--color-border)]"
                 >
                   <div>
-                    <div className="font-mono text-sm font-semibold" style={{ color: 'var(--color-ink)' }}>
+                    <div className="font-mono text-sm font-semibold text-[var(--color-ink)]">
                       {pk.name}
                     </div>
-                    <div className="font-mono text-xs" style={{ color: 'var(--color-ink-muted)' }}>
+                    <div className="font-mono text-xs text-[var(--color-ink-muted)]">
                       添加于 {formatDate(pk.created_at)} · 上次使用 {formatDate(pk.last_used_at)}
                     </div>
                   </div>
                   <button
                     onClick={() => handleDelete(pk.id)}
-                    className="font-mono text-sm px-3 py-1 rounded-md transition-colors"
-                    style={{
-                      color: 'var(--color-danger-text)',
-                      border: '1px solid var(--color-danger-border)',
-                      borderRadius: '6px',
-                    }}
+                    className="font-mono text-sm px-3 py-1 rounded-md transition-colors text-[var(--color-danger-text)] border border-[var(--color-danger-border)]"
                   >
                     删除
                   </button>
@@ -144,22 +138,22 @@ export function PasskeySection() {
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="通行密钥名称（如 MacBook、iPhone）"
-              className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)] w-full sm:w-72"
-              style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
+              className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)] w-full sm:w-72 border border-[var(--color-border)] rounded-md outline-none"
               onKeyDown={e => e.key === 'Enter' && void handleAdd()}
             />
             <button
               onClick={handleAdd}
               disabled={adding}
-              className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
-              style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
+              className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 bg-[var(--color-solid)]"
             >
               {adding ? '添加中...' : '添加通行密钥'}
             </button>
           </div>
 
           {msg && (
-            <p className="font-mono text-sm mt-3" style={{ color: isError ? 'var(--color-danger-text)' : 'var(--color-ink-muted)' }}>
+            <p
+              className={`font-mono text-sm mt-3 ${isError ? 'text-[var(--color-danger-text)]' : 'text-[var(--color-ink-muted)]'}`}
+            >
               {msg}
             </p>
           )}

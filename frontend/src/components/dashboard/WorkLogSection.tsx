@@ -32,7 +32,7 @@ export function WorkLogSection() {
       <p className="mb-4 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">§ 工作内容 §</p>
 
       {isLoading ? (
-        <p className="text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
+        <p className="text-sm text-[var(--color-ink-muted)] font-serif">加载中...</p>
       ) : (
         <>
           <div className="mb-4">
@@ -47,12 +47,11 @@ export function WorkLogSection() {
             <button
               onClick={save}
               disabled={saveMut.isPending}
-              className="rounded-md px-5 py-2.5 font-mono text-sm hover:bg-[var(--color-solid-hover)] disabled:opacity-50"
-              style={{ background: 'var(--color-solid)', color: 'var(--color-solid-text)' }}
+              className="rounded-md px-5 py-2.5 font-mono text-sm hover:bg-[var(--color-solid-hover)] disabled:opacity-50 bg-[var(--color-solid)] text-[var(--color-solid-text)]"
             >
               {saveMut.isPending ? '保存中...' : '保存'}
             </button>
-            {saved && <span className="text-sm" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>✓ 已保存</span>}
+            {saved && <span className="text-sm font-serif text-[var(--color-ink-muted)]">✓ 已保存</span>}
           </div>
         </>
       )}

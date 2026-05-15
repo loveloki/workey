@@ -59,8 +59,7 @@ function IterationSelector({
     <button
       onClick={() => onSelect(target)}
       disabled={disabled}
-      className="rounded-md border px-2 py-1.5 font-mono text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--color-surface-hover)]"
-      style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+      className="rounded-md border border-[var(--color-border)] px-2 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-30"
       title={label}
     >
       {label}
@@ -70,7 +69,7 @@ function IterationSelector({
   return (
     <div className="mb-4 space-y-2">
       {/* Row 1: nav arrows + window buttons — scrollable on narrow screens */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin' }}>
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:thin]">
         {navBtn('«', maxIter, selectedIter === maxIter)}
         {navBtn('‹', clamp(selectedIter + 1), selectedIter === maxIter)}
 
@@ -98,7 +97,7 @@ function IterationSelector({
       {/* Row 2: jump input + date range hint */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-1.5">
-          <span className="font-mono text-xs" style={{ color: 'var(--color-ink-muted)' }}>跳转到</span>
+          <span className="font-mono text-xs text-[var(--color-ink-muted)]">跳转到</span>
           <input
             type="number"
             min={minIter}
@@ -107,18 +106,16 @@ function IterationSelector({
             onChange={e => setJumpValue(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleJump()}
             placeholder={`${minIter}–${maxIter}`}
-            className="font-mono text-xs px-2 py-1 w-20 bg-[var(--color-surface-strong)] text-center"
-            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none', color: 'var(--color-ink)' }}
+            className="w-20 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-strong)] px-2 py-1 text-center font-mono text-xs text-[var(--color-ink)] outline-none"
           />
           <button
             onClick={handleJump}
-            className="font-mono text-xs px-2.5 py-1 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
-            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+            className="rounded-md border border-[var(--color-border)] px-2.5 py-1 font-mono text-xs text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-hover)]"
           >
             Go
           </button>
         </div>
-        <span className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>
+        <span className="font-mono text-xs text-[var(--color-ink-faint)]">
           {currentRange.start} ~ {currentRange.end}
         </span>
       </div>
@@ -286,15 +283,14 @@ function HistoryPage() {
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
           <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">历史记录</p>
-          <h1 className="text-3xl font-normal tracking-tight text-[var(--color-ink)]" style={{ fontFamily: 'Georgia, serif' }}>
+          <h1 className="font-serif text-3xl font-normal tracking-tight text-[var(--color-ink)]">
             工作回顾
           </h1>
         </div>
         {sortedDates.length > 0 && (
           <button
             onClick={downloadAll}
-            className="mt-2 flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] shrink-0 whitespace-nowrap"
-            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+            className="mt-2 flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-[var(--color-border)] px-3 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-hover)]"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -391,7 +387,7 @@ function HistoryPage() {
             onChange={e => setCustomStart(e.target.value)}
             className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3.5 font-mono text-sm text-[var(--color-ink)] focus:border-[var(--color-border-focus)] focus:outline-none"
           />
-          <span className="text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>至</span>
+          <span className="font-serif text-sm text-[var(--color-ink-muted)]">至</span>
           <input
             type="date"
             value={customEnd}
@@ -412,7 +408,7 @@ function HistoryPage() {
         <p className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
       ) : sortedDates.length === 0 ? (
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-8 text-center">
-          <p className="text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>暂无记录</p>
+          <p className="font-serif text-sm text-[var(--color-ink-muted)]">暂无记录</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -463,8 +459,7 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
           {!isEditing && (
             <button
               onClick={handleEdit}
-              className="font-mono text-xs px-2 py-1 rounded transition-colors hover:bg-[var(--color-surface-hover)] text-[var(--color-ink-muted)]"
-              style={{ border: '1px solid var(--color-border)' }}
+              className="rounded border border-[var(--color-border)] px-2 py-1 font-mono text-xs text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-hover)]"
             >
               编辑
             </button>
@@ -518,11 +513,11 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
       ) : (
         <>
           {entry.log ? (
-            <div className="markdown-body text-sm text-[var(--color-ink-secondary)] mt-2" style={{ fontFamily: 'Georgia, serif' }}>
+            <div className="markdown-body mt-2 font-serif text-sm text-[var(--color-ink-secondary)]">
               <MarkdownContent content={entry.log.content} />
             </div>
           ) : (
-            <p className="m-0 mt-2 text-sm italic text-[var(--color-ink-faint)]" style={{ fontFamily: 'Georgia, serif' }}>
+            <p className="m-0 mt-2 font-serif text-sm italic text-[var(--color-ink-faint)]">
               未记录工作内容
             </p>
           )}
@@ -534,8 +529,7 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
                 {entry.todos.map((todo) => (
                   <div key={todo.id} className="flex items-start gap-2 px-1">
                     <div
-                      className="w-3.5 h-3.5 mt-0.5 rounded flex items-center justify-center shrink-0"
-                      style={{ background: 'var(--color-solid)' }}
+                      className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded bg-[var(--color-solid)]"
                     >
                       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--color-solid-text)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="20 6 9 17 4 12" />
@@ -543,8 +537,7 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
                     </div>
                     <div className="flex-1 min-w-0">
                       <span
-                        className="text-sm"
-                        style={{ color: 'var(--color-ink-muted)', fontFamily: 'Georgia, serif' }}
+                        className="text-sm font-serif text-[var(--color-ink-muted)]"
                       >
                         {todo.content}
                       </span>
@@ -553,8 +546,7 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
                           href={todo.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-mono text-xs ml-2"
-                          style={{ color: 'var(--color-ink-faint)', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+                          className="ml-2 font-mono text-xs text-[var(--color-ink-faint)] underline underline-offset-2"
                         >
                           ⇗
                         </a>
@@ -589,12 +581,7 @@ function OvertimeBadge({ date, isOvertime, isLeave }: { date: string, isOvertime
       onClick={toggle}
       disabled={overtimeMut.isPending}
       title={isOvertime ? '点击取消加班标记' : '点击标记为加班'}
-      className="px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors disabled:opacity-50"
-      style={{
-        background: isOvertime ? '#fee2e2' : 'transparent',
-        color: isOvertime ? '#dc2626' : 'var(--color-ink-faint)',
-        border: isOvertime ? '1px solid transparent' : '1px dashed var(--color-border)',
-      }}
+      className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors disabled:opacity-50 ${isOvertime ? 'border border-transparent bg-red-100 text-red-600' : 'border border-dashed border-[var(--color-border)] bg-transparent text-[var(--color-ink-faint)]'}`}
     >
       {isOvertime ? '加班' : '+ 加班'}
     </button>

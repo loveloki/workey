@@ -52,13 +52,14 @@ export function PasswordSection() {
           <button
             type="submit"
             disabled={saving}
-            className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
-            style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
+            className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 bg-[var(--color-solid)]"
           >
             {saving ? '修改中...' : '修改密码'}
           </button>
           {msg && (
-            <span className="font-mono text-sm" style={{ color: isError ? 'var(--color-danger-text)' : 'var(--color-ink-muted)' }}>
+            <span
+              className={`font-mono text-sm ${isError ? 'text-[var(--color-danger-text)]' : 'text-[var(--color-ink-muted)]'}`}
+            >
               {msg}
             </span>
           )}

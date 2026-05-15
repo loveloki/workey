@@ -11,8 +11,7 @@ export function CopyButton({ getText, className = '' }: { getText: () => Promise
   return (
     <button
       onClick={handleCopy}
-      className={`font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] shrink-0 whitespace-nowrap ${className}`}
-      style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+      className={`font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] shrink-0 whitespace-nowrap border border-[var(--color-border)] text-[var(--color-ink-muted)] ${className}`}
       title="复制为 Markdown"
     >
       {copied ? '✓ 已复制' : (

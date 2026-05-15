@@ -11,13 +11,18 @@ export function useAutoGrow<T extends HTMLTextAreaElement>(value: string) {
   return ref
 }
 
-export function AutoTextarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function AutoTextarea({
+  className,
+  style,
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   const ref = useAutoGrow<HTMLTextAreaElement>(String(props.value ?? ''))
   return (
     <textarea
       ref={ref}
       {...props}
-      style={{ ...(props.style || {}), overflow: 'hidden', resize: 'none' }}
+      className={['overflow-hidden', 'resize-none', className].filter(Boolean).join(' ')}
+      style={style}
     />
   )
 }

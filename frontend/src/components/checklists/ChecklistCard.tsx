@@ -57,14 +57,7 @@ export function ChecklistCard({
   }
 
   return (
-    <div
-      className="rounded-lg p-4 group transition-colors flex flex-col"
-      style={{
-        background: 'var(--color-surface-strong)',
-        border: '1px solid var(--color-border)',
-        borderRadius: '8px',
-      }}
-    >
+    <div className="rounded-lg p-4 group transition-colors flex flex-col bg-[var(--color-surface-strong)] border border-[var(--color-border)]">
       <h3 className="font-mono text-base font-medium text-[var(--color-ink)] mb-2 flex items-start justify-between">
         <span className="flex items-center gap-2">
           <svg
@@ -76,15 +69,14 @@ export function ChecklistCard({
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="shrink-0 mt-0.5"
-            style={{ color: 'var(--color-ink-muted)' }}
+            className="shrink-0 mt-0.5 text-[var(--color-ink-muted)]"
           >
             <path d="M9 11l3 3L22 4" />
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
           </svg>
           {checklist.title}
         </span>
-        <span className="font-mono text-xs font-normal" style={{ color: 'var(--color-ink-faint)' }}>
+        <span className="font-mono text-xs font-normal text-[var(--color-ink-faint)]">
           {parsedItems.length} 项
         </span>
       </h3>
@@ -92,51 +84,45 @@ export function ChecklistCard({
       <div className="flex-1 mb-3">
         <ul className="space-y-1.5">
           {parsedItems.slice(0, 4).map((it, idx) => (
-            <li key={idx} className="font-mono text-xs" style={{ color: 'var(--color-ink-muted)' }}>
+            <li key={idx} className="font-mono text-xs text-[var(--color-ink-muted)]">
               <div className="flex items-start gap-2">
-                <span
-                  className="shrink-0 mt-0.5"
-                  style={{ color: 'var(--color-border-strong, var(--color-border))' }}
-                >
+                <span className="shrink-0 mt-0.5 text-[var(--color-border-strong,var(--color-border))]">
                   ·
                 </span>
                 <span className="line-clamp-1">{it.text}</span>
               </div>
               {it.note && (
-                <p className="pl-3.5 line-clamp-1" style={{ fontSize: '10.5px', color: 'var(--color-ink-faint)' }}>
+                <p className="pl-3.5 line-clamp-1 text-[10.5px] text-[var(--color-ink-faint)]">
                   {it.note}
                 </p>
               )}
             </li>
           ))}
           {parsedItems.length > 4 && (
-            <li className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>
+            <li className="font-mono text-xs text-[var(--color-ink-faint)]">
               ... 还有 {parsedItems.length - 4} 项
             </li>
           )}
         </ul>
       </div>
 
-      <div className="flex items-center gap-2 pt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+      <div className="flex items-center gap-2 pt-3 border-t border-t-[var(--color-border)]">
         <button
           onClick={onUse}
-          className="font-mono text-xs px-4 py-1.5 rounded-md text-[var(--color-solid-text)] transition-colors"
-          style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
+          className="font-mono text-xs px-4 py-1.5 rounded-md text-[var(--color-solid-text)] transition-colors bg-[var(--color-solid)]"
         >
           开始检查
         </button>
         <button
           onClick={() => setEditing(true)}
-          className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
-          style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+          className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
         >
           编辑
         </button>
         {!confirmDelete ? (
           <button
             onClick={() => setConfirmDelete(true)}
-            className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] ml-auto"
-            style={{ color: 'var(--color-danger-text, #c00)' }}
+            className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] ml-auto text-[var(--color-danger-text,#c00)]"
           >
             删除
           </button>
@@ -144,15 +130,13 @@ export function ChecklistCard({
           <div className="flex items-center gap-1 ml-auto">
             <button
               onClick={handleDelete}
-              className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors"
-              style={{ background: 'var(--color-danger-text, #c00)', color: '#fff', borderRadius: '6px' }}
+              className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors bg-[var(--color-danger-text,#c00)] text-white"
             >
               确认删除
             </button>
             <button
               onClick={() => setConfirmDelete(false)}
-              className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
-              style={{ color: 'var(--color-ink-muted)' }}
+              className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] text-[var(--color-ink-muted)]"
             >
               取消
             </button>

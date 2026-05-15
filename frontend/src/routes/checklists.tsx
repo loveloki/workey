@@ -23,8 +23,7 @@ function ChecklistsPage() {
           § 检查清单
         </p>
         <h1
-          className="text-3xl font-normal tracking-tight text-[var(--color-ink)] sm:text-4xl"
-          style={{ fontFamily: 'Georgia, serif' }}
+          className="text-3xl font-normal tracking-tight text-[var(--color-ink)] sm:text-4xl font-serif"
         >
           Checklists
         </h1>
@@ -63,8 +62,7 @@ function ChecklistManager() {
       {!showCreate && (
         <button
           onClick={() => setShowCreate(true)}
-          className="font-mono text-sm px-5 py-2.5 rounded-md text-[var(--color-solid-text)] transition-colors mb-6"
-          style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
+          className="font-mono text-sm px-5 py-2.5 rounded-md text-[var(--color-solid-text)] transition-colors mb-6 bg-[var(--color-solid)]"
         >
           + 新建清单
         </button>
@@ -75,15 +73,15 @@ function ChecklistManager() {
       )}
 
       {isLoading ? (
-        <p className="font-mono text-sm text-center py-8" style={{ color: 'var(--color-ink-muted)' }}>
+        <p className="font-mono text-sm text-center py-8 text-[var(--color-ink-muted)]">
           加载中...
         </p>
       ) : items.length === 0 && !showCreate ? (
-        <div className="rounded-lg py-12 text-center" style={{ border: '1px dashed var(--color-border)' }}>
-          <p className="font-mono text-sm" style={{ color: 'var(--color-ink-faint)' }}>
+        <div className="rounded-lg py-12 text-center border border-dashed border-[var(--color-border)]">
+          <p className="font-mono text-sm text-[var(--color-ink-faint)]">
             暂无检查清单
           </p>
-          <p className="text-sm mt-1" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-faint)' }}>
+          <p className="text-sm mt-1 font-serif text-[var(--color-ink-faint)]">
             点击上方按钮创建你的第一个清单
           </p>
         </div>

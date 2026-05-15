@@ -58,30 +58,30 @@ export function DataSection() {
 
   return (
     <Card title="数据管理">
-      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
+      <p className="text-sm mb-4 font-serif text-[var(--color-ink-muted)]">
         导出所有考勤、工作日志和待办等数据为 ZIP 压缩包，或从 ZIP 文件导入数据。
       </p>
       <div className="flex flex-col sm:flex-row items-start gap-3">
         <button
           onClick={handleExport}
           disabled={exporting}
-          className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
-          style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
+          className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 bg-[var(--color-solid)]"
         >
           {exporting ? '导出中...' : '↓ 导出数据'}
         </button>
         <button
           onClick={handleImport}
           disabled={importing}
-          className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-surface-strong)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
-          style={{ border: '1px solid var(--color-border)', borderRadius: '6px' }}
+          className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-surface-strong)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-50 border border-[var(--color-border)]"
         >
           {importing ? '导入中...' : '↑ 导入数据'}
         </button>
         <input ref={fileRef} type="file" accept=".zip" onChange={onFileChange} className="hidden" />
       </div>
       {msg && (
-        <p className="font-mono text-sm mt-3" style={{ color: isError ? 'var(--color-danger-text)' : 'var(--color-ink-muted)' }}>
+        <p
+          className={`font-mono text-sm mt-3 ${isError ? 'text-[var(--color-danger-text)]' : 'text-[var(--color-ink-muted)]'}`}
+        >
           {msg}
         </p>
       )}

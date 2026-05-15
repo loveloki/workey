@@ -31,7 +31,7 @@ export function ThemeSection() {
 
   return (
     <Card title="主题设置">
-      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
+      <p className="text-sm mb-4 font-serif text-[var(--color-ink-muted)]">
         选择界面外观主题。「跟随系统」将根据你的操作系统偏好自动切换。
       </p>
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -41,20 +41,20 @@ export function ThemeSection() {
               key={opt.value}
               onClick={() => handleChange(opt.value)}
               disabled={saving}
-              className="font-mono text-sm px-4 py-2 rounded-md transition-colors disabled:opacity-50"
-              style={{
-                background: theme === opt.value ? 'var(--color-solid)' : 'var(--color-surface-strong)',
-                color: theme === opt.value ? 'var(--color-solid-text)' : 'var(--color-ink)',
-                border: theme === opt.value ? '1px solid var(--color-solid)' : '1px solid var(--color-border)',
-                borderRadius: '6px',
-              }}
+              className={`font-mono text-sm px-4 py-2 rounded-md transition-colors disabled:opacity-50 ${
+                theme === opt.value
+                  ? 'bg-[var(--color-solid)] text-[var(--color-solid-text)] border border-[var(--color-solid)]'
+                  : 'bg-[var(--color-surface-strong)] text-[var(--color-ink)] border border-[var(--color-border)]'
+              }`}
             >
               {opt.icon} {opt.label}
             </button>
           ))}
         </div>
         {msg && (
-          <span className="font-mono text-sm" style={{ color: msg === '已保存' ? 'var(--color-ink-muted)' : 'var(--color-danger-text)' }}>
+          <span
+            className={`font-mono text-sm ${msg === '已保存' ? 'text-[var(--color-ink-muted)]' : 'text-[var(--color-danger-text)]'}`}
+          >
             {msg}
           </span>
         )}

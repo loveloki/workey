@@ -43,37 +43,34 @@ export function DeleteDataSection() {
 
   return (
     <Card title="危险操作">
-      <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-danger-text)' }}>
+      <p className="text-sm mb-4 font-serif text-[var(--color-danger-text)]">
         删除所有数据（考勤、工作日志、待办事项），此操作不可恢复。
       </p>
 
       {step === 'idle' && (
         <button
           onClick={() => setStep('confirm')}
-          className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors"
-          style={{ background: 'var(--color-danger)', borderRadius: '6px' }}
+          className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors bg-[var(--color-danger)]"
         >
           🗑 删除所有数据
         </button>
       )}
 
       {step === 'confirm' && (
-        <div className="rounded-lg p-4" style={{ background: 'var(--color-danger-bg)', border: '1px solid var(--color-danger-border)' }}>
-          <p className="font-mono text-sm font-semibold mb-3" style={{ color: 'var(--color-danger-strong)' }}>
+        <div className="rounded-lg p-4 bg-[var(--color-danger-bg)] border border-[var(--color-danger-border)]">
+          <p className="font-mono text-sm font-semibold mb-3 text-[var(--color-danger-strong)]">
             ⚠️ 确认删除所有数据？此操作不可撤销！
           </p>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setStep('password')}
-              className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors"
-              style={{ background: 'var(--color-danger)', borderRadius: '6px' }}
+              className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors bg-[var(--color-danger)]"
             >
               确认删除
             </button>
             <button
               onClick={cancel}
-              className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-surface-strong)] transition-colors hover:bg-[var(--color-surface-hover)]"
-              style={{ border: '1px solid var(--color-border)', borderRadius: '6px' }}
+              className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-surface-strong)] transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)]"
             >
               取消
             </button>
@@ -82,8 +79,8 @@ export function DeleteDataSection() {
       )}
 
       {step === 'password' && (
-        <div className="rounded-lg p-4" style={{ background: 'var(--color-danger-bg)', border: '1px solid var(--color-danger-border)' }}>
-          <p className="font-mono text-sm font-semibold mb-3" style={{ color: 'var(--color-danger-strong)' }}>
+        <div className="rounded-lg p-4 bg-[var(--color-danger-bg)] border border-[var(--color-danger-border)]">
+          <p className="font-mono text-sm font-semibold mb-3 text-[var(--color-danger-strong)]">
             🔒 请输入账号密码以确认删除
           </p>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -92,23 +89,20 @@ export function DeleteDataSection() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="输入密码"
-              className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)] w-full sm:w-64"
-              style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
+              className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)] w-full sm:w-64 border border-[var(--color-border)] rounded-md outline-none"
               onKeyDown={e => e.key === 'Enter' && void handleDelete()}
               autoFocus
             />
             <button
               onClick={handleDelete}
               disabled={deleting}
-              className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
-              style={{ background: 'var(--color-danger)', borderRadius: '6px' }}
+              className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 bg-[var(--color-danger)]"
             >
               {deleting ? '删除中...' : '确认删除'}
             </button>
             <button
               onClick={cancel}
-              className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-surface-strong)] transition-colors hover:bg-[var(--color-surface-hover)]"
-              style={{ border: '1px solid var(--color-border)', borderRadius: '6px' }}
+              className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-surface-strong)] transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)]"
             >
               取消
             </button>
@@ -117,7 +111,9 @@ export function DeleteDataSection() {
       )}
 
       {msg && (
-        <p className="font-mono text-sm mt-3" style={{ color: isError ? 'var(--color-danger-text)' : 'var(--color-ink-muted)' }}>
+        <p
+          className={`font-mono text-sm mt-3 ${isError ? 'text-[var(--color-danger-text)]' : 'text-[var(--color-ink-muted)]'}`}
+        >
           {msg}
         </p>
       )}

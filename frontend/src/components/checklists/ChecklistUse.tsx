@@ -170,8 +170,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
     <div>
       <button
         onClick={onBack}
-        className="font-mono text-sm flex items-center gap-1 mb-4 transition-colors hover:text-[var(--color-ink)]"
-        style={{ color: 'var(--color-ink-muted)' }}
+        className="font-mono text-sm flex items-center gap-1 mb-4 transition-colors hover:text-[var(--color-ink)] text-[var(--color-ink-muted)]"
       >
         <svg
           width="16"
@@ -189,17 +188,15 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
       </button>
 
       <div
-        className="rounded-lg p-6"
-        style={{
-          background: 'var(--color-surface-strong)',
-          border: allDone ? '2px solid #22c55e' : '1px solid var(--color-border)',
-          borderRadius: '8px',
-        }}
+        className={
+          'rounded-lg p-6 bg-[var(--color-surface-strong)] ' +
+          (allDone ? 'border-2 border-[#22c55e]' : 'border border-[var(--color-border)]')
+        }
       >
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="font-mono text-xl font-medium text-[var(--color-ink)] mb-1">{checklist.title}</h2>
-            <p className="font-mono text-xs" style={{ color: 'var(--color-ink-muted)' }}>
+            <p className="font-mono text-xs text-[var(--color-ink-muted)]">
               {checkedCount} / {totalCount} 项已填写
               {allDone && ' ✅ 全部完成！'}
             </p>
@@ -207,21 +204,20 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
           {(checkedCount > 0 || notes.some(n => n.trim() !== '')) && (
             <button
               onClick={startNewRun}
-              className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
-              style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+              className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
             >
               {viewingRunId ? '新建一份' : '重置'}
             </button>
           )}
         </div>
 
-        <div className="w-full h-1.5 rounded-full mb-6 overflow-hidden" style={{ background: 'var(--color-border)' }}>
+        <div className="w-full h-1.5 rounded-full mb-6 overflow-hidden bg-[var(--color-border)]">
           <div
-            className="h-full rounded-full transition-all duration-300"
-            style={{
-              width: `${progress}%`,
-              background: allDone ? '#22c55e' : 'var(--color-solid)',
-            }}
+            className={
+              'h-full rounded-full transition-all duration-300 ' +
+              (allDone ? 'bg-[#22c55e]' : 'bg-[var(--color-solid)]')
+            }
+            style={{ width: `${progress}%` }}
           />
         </div>
 
@@ -236,10 +232,10 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                   onClick={() => setEditingNote(editing ? null : idx)}
                 >
                   <span
-                    className="mt-0.5 w-5 h-5 rounded flex items-center justify-center shrink-0"
-                    style={{
-                      color: done ? '#22c55e' : 'var(--color-ink-faint)',
-                    }}
+                    className={
+                      'mt-0.5 w-5 h-5 rounded flex items-center justify-center shrink-0 ' +
+                      (done ? 'text-[#22c55e]' : 'text-[var(--color-ink-faint)]')
+                    }
                     aria-hidden
                   >
                     {done ? (
@@ -256,24 +252,17 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     ) : (
-                      <span className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>
+                      <span className="font-mono text-xs text-[var(--color-ink-faint)]">
                         {idx + 1}
                       </span>
                     )}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="font-mono text-sm" style={{ color: 'var(--color-ink)', wordBreak: 'break-word' }}>
+                    <p className="font-mono text-sm text-[var(--color-ink)] break-words">
                       {it.text}
                     </p>
                     {it.note && (
-                      <p
-                        className="font-mono mt-0.5"
-                        style={{
-                          fontSize: '11px',
-                          color: 'var(--color-ink-faint)',
-                          wordBreak: 'break-word',
-                        }}
-                      >
+                      <p className="font-mono mt-0.5 text-[11px] text-[var(--color-ink-faint)] break-words">
                         {it.note}
                       </p>
                     )}
@@ -287,14 +276,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                       placeholder="输入备注... (Esc 收起)"
                       rows={2}
                       autoFocus
-                      className="font-mono text-xs w-full px-2.5 py-1.5 bg-[var(--color-surface-strong)]"
-                      style={{
-                        border: '1px solid var(--color-border)',
-                        borderRadius: '6px',
-                        outline: 'none',
-                        color: 'var(--color-ink-secondary)',
-                        minHeight: '2.5rem',
-                      }}
+                      className="font-mono text-xs w-full px-2.5 py-1.5 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none text-[var(--color-ink-secondary)] min-h-[2.5rem]"
                       onKeyDown={e => {
                         if (e.key === 'Escape') setEditingNote(null)
                       }}
@@ -302,10 +284,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                   </div>
                 ) : notes[idx] ? (
                   <div className="pl-11 pr-3 pb-2.5 cursor-pointer" onClick={() => setEditingNote(idx)}>
-                    <p
-                      className="font-mono text-xs whitespace-pre-wrap"
-                      style={{ color: 'var(--color-ink-muted)', wordBreak: 'break-word' }}
-                    >
+                    <p className="font-mono text-xs whitespace-pre-wrap text-[var(--color-ink-muted)] break-words">
                       📝 {notes[idx]}
                     </p>
                   </div>
@@ -315,8 +294,8 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
           })}
 
           {extras.length > 0 && (
-            <div className="pt-2 mt-2" style={{ borderTop: '1px dashed var(--color-border)' }}>
-              <p className="font-mono text-xs px-3 py-1" style={{ color: 'var(--color-ink-faint)' }}>
+            <div className="pt-2 mt-2 border-t border-dashed border-t-[var(--color-border)]">
+              <p className="font-mono text-xs px-3 py-1 text-[var(--color-ink-faint)]">
                 临时添加（{extras.length}）
               </p>
               {extras.map(extra => {
@@ -332,8 +311,10 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                       onClick={() => setEditingExtraNote(editing ? null : extra.id)}
                     >
                       <span
-                        className="mt-0.5 w-5 h-5 rounded flex items-center justify-center shrink-0"
-                        style={{ color: done ? '#22c55e' : 'var(--color-ink-faint)' }}
+                        className={
+                          'mt-0.5 w-5 h-5 rounded flex items-center justify-center shrink-0 ' +
+                          (done ? 'text-[#22c55e]' : 'text-[var(--color-ink-faint)]')
+                        }
                         aria-hidden
                       >
                         {done ? (
@@ -353,10 +334,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                           '+'
                         )}
                       </span>
-                      <span
-                        className="font-mono text-sm flex-1"
-                        style={{ color: 'var(--color-ink)', wordBreak: 'break-word' }}
-                      >
+                      <span className="font-mono text-sm flex-1 text-[var(--color-ink)] break-words">
                         {extra.text}
                       </span>
                       <button
@@ -364,8 +342,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                           e.stopPropagation()
                           removeExtra(extra.id)
                         }}
-                        className="shrink-0 font-mono text-xs px-1.5 py-0.5 rounded transition-colors hover:bg-[var(--color-surface-strong)]"
-                        style={{ color: 'var(--color-danger-text, #c00)' }}
+                        className="shrink-0 font-mono text-xs px-1.5 py-0.5 rounded transition-colors hover:bg-[var(--color-surface-strong)] text-[var(--color-danger-text,#c00)]"
                         title="删除临时项"
                       >
                         ✕
@@ -381,14 +358,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                           placeholder="输入备注..."
                           rows={2}
                           autoFocus
-                          className="font-mono text-xs w-full px-2.5 py-1.5 bg-[var(--color-surface-strong)]"
-                          style={{
-                            border: '1px solid var(--color-border)',
-                            borderRadius: '6px',
-                            outline: 'none',
-                            color: 'var(--color-ink-secondary)',
-                            minHeight: '2.5rem',
-                          }}
+                          className="font-mono text-xs w-full px-2.5 py-1.5 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none text-[var(--color-ink-secondary)] min-h-[2.5rem]"
                           onKeyDown={e => {
                             if (e.key === 'Escape') setEditingExtraNote(null)
                           }}
@@ -399,10 +369,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                         className="pl-11 pr-3 pb-2.5 cursor-pointer"
                         onClick={() => setEditingExtraNote(extra.id)}
                       >
-                        <p
-                          className="font-mono text-xs whitespace-pre-wrap"
-                          style={{ color: 'var(--color-ink-muted)', wordBreak: 'break-word' }}
-                        >
+                        <p className="font-mono text-xs whitespace-pre-wrap text-[var(--color-ink-muted)] break-words">
                           📝 {extra.note}
                         </p>
                       </div>
@@ -413,9 +380,9 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
             </div>
           )}
 
-          <div className="pt-3 mt-2" style={{ borderTop: '1px dashed var(--color-border)' }}>
+          <div className="pt-3 mt-2 border-t border-dashed border-t-[var(--color-border)]">
             <div className="flex items-center gap-2 px-3">
-              <span className="font-mono text-sm shrink-0" style={{ color: 'var(--color-ink-faint)' }}>
+              <span className="font-mono text-sm shrink-0 text-[var(--color-ink-faint)]">
                 +
               </span>
               <input
@@ -431,14 +398,12 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                   }
                 }}
                 placeholder="临时添加检查项（仅本次进度使用，Enter 添加）"
-                className="font-mono text-sm flex-1 px-2.5 py-1.5 bg-[var(--color-surface-strong)]"
-                style={{ border: '1px dashed var(--color-border)', borderRadius: '6px', outline: 'none' }}
+                className="font-mono text-sm flex-1 px-2.5 py-1.5 bg-[var(--color-surface-strong)] border border-dashed border-[var(--color-border)] rounded-md outline-none"
               />
               <button
                 onClick={addExtra}
                 disabled={!newExtraText.trim()}
-                className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-40"
-                style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+                className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-40 border border-[var(--color-border)] text-[var(--color-ink-muted)]"
               >
                 添加
               </button>
@@ -447,24 +412,17 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
         </div>
 
         {allDone && (
-          <div className="mt-6 pt-4 text-center" style={{ borderTop: '1px solid var(--color-border)' }}>
+          <div className="mt-6 pt-4 text-center border-t border-t-[var(--color-border)]">
             <p className="text-2xl mb-1">🎉</p>
-            <p className="font-mono text-sm" style={{ color: '#22c55e', fontWeight: 500 }}>
+            <p className="font-mono text-sm text-[#22c55e] font-medium">
               所有项目均已填写完毕
             </p>
           </div>
         )}
       </div>
 
-      <div
-        className="rounded-lg p-4 mt-4"
-        style={{
-          background: 'var(--color-surface-strong)',
-          border: '1px solid var(--color-border)',
-          borderRadius: '8px',
-        }}
-      >
-        <p className="font-mono text-xs mb-2" style={{ color: 'var(--color-ink-muted)' }}>
+      <div className="rounded-lg p-4 mt-4 bg-[var(--color-surface-strong)] border border-[var(--color-border)]">
+        <p className="font-mono text-xs mb-2 text-[var(--color-ink-muted)]">
           {viewingRunId
             ? '📂 正在查看已保存的记录，可修改后另存一份'
             : '💾 保存当前进度为一份快照（云端保存）'}
@@ -481,14 +439,12 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
               }
             }}
             placeholder={`快照标题（默认：检查 - ${new Date().toLocaleString('zh-CN')}）`}
-            className="font-mono text-sm flex-1 min-w-[200px] px-3 py-2 bg-[var(--color-surface-strong)]"
-            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
+            className="font-mono text-sm flex-1 min-w-[200px] px-3 py-2 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none"
           />
           <button
             onClick={saveSnapshot}
             disabled={createSnapshotMut.isPending || (checkedCount === 0 && notes.every(n => n.trim() === ''))}
-            className="font-mono text-sm px-4 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
-            style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
+            className="font-mono text-sm px-4 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 bg-[var(--color-solid)]"
           >
             {createSnapshotMut.isPending ? '保存中...' : '保存快照'}
           </button>
@@ -496,18 +452,10 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
       </div>
 
       {!snapshotsLoading && savedRuns.length > 0 && (
-        <div
-          className="rounded-lg mt-4"
-          style={{
-            background: 'var(--color-surface-strong)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '8px',
-          }}
-        >
+        <div className="rounded-lg mt-4 bg-[var(--color-surface-strong)] border border-[var(--color-border)]">
           <button
             onClick={() => setShowSavedList(v => !v)}
-            className="w-full flex items-center justify-between px-4 py-3 font-mono text-sm transition-colors hover:bg-[var(--color-surface-hover)]"
-            style={{ color: 'var(--color-ink)', borderRadius: '8px' }}
+            className="w-full flex items-center justify-between px-4 py-3 font-mono text-sm transition-colors hover:bg-[var(--color-surface-hover)] text-[var(--color-ink)] rounded-lg"
           >
             <span>📚 已保存的快照 ({savedRuns.length})</span>
             <svg
@@ -519,13 +467,15 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              style={{ transform: showSavedList ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+              className={
+                'transition-transform duration-200 ' + (showSavedList ? 'rotate-180' : '')
+              }
             >
               <polyline points="6 9 12 15 18 9" />
             </svg>
           </button>
           {showSavedList && (
-            <div style={{ borderTop: '1px solid var(--color-border)' }}>
+            <div className="border-t border-t-[var(--color-border)]">
               {savedRuns.map(run => {
                 let runNoteCount = 0
                 let runTotal = parsedItems.length
@@ -545,31 +495,29 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                 return (
                   <div
                     key={run.id}
-                    className="flex items-center gap-2 px-4 py-2.5"
-                    style={{
-                      borderBottom: '1px solid var(--color-border)',
-                      background: isViewing ? 'var(--color-surface-hover)' : 'transparent',
-                    }}
+                    className={
+                      'flex items-center gap-2 px-4 py-2.5 border-b border-b-[var(--color-border)] ' +
+                      (isViewing ? 'bg-[var(--color-surface-hover)]' : 'bg-transparent')
+                    }
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="font-mono text-sm truncate" style={{ color: 'var(--color-ink)' }}>
+                      <p className="font-mono text-sm truncate text-[var(--color-ink)]">
                         {isViewing && '👁 '}
                         {run.title}
                         {!isMatch && (
-                          <span className="ml-2 text-xs" style={{ color: 'var(--color-ink-faint)' }}>
+                          <span className="ml-2 text-xs text-[var(--color-ink-faint)]">
                             （清单已变更）
                           </span>
                         )}
                       </p>
-                      <p className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>
+                      <p className="font-mono text-xs text-[var(--color-ink-faint)]">
                         {runNoteCount}/{runTotal} 项 · {new Date(run.created_at).toLocaleString('zh-CN')}
                       </p>
                     </div>
                     <button
                       onClick={() => loadSnapshot(run)}
                       disabled={!isMatch}
-                      className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-strong)] disabled:opacity-40"
-                      style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+                      className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-strong)] disabled:opacity-40 border border-[var(--color-border)] text-[var(--color-ink-muted)]"
                       type="button"
                     >
                       查看
@@ -578,16 +526,14 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                       <>
                         <button
                           onClick={() => deleteSnapshot(run.id)}
-                          className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors"
-                          style={{ background: 'var(--color-danger-text, #c00)', color: '#fff', borderRadius: '6px' }}
+                          className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors bg-[var(--color-danger-text,#c00)] text-white"
                           type="button"
                         >
                           确认
                         </button>
                         <button
                           onClick={() => setConfirmDeleteRunId(null)}
-                          className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-strong)]"
-                          style={{ color: 'var(--color-ink-muted)' }}
+                          className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-strong)] text-[var(--color-ink-muted)]"
                           type="button"
                         >
                           取消
@@ -596,8 +542,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                     ) : (
                       <button
                         onClick={() => setConfirmDeleteRunId(run.id)}
-                        className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-strong)]"
-                        style={{ color: 'var(--color-danger-text, #c00)' }}
+                        className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-strong)] text-[var(--color-danger-text,#c00)]"
                         title="删除快照"
                         type="button"
                       >
@@ -612,7 +557,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
         </div>
       )}
 
-      <p className="font-mono text-xs text-center mt-4" style={{ color: 'var(--color-ink-faint)' }}>
+      <p className="font-mono text-xs text-center mt-4 text-[var(--color-ink-faint)]">
         {lastSavedAt && !viewingRunId
           ? `💾 已恢复上次草稿 (${new Date(lastSavedAt).toLocaleString('zh-CN')})、草稿保存在本设备本地`
           : '💾 草稿保存在本设备本地，快照保存到云端'}

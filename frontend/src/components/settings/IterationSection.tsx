@@ -153,25 +153,24 @@ export function IterationSection() {
   return (
     <>
       <Card title="基础配置">
-        <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
+        <p className="text-sm mb-4 font-serif text-[var(--color-ink-muted)]">
           设置 Iteration 的起始日期与默认周期天数。每个 Iteration 默认按此规则自动排列。
         </p>
         {loaded && (
           <div className="flex flex-col gap-3">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-              <label className="font-mono text-xs whitespace-nowrap" style={{ color: 'var(--color-ink-muted)', minWidth: '80px' }}>
+              <label className="font-mono text-xs whitespace-nowrap text-[var(--color-ink-muted)] min-w-[80px]">
                 起始日期
               </label>
               <input
                 type="date"
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
-                className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)] w-full sm:w-auto"
-                style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
+                className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)] w-full sm:w-auto border border-[var(--color-border)] rounded-md outline-none"
               />
             </div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-              <label className="font-mono text-xs whitespace-nowrap" style={{ color: 'var(--color-ink-muted)', minWidth: '80px' }}>
+              <label className="font-mono text-xs whitespace-nowrap text-[var(--color-ink-muted)] min-w-[80px]">
                 周期天数
               </label>
               <input
@@ -179,10 +178,9 @@ export function IterationSection() {
                 min="1"
                 value={durationDays}
                 onChange={e => setDurationDays(e.target.value)}
-                className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)] w-24"
-                style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none' }}
+                className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)] w-24 border border-[var(--color-border)] rounded-md outline-none"
               />
-              <span className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>
+              <span className="font-mono text-xs text-[var(--color-ink-faint)]">
                 天
               </span>
             </div>
@@ -190,13 +188,14 @@ export function IterationSection() {
               <button
                 onClick={saveBase}
                 disabled={saveSettingsMut.isPending}
-                className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
-                style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
+                className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 bg-[var(--color-solid)]"
               >
                 {saveSettingsMut.isPending ? '保存中...' : '保存'}
               </button>
               {msg && (
-                <span className="font-mono text-sm" style={{ color: msg === '已保存' ? 'var(--color-ink-muted)' : 'var(--color-danger-text)' }}>
+                <span
+                  className={`font-mono text-sm ${msg === '已保存' ? 'text-[var(--color-ink-muted)]' : 'text-[var(--color-danger-text)]'}`}
+                >
                   {msg}
                 </span>
               )}
@@ -206,7 +205,7 @@ export function IterationSection() {
       </Card>
 
       <Card title="Iteration 时间线">
-        <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
+        <p className="text-sm mb-4 font-serif text-[var(--color-ink-muted)]">
           遇到节假日等需要调整时，点击「调整」来修改个别 Iteration 的起止日期，后续 Iteration 自动顺延。
         </p>
 
@@ -214,39 +213,34 @@ export function IterationSection() {
           <>
             <div className="flex items-center gap-2 mb-3 flex-wrap">
               <button
-                className="font-mono text-xs px-2.5 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
-                style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+                className="font-mono text-xs px-2.5 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
                 onClick={() => navTimeline(-10)}
               >
                 « 更早
               </button>
               <button
-                className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
-                style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+                className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
                 onClick={() => navTimeline(-5)}
               >
                 ‹
               </button>
-              <span className="font-mono text-xs" style={{ color: 'var(--color-ink-muted)' }}>
+              <span className="font-mono text-xs text-[var(--color-ink-muted)]">
                 Iter {fromNum} – {toNum}
               </span>
               <button
-                className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
-                style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+                className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
                 onClick={() => navTimeline(5)}
               >
                 ›
               </button>
               <button
-                className="font-mono text-xs px-2.5 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
-                style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+                className="font-mono text-xs px-2.5 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
                 onClick={() => navTimeline(10)}
               >
                 更晚 »
               </button>
               <button
-                className="font-mono text-xs px-2.5 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] ml-auto"
-                style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+                className="font-mono text-xs px-2.5 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] ml-auto border border-[var(--color-border)] text-[var(--color-ink-muted)]"
                 onClick={() => setViewCenter(currentNum)}
               >
                 回到当前
@@ -262,17 +256,12 @@ export function IterationSection() {
                   return (
                     <div
                       key={iter.num}
-                      className="flex items-center gap-2 p-2.5 rounded-md flex-wrap"
-                      style={{
-                        background: 'var(--color-info-bg, #dbeafe)',
-                        border: '1px solid var(--color-info-border, #2563eb)',
-                        borderRadius: '6px',
-                      }}
+                      className="flex items-center gap-2 p-2.5 rounded-md flex-wrap bg-[var(--color-info-bg,#dbeafe)] border border-[var(--color-info-border,#2563eb)]"
                     >
-                      <span className="font-mono text-sm font-semibold" style={{ minWidth: 64 }}>
+                      <span className="font-mono text-sm font-semibold min-w-16">
                         Iter {iter.num}
                       </span>
-                      <span className="font-mono text-xs" style={{ color: 'var(--color-ink-muted)' }}>
+                      <span className="font-mono text-xs text-[var(--color-ink-muted)]">
                         起始
                       </span>
                       <input
@@ -282,10 +271,9 @@ export function IterationSection() {
                           setEditStart(e.target.value)
                           setEditError('')
                         }}
-                        className="font-mono text-xs px-2 py-1 bg-[var(--color-surface)]"
-                        style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none', width: 140 }}
+                        className="font-mono text-xs px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md outline-none w-[140px]"
                       />
-                      <span className="font-mono text-xs" style={{ color: 'var(--color-ink-muted)' }}>
+                      <span className="font-mono text-xs text-[var(--color-ink-muted)]">
                         结束
                       </span>
                       <input
@@ -295,30 +283,27 @@ export function IterationSection() {
                           setEditEnd(e.target.value)
                           setEditError('')
                         }}
-                        className="font-mono text-xs px-2 py-1 bg-[var(--color-surface)]"
-                        style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none', width: 140 }}
+                        className="font-mono text-xs px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md outline-none w-[140px]"
                       />
-                      <span className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>
+                      <span className="font-mono text-xs text-[var(--color-ink-faint)]">
                         {editDays > 0 ? `${editDays} 天` : '无效'}
                       </span>
                       <div className="flex gap-1.5 ml-auto">
                         <button
                           onClick={saveEdit}
-                          className="font-mono text-xs px-3 py-1 rounded-md text-white"
-                          style={{ background: '#2563eb', borderRadius: '6px' }}
+                          className="font-mono text-xs px-3 py-1 rounded-md text-white bg-[#2563eb]"
                         >
                           确认
                         </button>
                         <button
                           onClick={cancelEdit}
-                          className="font-mono text-xs px-3 py-1 rounded-md"
-                          style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+                          className="font-mono text-xs px-3 py-1 rounded-md border border-[var(--color-border)] text-[var(--color-ink-muted)]"
                         >
                           取消
                         </button>
                       </div>
                       {editError && (
-                        <div className="w-full font-mono text-xs" style={{ color: 'var(--color-danger-text, #dc2626)' }}>
+                        <div className="w-full font-mono text-xs text-[var(--color-danger-text,#dc2626)]">
                           {editError}
                         </div>
                       )}
@@ -329,53 +314,44 @@ export function IterationSection() {
                 return (
                   <div
                     key={iter.num}
-                    className="flex items-center gap-2 px-3 py-2 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
-                    style={{
-                      ...(isCurrent
-                        ? { background: 'var(--color-surface)', border: '1px solid var(--color-border-strong, #ccc)', borderRadius: '6px' }
-                        : {}),
-                      ...(iter.isOverride && !isCurrent ? { background: '#f0fdf4', borderRadius: '6px' } : {}),
-                    }}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] ${
+                      isCurrent
+                        ? 'bg-[var(--color-surface)] border border-[var(--color-border-strong,#ccc)]'
+                        : ''
+                    } ${iter.isOverride && !isCurrent ? 'bg-[#f0fdf4]' : ''}`}
                   >
-                    <span className="font-mono text-sm font-semibold" style={{ minWidth: 64, color: 'var(--color-ink)' }}>
+                    <span className="font-mono text-sm font-semibold min-w-16 text-[var(--color-ink)]">
                       Iter {iter.num}
                     </span>
-                    <span className="font-mono text-xs" style={{ color: 'var(--color-ink-secondary)', minWidth: 160 }}>
+                    <span className="font-mono text-xs text-[var(--color-ink-secondary)] min-w-[160px]">
                       {iter.start} ~ {iter.end}
                     </span>
-                    <span className="font-mono text-xs hidden sm:inline" style={{ color: 'var(--color-ink-faint)', minWidth: 40 }}>
+                    <span className="font-mono text-xs hidden sm:inline text-[var(--color-ink-faint)] min-w-10">
                       {days} 天
                     </span>
                     {isCurrent && (
                       <span
-                        className="font-mono text-[10px] px-1.5 py-0.5 rounded"
-                        style={{ background: 'var(--color-solid)', color: 'var(--color-solid-text)', borderRadius: '4px' }}
+                        className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-solid)] text-[var(--color-solid-text)]"
                       >
                         当前
                       </span>
                     )}
                     {iter.isOverride && (
-                      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded" style={{ background: '#bbf7d0', color: '#166534', borderRadius: '4px' }}>
+                      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[#bbf7d0] text-[#166534]">
                         已调整
                       </span>
                     )}
                     <div className="flex gap-1 ml-auto">
                       <button
                         onClick={() => startEdit(iter)}
-                        className="font-mono text-xs px-2.5 py-1 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
-                        style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+                        className="font-mono text-xs px-2.5 py-1 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
                       >
                         调整
                       </button>
                       {iter.isOverride && (
                         <button
                           onClick={() => removeOverride(iter.num)}
-                          className="font-mono text-xs px-2.5 py-1 rounded-md transition-colors"
-                          style={{
-                            border: '1px solid var(--color-danger-border, #fca5a5)',
-                            borderRadius: '6px',
-                            color: 'var(--color-danger-text, #dc2626)',
-                          }}
+                          className="font-mono text-xs px-2.5 py-1 rounded-md transition-colors border border-[var(--color-danger-border,#fca5a5)] text-[var(--color-danger-text,#dc2626)]"
                         >
                           还原
                         </button>
@@ -391,7 +367,7 @@ export function IterationSection() {
 
       {overrideNums.length > 0 && (
         <Card title="已调整的 Iteration">
-          <p className="text-sm mb-3" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
+          <p className="text-sm mb-3 font-serif text-[var(--color-ink-muted)]">
             共 {overrideNums.length} 个 Iteration 已手动调整起止日期：
           </p>
           <div className="space-y-1.5">
@@ -402,32 +378,28 @@ export function IterationSection() {
               const diff = days - defaultDays
               return (
                 <div key={n} className="flex items-center gap-2 font-mono text-xs py-1">
-                  <span style={{ minWidth: 56, fontWeight: 600 }}>Iter {n}</span>
-                  <span style={{ color: 'var(--color-ink-secondary)' }}>
+                  <span className="min-w-14 font-semibold">Iter {n}</span>
+                  <span className="text-[var(--color-ink-secondary)]">
                     {o.start} ~ {o.end}
                   </span>
-                  <span style={{ color: 'var(--color-ink-faint)' }}>{days}天</span>
+                  <span className="text-[var(--color-ink-faint)]">{days}天</span>
                   {diff !== 0 && (
-                    <span style={{ color: diff > 0 ? '#166534' : 'var(--color-danger-text, #dc2626)', fontSize: 11 }}>
+                    <span
+                      className={`text-[11px] ${diff > 0 ? 'text-[#166534]' : 'text-[var(--color-danger-text,#dc2626)]'}`}
+                    >
                       {diff > 0 ? '+' : ''}
                       {diff}天
                     </span>
                   )}
                   <button
                     onClick={() => setViewCenter(n)}
-                    className="ml-auto font-mono text-xs px-2 py-0.5 rounded-md"
-                    style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+                    className="ml-auto font-mono text-xs px-2 py-0.5 rounded-md border border-[var(--color-border)] text-[var(--color-ink-muted)]"
                   >
                     查看
                   </button>
                   <button
                     onClick={() => removeOverride(n)}
-                    className="font-mono text-xs px-2 py-0.5 rounded-md"
-                    style={{
-                      border: '1px solid var(--color-danger-border, #fca5a5)',
-                      borderRadius: '6px',
-                      color: 'var(--color-danger-text, #dc2626)',
-                    }}
+                    className="font-mono text-xs px-2 py-0.5 rounded-md border border-[var(--color-danger-border,#fca5a5)] text-[var(--color-danger-text,#dc2626)]"
                   >
                     删除
                   </button>
