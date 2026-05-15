@@ -212,6 +212,12 @@ func loadCredentials(userID int64) []webauthn.Credential {
 		creds = append(creds, webauthn.Credential{
 			ID:        credID,
 			PublicKey: pubKey,
+			Flags: webauthn.CredentialFlags{
+				// 平台认证器的通行密钥支持备份（iCloud Keychain 等），
+				// 需要设置此标志以通过 go-webauthn 的一致性校验
+				BackupEligible: true,
+				BackupState:    true,
+			},
 			Authenticator: webauthn.Authenticator{
 				SignCount: uint32(signCount),
 			},
@@ -263,6 +269,16 @@ func handlePasskeyRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 构建排除列表，防止重复注册已有凭证
+	existingCreds := waUser.WebAuthnCredentials()
+	excludeList := make([]protocol.CredentialDescriptor, len(existingCreds))
+	for i, cred := range existingCreds {
+		excludeList[i] = protocol.CredentialDescriptor{
+			Type:         protocol.PublicKeyCredentialType,
+			CredentialID: cred.ID,
+		}
+	}
+
 	rrk := true
 	creation, session, err := wa.BeginRegistration(waUser,
 		webauthn.WithAuthenticatorSelection(protocol.AuthenticatorSelection{
@@ -272,6 +288,7 @@ func handlePasskeyRegisterBegin(w http.ResponseWriter, r *http.Request) {
 			UserVerification:        protocol.VerificationPreferred,
 		}),
 		webauthn.WithConveyancePreference(protocol.PreferNoAttestation),
+		webauthn.WithExclusions(excludeList),
 	)
 	if err != nil {
 		jsonError(w, "Failed to begin registration: "+err.Error(), http.StatusInternalServerError)

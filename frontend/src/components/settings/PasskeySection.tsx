@@ -46,7 +46,7 @@ export function PasskeySection() {
         },
         timeout: options.timeout,
         attestation: (options.attestation || 'none') as AttestationConveyancePreference,
-        excludeCredentials: options.excludeCredentials.map(c => ({
+        excludeCredentials: (options.excludeCredentials ?? []).map(c => ({
           type: 'public-key' as const,
           id: base64urlToBuffer(c.id),
         })),

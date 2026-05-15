@@ -214,7 +214,7 @@ export interface PasskeyCreationOptions {
   }
   timeout: number
   attestation: string
-  excludeCredentials: { type: string; id: string }[]
+  excludeCredentials?: { type: string; id: string }[]
 }
 
 export interface PasskeyRequestOptions {
