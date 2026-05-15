@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react'
-import { settings, iterationOverrides as overridesApi } from '../../lib/api'
+import { useState, useEffect, useMemo } from 'react'
 import {
   makeIterationConfig,
   getCurrentIteration,
@@ -8,6 +7,10 @@ import {
   type IterationOverrideMap,
 } from '../../lib/date-utils'
 import { Card } from '../../components/Card'
+import {
+  useSettings, useSaveSettings,
+  useIterationOverrides, useSaveIterationOverride, useDeleteIterationOverride,
+} from '../../lib/queries'
 
 const VIEW_SIZE = 10
 const FUTURE_BUFFER = 2
@@ -15,44 +18,51 @@ const FUTURE_BUFFER = 2
 export function IterationSection() {
   const [startDate, setStartDate] = useState('2019-09-02')
   const [durationDays, setDurationDays] = useState('14')
-  const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
-  const [loaded, setLoaded] = useState(false)
-  const [iterConfig, setIterConfig] = useState<IterationConfig | null>(null)
-  const [overrides, setOverrides] = useState<IterationOverrideMap>({})
   const [viewCenter, setViewCenter] = useState<number | null>(null)
   const [editingIter, setEditingIter] = useState<number | null>(null)
   const [editStart, setEditStart] = useState('')
   const [editEnd, setEditEnd] = useState('')
   const [editError, setEditError] = useState('')
 
-  const loadData = async () => {
-    try {
-      const [data, ovRes] = await Promise.all([settings.get(), overridesApi.list()])
-      const sd = data.iteration_start_date || '2019-09-02'
-      const dd = data.iteration_duration_days || '14'
-      setStartDate(sd)
-      setDurationDays(dd)
-      const cfg = makeIterationConfig(sd, dd)
-      setIterConfig(cfg)
-      const ovMap: IterationOverrideMap = {}
-      for (const o of ovRes.overrides) {
-        ovMap[o.iteration_number] = { start: o.start_date, end: o.end_date }
-      }
-      setOverrides(ovMap)
-      setViewCenter(prev => {
-        if (prev === null) return getCurrentIteration(cfg, ovMap)
-        return prev
-      })
-      setLoaded(true)
-    } catch (e) {
-      console.error(e)
+  const { data: settingsData, isSuccess: settingsLoaded } = useSettings()
+  const { data: ovData, isSuccess: ovLoaded } = useIterationOverrides()
+  const saveSettingsMut = useSaveSettings()
+  const saveOverrideMut = useSaveIterationOverride()
+  const deleteOverrideMut = useDeleteIterationOverride()
+
+  const loaded = settingsLoaded && ovLoaded
+
+  // 从 query 数据派生 iterConfig 和 overrides map
+  const overrides = useMemo<IterationOverrideMap>(() => {
+    if (!ovData) return {}
+    const map: IterationOverrideMap = {}
+    for (const o of ovData.overrides) {
+      map[o.iteration_number] = { start: o.start_date, end: o.end_date }
     }
-  }
+    return map
+  }, [ovData])
+
+  const iterConfig = useMemo<IterationConfig | null>(() => {
+    if (!settingsData) return null
+    const sd = settingsData.iteration_start_date || '2019-09-02'
+    const dd = settingsData.iteration_duration_days || '14'
+    return makeIterationConfig(sd, dd)
+  }, [settingsData])
+
+  // 服务端数据到达后同步本地表单状态
+  useEffect(() => {
+    if (settingsData) {
+      setStartDate(settingsData.iteration_start_date || '2019-09-02')
+      setDurationDays(settingsData.iteration_duration_days || '14')
+    }
+  }, [settingsData])
 
   useEffect(() => {
-    void loadData()
-  }, [])
+    if (iterConfig && viewCenter === null) {
+      setViewCenter(getCurrentIteration(iterConfig, overrides))
+    }
+  }, [iterConfig, overrides, viewCenter])
 
   const saveBase = async () => {
     const d = new Date(startDate + 'T00:00:00')
@@ -65,19 +75,15 @@ export function IterationSection() {
       setMsg('天数必须为正整数')
       return
     }
-    setSaving(true)
     setMsg('')
     try {
-      await settings.save({ iteration_start_date: startDate, iteration_duration_days: String(days) })
+      await saveSettingsMut.mutateAsync({ iteration_start_date: startDate, iteration_duration_days: String(days) })
       const cfg = makeIterationConfig(startDate, String(days))
-      setIterConfig(cfg)
       setViewCenter(getCurrentIteration(cfg, overrides))
       setMsg('已保存')
       setTimeout(() => setMsg(''), 2000)
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : '保存失败')
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -115,8 +121,11 @@ export function IterationSection() {
       return
     }
     try {
-      await overridesApi.save(editingIter!, editStart, editEnd)
-      setOverrides(prev => ({ ...prev, [editingIter!]: { start: editStart, end: editEnd } }))
+      await saveOverrideMut.mutateAsync({
+        iterationNumber: editingIter!,
+        startDate: editStart,
+        endDate: editEnd,
+      })
       setEditingIter(null)
       setEditError('')
     } catch (e: unknown) {
@@ -126,12 +135,7 @@ export function IterationSection() {
 
   const removeOverride = async (iterNum: number) => {
     try {
-      await overridesApi.delete(iterNum)
-      setOverrides(prev => {
-        const next = { ...prev }
-        delete next[iterNum]
-        return next
-      })
+      await deleteOverrideMut.mutateAsync(iterNum)
     } catch (e: unknown) {
       console.error(e)
     }
@@ -185,11 +189,11 @@ export function IterationSection() {
             <div className="flex items-center gap-3 pt-1">
               <button
                 onClick={saveBase}
-                disabled={saving}
+                disabled={saveSettingsMut.isPending}
                 className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
                 style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
               >
-                {saving ? '保存中...' : '保存'}
+                {saveSettingsMut.isPending ? '保存中...' : '保存'}
               </button>
               {msg && (
                 <span className="font-mono text-sm" style={{ color: msg === '已保存' ? 'var(--color-ink-muted)' : 'var(--color-danger-text)' }}>

@@ -1,11 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useAuthGuard } from '../lib/useAuthGuard'
-import { useState, useEffect } from 'react'
-import { checklists as checklistsApi, type Checklist } from '../lib/api'
+import { useState } from 'react'
+import { type Checklist } from '../lib/api'
 import { LoadingScreen } from '../components/LoadingScreen'
 import { ChecklistForm } from '../components/checklists/ChecklistForm'
 import { ChecklistCard } from '../components/checklists/ChecklistCard'
 import { ChecklistUse } from '../components/checklists/ChecklistUse'
+import { useChecklistList } from '../lib/queries'
 
 export const Route = createFileRoute('/checklists')({ component: ChecklistsPage })
 
@@ -34,32 +35,21 @@ function ChecklistsPage() {
 }
 
 function ChecklistManager() {
-  const [items, setItems] = useState<Checklist[]>([])
-  const [loading, setLoading] = useState(true)
   const [activeId, setActiveId] = useState<number | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const { data, isLoading } = useChecklistList()
 
-  const load = async () => {
-    const data = await checklistsApi.list()
-    setItems(data.checklists)
-    setLoading(false)
-  }
+  const items = data?.checklists ?? []
 
-  useEffect(() => {
-    load()
-  }, [])
-
-  const handleCreated = (cl: Checklist | Pick<Checklist, 'title' | 'items'>) => {
-    setItems(prev => [cl as Checklist, ...prev])
+  const handleCreated = (_cl: Checklist | Pick<Checklist, 'title' | 'items'>) => {
     setShowCreate(false)
   }
 
-  const handleUpdated = (cl: Checklist) => {
-    setItems(prev => prev.map(c => (c.id === cl.id ? cl : c)))
+  const handleUpdated = (_cl: Checklist) => {
+    // mutation hook 会自动 invalidate query，无需手动更新
   }
 
   const handleDeleted = (id: number) => {
-    setItems(prev => prev.filter(c => c.id !== id))
     if (activeId === id) setActiveId(null)
   }
 
@@ -84,7 +74,7 @@ function ChecklistManager() {
         <ChecklistForm onSave={handleCreated} onCancel={() => setShowCreate(false)} />
       )}
 
-      {loading ? (
+      {isLoading ? (
         <p className="font-mono text-sm text-center py-8" style={{ color: 'var(--color-ink-muted)' }}>
           加载中...
         </p>

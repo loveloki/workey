@@ -1,8 +1,19 @@
 import { createRootRoute, Outlet, Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import { useState, useRef, useEffect } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from '../lib/auth-context'
 import { ThemeProvider } from '../lib/theme-context'
 import { PWAReloadPrompt } from '../lib/pwa-reload-prompt'
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: 1,
+      refetchOnWindowFocus: true,
+    },
+  },
+})
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -10,18 +21,20 @@ export const Route = createRootRoute({
 
 function RootLayout() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <div className="min-h-screen flex flex-col">
-          <Header />
-          <main className="flex-1">
-            <Outlet />
-          </main>
-          <Footer />
-          <PWAReloadPrompt />
-        </div>
-      </AuthProvider>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <AuthProvider>
+          <div className="min-h-screen flex flex-col">
+            <Header />
+            <main className="flex-1">
+              <Outlet />
+            </main>
+            <Footer />
+            <PWAReloadPrompt />
+          </div>
+        </AuthProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   )
 }
 

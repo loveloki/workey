@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  checklistSnapshots as snapshotsApi,
   type Checklist,
   type ChecklistSnapshot,
   type SnapshotData,
 } from '../../lib/api'
 import { AutoTextarea } from './AutoTextarea'
 import { parseItems, itemsHash as computeItemsHash } from './checklist-utils'
+import { useChecklistSnapshots, useCreateSnapshot, useDeleteSnapshot } from '../../lib/queries'
 
 type ExtraItem = { id: string; text: string; note: string }
 
@@ -45,29 +45,15 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
   const newExtraRef = useRef<HTMLInputElement>(null)
   const [lastSavedAt] = useState<string | null>(draft?.updatedAt ?? null)
 
-  const [savedRuns, setSavedRuns] = useState<ChecklistSnapshot[]>([])
-  const [snapshotsLoading, setSnapshotsLoading] = useState(true)
+  const { data: snapshotsData, isLoading: snapshotsLoading } = useChecklistSnapshots(checklist.id)
+  const createSnapshotMut = useCreateSnapshot()
+  const deleteSnapshotMut = useDeleteSnapshot()
+  const savedRuns = snapshotsData?.snapshots ?? []
+
   const [snapshotTitle, setSnapshotTitle] = useState('')
   const [viewingRunId, setViewingRunId] = useState<number | null>(null)
   const [showSavedList, setShowSavedList] = useState(false)
   const [confirmDeleteRunId, setConfirmDeleteRunId] = useState<number | null>(null)
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    snapshotsApi
-      .list(checklist.id)
-      .then(({ snapshots }) => {
-        if (!cancelled) setSavedRuns(snapshots)
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setSnapshotsLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [checklist.id])
 
   useEffect(() => {
     try {
@@ -85,20 +71,16 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
 
   const saveSnapshot = async () => {
     const title = snapshotTitle.trim() || `检查 - ${new Date().toLocaleString('zh-CN')}`
-    setSaving(true)
     try {
       const data: SnapshotData = {
         notes: [...notes],
         extras: extras.map(e => ({ ...e })),
       }
-      const { snapshot } = await snapshotsApi.create(checklist.id, title, hash, data)
-      setSavedRuns(prev => [snapshot, ...prev])
+      await createSnapshotMut.mutateAsync({ checklistId: checklist.id, title, itemsHash: hash, data })
       setSnapshotTitle('')
       setShowSavedList(true)
     } catch (e: unknown) {
       alert('保存失败：' + (e instanceof Error ? e.message : '未知错误'))
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -125,8 +107,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
 
   const deleteSnapshot = async (id: number) => {
     try {
-      await snapshotsApi.delete(id)
-      setSavedRuns(prev => prev.filter(r => r.id !== id))
+      await deleteSnapshotMut.mutateAsync({ id, checklistId: checklist.id })
       if (viewingRunId === id) setViewingRunId(null)
     } catch (e: unknown) {
       alert('删除失败：' + (e instanceof Error ? e.message : '未知错误'))
@@ -503,11 +484,11 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
           />
           <button
             onClick={saveSnapshot}
-            disabled={saving || (checkedCount === 0 && notes.every(n => n.trim() === ''))}
+            disabled={createSnapshotMut.isPending || (checkedCount === 0 && notes.every(n => n.trim() === ''))}
             className="font-mono text-sm px-4 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
             style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
           >
-            {saving ? '保存中...' : '保存快照'}
+            {createSnapshotMut.isPending ? '保存中...' : '保存快照'}
           </button>
         </div>
       </div>

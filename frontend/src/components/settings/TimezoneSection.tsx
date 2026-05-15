@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { settings } from '../../lib/api'
 import { Card } from '../../components/Card'
+import { useSettings, useSaveSettings } from '../../lib/queries'
 
 const TIMEZONE_OPTIONS = [
   { label: 'UTC-12', value: '-12' },
@@ -33,28 +33,22 @@ const TIMEZONE_OPTIONS = [
 
 export function TimezoneSection() {
   const [timezone, setTimezone] = useState('+8')
-  const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
-  const [loaded, setLoaded] = useState(false)
+  const { data, isSuccess } = useSettings()
+  const saveMut = useSaveSettings()
 
   useEffect(() => {
-    settings.get().then(data => {
-      setTimezone(data.timezone)
-      setLoaded(true)
-    })
-  }, [])
+    if (data) setTimezone(data.timezone)
+  }, [data])
 
   const save = async () => {
-    setSaving(true)
     setMsg('')
     try {
-      await settings.save({ timezone })
+      await saveMut.mutateAsync({ timezone })
       setMsg('已保存')
       setTimeout(() => setMsg(''), 2000)
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : '保存失败')
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -63,7 +57,7 @@ export function TimezoneSection() {
       <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
         设置你的工作时区，影响打卡时间的显示。
       </p>
-      {loaded && (
+      {isSuccess && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <select
             value={timezone}
@@ -79,11 +73,11 @@ export function TimezoneSection() {
           </select>
           <button
             onClick={save}
-            disabled={saving}
+            disabled={saveMut.isPending}
             className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
             style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
           >
-            {saving ? '保存中...' : '保存'}
+            {saveMut.isPending ? '保存中...' : '保存'}
           </button>
           {msg && (
             <span className="font-mono text-sm" style={{ color: msg === '已保存' ? 'var(--color-ink-muted)' : 'var(--color-danger-text)' }}>

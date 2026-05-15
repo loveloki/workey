@@ -1,29 +1,20 @@
-import { useState, useEffect } from 'react'
-import { passkeys as passkeysApi, base64urlToBuffer, type Passkey } from '../../lib/api'
+import { useState } from 'react'
+import { passkeys as passkeysApi, base64urlToBuffer } from '../../lib/api'
 import { Card } from '../../components/Card'
+import { usePasskeyList, useDeletePasskey } from '../../lib/queries'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '../../lib/queries'
 
 export function PasskeySection() {
-  const [passkeyList, setPasskeyList] = useState<Passkey[]>([])
-  const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')
   const [adding, setAdding] = useState(false)
   const [msg, setMsg] = useState('')
   const [isError, setIsError] = useState(false)
+  const { data, isLoading } = usePasskeyList()
+  const deleteMut = useDeletePasskey()
+  const qc = useQueryClient()
 
-  const loadPasskeys = async () => {
-    try {
-      const data = await passkeysApi.list()
-      setPasskeyList(data.passkeys)
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    void loadPasskeys()
-  }, [])
+  const passkeyList = data?.passkeys ?? []
 
   const handleAdd = async () => {
     if (!name.trim()) {
@@ -76,7 +67,7 @@ export function PasskeySection() {
       setMsg('通行密钥已添加')
       setIsError(false)
       setName('')
-      await loadPasskeys()
+      qc.invalidateQueries({ queryKey: queryKeys.passkeys })
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : '添加通行密钥失败')
       setIsError(true)
@@ -87,8 +78,7 @@ export function PasskeySection() {
 
   const handleDelete = async (id: number) => {
     try {
-      await passkeysApi.delete(id)
-      setPasskeyList(prev => prev.filter(p => p.id !== id))
+      await deleteMut.mutateAsync(id)
       setMsg('通行密钥已删除')
       setIsError(false)
     } catch (e: unknown) {
@@ -110,7 +100,7 @@ export function PasskeySection() {
         通行密钥让你无需输入密码即可登录，支持指纹、面容识别等方式。
       </p>
 
-      {loading ? (
+      {isLoading ? (
         <p className="font-mono text-sm" style={{ color: 'var(--color-ink-muted)' }}>
           加载中...
         </p>

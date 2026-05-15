@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuthGuard } from '../lib/useAuthGuard'
-import { useState, useEffect, useCallback } from 'react'
-import { attendance, workLogs, todos as todosApi, type Attendance } from '../lib/api'
+import { useEffect, useCallback } from 'react'
+import { attendance, workLogs, todos as todosApi } from '../lib/api'
 import { formatTime, getToday } from '../lib/date-utils'
 import { formatDayMarkdown } from '../lib/report-utils'
 import { CopyButton } from '../components/CopyButton'
@@ -9,6 +9,7 @@ import { LoadingScreen } from '../components/LoadingScreen'
 import { WorkLogSection } from '../components/dashboard/WorkLogSection'
 import { CompletedTodosSection } from '../components/dashboard/CompletedTodosSection'
 import { TodayCreatedTodosSidebar, TodayCreatedTodosInline } from '../components/dashboard/TodayCreatedTodos'
+import { useAttendanceToday } from '../lib/queries'
 
 export const Route = createFileRoute('/')({ component: Dashboard })
 
@@ -16,23 +17,18 @@ export const Route = createFileRoute('/')({ component: Dashboard })
 function Dashboard() {
   const { user, loading: authLoading } = useAuthGuard()
   const navigate = useNavigate()
-  const [todayData, setTodayData] = useState<Attendance | null>(null)
-  const [checking, setChecking] = useState(true)
+  const { data: todayQuery, isLoading: checking } = useAttendanceToday(!!user)
 
-  // Check if clocked in today
+  const todayData = todayQuery?.attendance ?? null
+
+  // 未打卡时自动跳转到打卡页
   useEffect(() => {
-    if (!user) return
-    attendance.today()
-      .then(d => {
-        if (!d.attendance?.clock_in && d.attendance?.status !== 'leave') {
-          navigate({ to: '/clock' })
-        } else {
-          setTodayData(d.attendance)
-          setChecking(false)
-        }
-      })
-      .catch(() => setChecking(false))
-  }, [user, navigate])
+    if (!todayQuery) return
+    const att = todayQuery.attendance
+    if (!att?.clock_in && att?.status !== 'leave') {
+      navigate({ to: '/clock' })
+    }
+  }, [todayQuery, navigate])
 
   const copyTodayReport = useCallback(async () => {
     const today = getToday()
@@ -69,7 +65,6 @@ function Dashboard() {
 
       {/* Desktop: two-column layout */}
       <div className="hidden md:flex gap-6 items-start">
-        {/* Left: Daily report card */}
         <div
           className="flex-1 min-w-0 rounded-lg overflow-hidden"
           style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)' }}
@@ -112,7 +107,6 @@ function Dashboard() {
           <CompletedTodosSection />
         </div>
 
-        {/* Right: Today's created todos sidebar */}
         <div className="w-80 shrink-0 lg:w-96">
           <TodayCreatedTodosSidebar />
         </div>
@@ -157,7 +151,6 @@ function Dashboard() {
             </div>
           )}
 
-          {/* Today's created todos — above work content on mobile */}
           <div style={{ borderTop: '1px dashed var(--color-border)' }} />
           <TodayCreatedTodosInline />
 

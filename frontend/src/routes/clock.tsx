@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuthGuard } from '../lib/useAuthGuard'
-import { useState, useEffect, useCallback } from 'react'
-import { attendance, type Attendance } from '../lib/api'
+import { useState, useEffect } from 'react'
+import { type Attendance } from '../lib/api'
 import { formatTime } from '../lib/date-utils'
 import { LoadingScreen } from '../components/LoadingScreen'
+import { useAttendanceToday, useClockIn, useClockOut, useLeave, useSetOvertime } from '../lib/queries'
 
 export const Route = createFileRoute('/clock')({ component: ClockPage })
 
@@ -30,89 +31,84 @@ function ClockPage() {
 }
 
 function ClockWidget() {
-  const [data, setData] = useState<Attendance | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [acting, setActing] = useState(false)
+  const { data: queryData, isLoading } = useAttendanceToday()
+  // 本地 data 用于即时更新 UI（mutation 返回后立即反映）
+  const [localData, setLocalData] = useState<Attendance | null>(null)
   const [now, setNow] = useState(new Date())
   const [isOvertime, setIsOvertime] = useState(false)
   const navigate = useNavigate()
 
-  useEffect(() => {
-    attendance.today()
-      .then(d => setData(d.attendance))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
+  const clockInMut = useClockIn()
+  const clockOutMut = useClockOut()
+  const leaveMut = useLeave()
+  const setOvertimeMut = useSetOvertime()
 
-  // Live clock
+  const acting = clockInMut.isPending || clockOutMut.isPending || leaveMut.isPending || setOvertimeMut.isPending
+
+  // query 数据到达时同步到本地
+  useEffect(() => {
+    if (queryData) setLocalData(queryData.attendance)
+  }, [queryData])
+
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
+
+  const data = localData
 
   const clockedIn = !!data?.clock_in
   const clockedOut = !!data?.clock_out
   const isLeave = data?.status === 'leave'
 
   const clockIn = async (overtime?: boolean) => {
-    setActing(true)
     try {
-      const res = await attendance.clockIn(overtime ?? isOvertime)
-      setData(res.attendance)
-      // After clocking in, go to today's work page
+      const res = await clockInMut.mutateAsync(overtime ?? isOvertime)
+      setLocalData(res.attendance)
       setTimeout(() => navigate({ to: '/' }), 600)
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '操作失败')
     }
-    setActing(false)
   }
 
   const toggleTodayOvertime = async () => {
     if (!data) return
-    setActing(true)
     try {
-      const res = await attendance.setOvertime(data.date, !data.is_overtime)
-      setData(res.attendance)
+      const res = await setOvertimeMut.mutateAsync({ date: data.date, isOvertime: !data.is_overtime })
+      setLocalData(res.attendance)
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '操作失败')
     }
-    setActing(false)
   }
 
   const clockOut = async () => {
-    setActing(true)
     try {
-      const res = await attendance.clockOut()
-      setData(res.attendance)
+      const res = await clockOutMut.mutateAsync()
+      setLocalData(res.attendance)
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '操作失败')
     }
-    setActing(false)
   }
 
   const markLeave = async () => {
-    setActing(true)
     try {
-      const res = await attendance.leave()
-      setData(res.attendance)
+      const res = await leaveMut.mutateAsync()
+      setLocalData(res.attendance)
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '操作失败')
     }
-    setActing(false)
   }
 
-  if (loading) return <LoadingScreen />
+  if (isLoading) return <LoadingScreen />
 
   const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 
   return (
     <div className="flex flex-col items-center">
-      {/* Live time */}
       <p className="font-mono text-5xl sm:text-6xl font-bold text-[var(--color-ink)] mb-8 tabular-nums tracking-wider">
         {timeStr}
       </p>
 
-      {/* Big circular button */}
       {!clockedIn && !isLeave ? (
         <div className="flex flex-col items-center gap-6">
           <label className="flex items-center gap-2 cursor-pointer select-none px-4 py-2 rounded-full" style={{ border: '1px solid var(--color-border)', background: isOvertime ? 'var(--color-surface-strong)' : 'transparent' }}>
@@ -210,7 +206,6 @@ function ClockWidget() {
         </button>
       )}
 
-      {/* Status row */}
       <div
         className="mt-10 flex items-center gap-8 rounded-lg px-8 py-5"
         style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)' }}
@@ -235,7 +230,6 @@ function ClockWidget() {
         )}
       </div>
 
-      {/* Overtime toggle (after clocked in) */}
       {clockedIn && !isLeave && (
         <button
           onClick={toggleTodayOvertime}
@@ -251,7 +245,6 @@ function ClockWidget() {
         </button>
       )}
 
-      {/* Hint */}
       {clockedIn && !clockedOut && (
         <p className="mt-4 text-sm text-[var(--color-ink-faint)]" style={{ fontFamily: 'Georgia, serif' }}>
           已上班打卡，下班时请再次打卡
@@ -275,4 +268,3 @@ function calcDuration(clockIn: string, clockOut: string): string {
   const m = diffMin % 60
   return `${h}h${m.toString().padStart(2, '0')}m`
 }
-

@@ -1,28 +1,10 @@
 import { useNavigate } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
-import { todos as todosApi, type Todo } from '../../lib/api'
+import { useCompletedTodosToday } from '../../lib/queries'
 
 export function CompletedTodosSection() {
-  const [items, setItems] = useState<Todo[]>([])
-  const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
-
-  useEffect(() => {
-    todosApi.completedToday()
-      .then(d => setItems(d.todos || []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
-
-  // Poll every 30s to sync completed todos
-  useEffect(() => {
-    const timer = setInterval(() => {
-      todosApi.completedToday()
-        .then(d => setItems(d.todos || []))
-        .catch(() => {})
-    }, 30000)
-    return () => clearInterval(timer)
-  }, [])
+  const { data, isLoading } = useCompletedTodosToday()
+  const items = data?.todos ?? []
 
   return (
     <div className="px-6 py-5">
@@ -37,7 +19,7 @@ export function CompletedTodosSection() {
         </button>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <p className="text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>加载中...</p>
       ) : items.length === 0 ? (
         <p className="text-sm text-[var(--color-ink-faint)]" style={{ fontFamily: 'Georgia, serif' }}>今天还没有完成的待办事项</p>
@@ -48,7 +30,6 @@ export function CompletedTodosSection() {
               key={todo.id}
               className="flex items-start gap-3 px-2 py-2"
             >
-              {/* Checkmark icon */}
               <div
                 className="w-4 h-4 mt-0.5 rounded flex items-center justify-center shrink-0"
                 style={{ background: 'var(--color-solid)' }}
@@ -58,7 +39,6 @@ export function CompletedTodosSection() {
                 </svg>
               </div>
 
-              {/* Content */}
               <div className="flex-1 min-w-0">
                 <p
                   className="text-sm"

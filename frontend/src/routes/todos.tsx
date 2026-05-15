@@ -1,8 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useAuthGuard } from '../lib/useAuthGuard'
-import { useState, useEffect, useRef } from 'react'
-import { todos as todosApi, settings, type Todo } from '../lib/api'
+import { useState, useRef } from 'react'
+import { type Todo } from '../lib/api'
 import { LoadingScreen } from '../components/LoadingScreen'
+import { useSettings, useTodoList, useCreateTodo, useUpdateTodo, useDeleteTodo } from '../lib/queries'
 
 export const Route = createFileRoute('/todos')({ component: TodosPage })
 
@@ -35,13 +36,10 @@ function TodosPage() {
 /* ── Kanban external link ─────────────────────────────────── */
 
 function KanbanLink() {
-  const [url, setUrl] = useState('')
+  const { data } = useSettings()
+  const url = data?.kanban_url || 'https://www.fizzy.do/'
 
-  useEffect(() => {
-    settings.get().then(d => setUrl(d.kanban_url || 'https://www.fizzy.do/'))
-  }, [])
-
-  if (!url) return null
+  if (!data) return null
 
   return (
     <a
@@ -65,57 +63,41 @@ function KanbanLink() {
 /* ── Todo List ────────────────────────────────────────────── */
 
 function TodoList() {
-  const [items, setItems] = useState<Todo[]>([])
-  const [loading, setLoading] = useState(true)
   const [showAll, setShowAll] = useState(false)
   const [newContent, setNewContent] = useState('')
   const [newUrl, setNewUrl] = useState('')
-  const [adding, setAdding] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const load = () => {
-    todosApi.list(showAll).then(d => {
-      setItems(d.todos)
-      setLoading(false)
-    })
-  }
+  const { data, isLoading } = useTodoList(showAll)
+  const createMut = useCreateTodo()
+  const updateMut = useUpdateTodo()
+  const deleteMut = useDeleteTodo()
 
-  useEffect(() => { load() }, [showAll])
+  const items = data?.todos ?? []
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newContent.trim() && !newUrl.trim()) return
-    setAdding(true)
     try {
-      const { todo } = await todosApi.create(newContent.trim(), newUrl.trim())
-      setItems(prev => [todo, ...prev])
+      await createMut.mutateAsync({ content: newContent.trim(), url: newUrl.trim() })
       setNewContent('')
       setNewUrl('')
       inputRef.current?.focus()
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '添加失败')
-    } finally {
-      setAdding(false)
     }
   }
 
   const toggleDone = async (todo: Todo) => {
-    const { todo: updated } = await todosApi.update(todo.id, { done: !todo.done })
-    if (!showAll && updated.done) {
-      setItems(prev => prev.filter(t => t.id !== todo.id))
-    } else {
-      setItems(prev => prev.map(t => t.id === todo.id ? updated : t))
-    }
+    await updateMut.mutateAsync({ id: todo.id, data: { done: !todo.done } })
   }
 
-  const updateTodo = async (id: number, data: { content?: string; url?: string }) => {
-    const { todo: updated } = await todosApi.update(id, data)
-    setItems(prev => prev.map(t => t.id === id ? updated : t))
+  const updateTodo = async (id: number, d: { content?: string; url?: string }) => {
+    await updateMut.mutateAsync({ id, data: d })
   }
 
   const deleteTodo = async (id: number) => {
-    await todosApi.delete(id)
-    setItems(prev => prev.filter(t => t.id !== id))
+    await deleteMut.mutateAsync(id)
   }
 
   return (
@@ -139,11 +121,11 @@ function TodoList() {
             />
             <button
               type="submit"
-              disabled={adding || (!newContent.trim() && !newUrl.trim())}
+              disabled={createMut.isPending || (!newContent.trim() && !newUrl.trim())}
               className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 shrink-0"
               style={{ background: 'var(--color-solid)', borderRadius: '6px' }}
             >
-              {adding ? '添加中...' : '+ 添加'}
+              {createMut.isPending ? '添加中...' : '+ 添加'}
             </button>
           </div>
           <input
@@ -174,7 +156,7 @@ function TodoList() {
       </div>
 
       {/* List */}
-      {loading ? (
+      {isLoading ? (
         <p className="font-mono text-sm text-center py-8" style={{ color: 'var(--color-ink-muted)' }}>加载中...</p>
       ) : items.length === 0 ? (
         <div

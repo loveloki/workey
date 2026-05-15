@@ -1,31 +1,15 @@
-import { useState, useEffect } from 'react'
-import { system } from '../../lib/api'
 import { Card } from '../../components/Card'
+import { useSystemVersion } from '../../lib/queries'
 
 export function VersionSection() {
-  const [version, setVersion] = useState<{ commit: string; date: string; content: string } | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    system
-      .version()
-      .then(data => {
-        setVersion(data)
-      })
-      .catch(() => {
-        // ignore
-      })
-      .finally(() => {
-        setLoading(false)
-      })
-  }, [])
+  const { data: version, isLoading } = useSystemVersion()
 
   return (
     <Card title="关于系统">
       <p className="text-sm mb-4" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>
         当前部署的系统版本信息。
       </p>
-      {loading ? (
+      {isLoading ? (
         <p className="font-mono text-sm" style={{ color: 'var(--color-ink-muted)' }}>
           加载中...
         </p>

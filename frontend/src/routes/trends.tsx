@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useAuthGuard } from '../lib/useAuthGuard'
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { attendance as attendanceApi } from '../lib/api'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { getDateRange, type RangePreset } from '../lib/date-utils'
+import { useAttendanceRange, useAttendanceStats } from '../lib/queries'
 
 export const Route = createFileRoute('/trends')({
   component: TrendsPage,
@@ -33,37 +33,25 @@ function TrendsPage() {
   const [preset, setPreset] = useState<RangePreset | 'custom'>('month')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
-  const [data, setData] = useState<AttendanceRecord[]>([])
-  const [fetching, setFetching] = useState(false)
-  const [hasLoaded, setHasLoaded] = useState(false)
+  // 自定义搜索时，确认后才更新 activeCustom 触发查询
+  const [activeCustom, setActiveCustom] = useState<{ start: string; end: string } | null>(null)
 
-  const [globalStats, setGlobalStats] = useState<{ global_overtime_days: number; global_leave_days: number; global_remaining: number } | null>(null)
+  // 计算当前查询的日期范围
+  const { start, end } = useMemo(() => {
+    if (preset === 'custom' && activeCustom) return activeCustom
+    if (preset !== 'custom') return getDateRange(preset as RangePreset)
+    return { start: '', end: '' }
+  }, [preset, activeCustom])
 
-  useEffect(() => {
-    if (!user) return
-    attendanceApi.stats().then(res => setGlobalStats(res)).catch(() => {})
-  }, [user])
+  const { data: statsData } = useAttendanceStats(!!user)
+  const { data: rangeData, isFetching: fetching } = useAttendanceRange(start, end, !!user)
 
-  useEffect(() => {
-    if (!user || preset === 'custom') return
-    const range = getDateRange(preset as RangePreset)
-    fetchData(range.start, range.end)
-  }, [preset, user])
-
-  const fetchData = async (start: string, end: string) => {
-    setFetching(true)
-    try {
-      const res = await attendanceApi.range(start, end)
-      setData(res.attendances)
-      setHasLoaded(true)
-    } catch (e) {
-      console.error(e)
-    }
-    setFetching(false)
-  }
+  const globalStats = statsData ?? null
+  const data: AttendanceRecord[] = rangeData?.attendances ?? []
+  const hasLoaded = !!rangeData
 
   const handleCustomSearch = () => {
-    if (customStart && customEnd) fetchData(customStart, customEnd)
+    if (customStart && customEnd) setActiveCustom({ start: customStart, end: customEnd })
   }
 
   const presets: { key: RangePreset | 'custom'; label: string }[] = [

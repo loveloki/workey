@@ -1,9 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useAuthGuard } from '../lib/useAuthGuard'
-import { useState, useEffect } from 'react'
-import { workLogs as workLogsApi, attendance as attendanceApi, todos as todosApi, history as historyApi, iterationOverrides as overridesApi, type Todo, type Attendance, type WorkLog } from '../lib/api'
+import { useState, useEffect, useMemo } from 'react'
+import { type Todo, type Attendance, type WorkLog } from '../lib/api'
 import { getDateRange, formatDate, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration, makeIterationConfig, type IterationConfig, type IterationOverrideMap } from '../lib/date-utils'
-import { settings as settingsApi } from '../lib/api'
+import {
+  useSettings, useIterationOverrides, useHistoryDateRange,
+  useWorkLogRange, useAttendanceRange, useCompletedTodosRange,
+  useSaveWorkLog, useSetOvertime,
+} from '../lib/queries'
 import { MarkdownContent, MarkdownEditor } from '../lib/markdown-editor'
 import { formatDayMarkdown } from '../lib/report-utils'
 import { CopyButton } from '../components/CopyButton'
@@ -126,123 +130,90 @@ function HistoryPage() {
   const [preset, setPreset] = useState<RangePreset | 'custom' | 'iteration'>('iteration')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
-  const [currentFetchRange, setCurrentFetchRange] = useState({ start: '', end: '' })
-  const [logs, setLogs] = useState<WorkLog[]>([])
-  const [attendances, setAttendances] = useState<Attendance[]>([])
-  const [completedTodos, setCompletedTodos] = useState<Todo[]>([])
-  const [fetching, setFetching] = useState(false)
-  // Iteration config from settings
-  const [iterConfig, setIterConfig] = useState<IterationConfig | null>(null)
-  const [iterOverrides, setIterOverrides] = useState<IterationOverrideMap>({})
-  // Iteration state
+  const [activeCustom, setActiveCustom] = useState<{ start: string; end: string } | null>(null)
   const [selectedIter, setSelectedIter] = useState<number | null>(null)
-  const [minIter, setMinIter] = useState<number | null>(null)
-  const [maxIter, setMaxIter] = useState<number | null>(null)
-  
-  // Year / Quarter state
+
   const currentYear = new Date().getFullYear()
-  const [availableYears, setAvailableYears] = useState<number[]>([currentYear])
   const [selectedYear, setSelectedYear] = useState<number>(currentYear)
   const [selectedQuarter, setSelectedQuarter] = useState<number>(Math.floor(new Date().getMonth() / 3) + 1)
 
-  // Load iteration config + overrides from settings
-  useEffect(() => {
-    if (!user) return
-    Promise.all([settingsApi.get(), overridesApi.list()]).then(([data, ovRes]) => {
-      const cfg = makeIterationConfig(data.iteration_start_date, data.iteration_duration_days)
-      setIterConfig(cfg)
-      const ovMap: IterationOverrideMap = {}
-      for (const o of ovRes.overrides) {
-        ovMap[o.iteration_number] = { start: o.start_date, end: o.end_date }
-      }
-      setIterOverrides(ovMap)
-      const cur = getCurrentIteration(cfg, ovMap)
-      setSelectedIter(cur)
-      setMaxIter(cur)
-    }).catch(console.error)
-  }, [user])
+  // ── 从 TanStack Query 获取配置数据 ──
+  const { data: settingsData } = useSettings(!!user)
+  const { data: ovData } = useIterationOverrides(!!user)
+  const { data: dateRangeData } = useHistoryDateRange(!!user)
 
-  // Load history date range to determine available iterations and years
-  useEffect(() => {
-    if (!user || !iterConfig) return
-    historyApi.dateRange().then(res => {
-      if (res.earliest) {
-        const earliestDate = new Date(res.earliest + 'T00:00:00')
-        setMinIter(getIterationNumber(earliestDate, iterConfig, iterOverrides))
-        
-        const earliestYear = earliestDate.getFullYear()
-        const cy = new Date().getFullYear()
-        const years = []
-        for (let y = cy; y >= earliestYear; y--) {
-          years.push(y)
-        }
-        if (years.length === 0) years.push(cy)
-        setAvailableYears(years)
-      }
-    }).catch(console.error)
-  }, [user, iterConfig, iterOverrides])
+  const iterOverrides = useMemo<IterationOverrideMap>(() => {
+    if (!ovData) return {}
+    const map: IterationOverrideMap = {}
+    for (const o of ovData.overrides) {
+      map[o.iteration_number] = { start: o.start_date, end: o.end_date }
+    }
+    return map
+  }, [ovData])
 
+  const iterConfig = useMemo<IterationConfig | null>(() => {
+    if (!settingsData) return null
+    return makeIterationConfig(settingsData.iteration_start_date, settingsData.iteration_duration_days)
+  }, [settingsData])
+
+  const maxIter = iterConfig ? getCurrentIteration(iterConfig, iterOverrides) : null
+
+  // 初始化 selectedIter
   useEffect(() => {
-    if (!user || preset === 'custom' || preset === 'iteration') return
-    
-    let startStr = ''
-    let endStr = ''
-    const now = new Date()
-    
-    if (preset === 'month') {
-      const range = getDateRange('month')
-      startStr = range.start
-      endStr = range.end
-    } else if (preset === 'quarter') {
+    if (iterConfig && selectedIter === null) {
+      setSelectedIter(getCurrentIteration(iterConfig, iterOverrides))
+    }
+  }, [iterConfig, iterOverrides, selectedIter])
+
+  // 从 dateRange 派生 minIter 和 availableYears
+  const { minIter, availableYears } = useMemo(() => {
+    if (!dateRangeData?.earliest || !iterConfig) {
+      return { minIter: null, availableYears: [currentYear] }
+    }
+    const earliestDate = new Date(dateRangeData.earliest + 'T00:00:00')
+    const mi = getIterationNumber(earliestDate, iterConfig, iterOverrides)
+    const earliestYear = earliestDate.getFullYear()
+    const cy = new Date().getFullYear()
+    const years: number[] = []
+    for (let y = cy; y >= earliestYear; y--) years.push(y)
+    if (years.length === 0) years.push(cy)
+    return { minIter: mi, availableYears: years }
+  }, [dateRangeData, iterConfig, iterOverrides, currentYear])
+
+  // ── 计算当前查询的日期范围 ──
+  const currentFetchRange = useMemo(() => {
+    if (preset === 'custom' && activeCustom) return activeCustom
+    if (preset === 'iteration' && iterConfig && selectedIter !== null) {
+      return getIterationRange(selectedIter, iterConfig, iterOverrides)
+    }
+    if (preset === 'month') return getDateRange('month')
+    if (preset === 'quarter') {
       const startMonth = (selectedQuarter - 1) * 3
-      const startDate = new Date(selectedYear, startMonth, 1)
-      const endDate = new Date(selectedYear, startMonth + 3, 0) // last day of quarter
-      
-      startStr = formatDate(startDate)
-      // if it's the current quarter and year, we might want to cap it to today, 
-      // but typically historical query just sends the end of the quarter
-      endStr = formatDate(endDate)
-    } else if (preset === 'year') {
-      const startDate = new Date(selectedYear, 0, 1)
-      const endDate = new Date(selectedYear, 11, 31)
-      startStr = formatDate(startDate)
-      endStr = formatDate(endDate)
+      const sd = new Date(selectedYear, startMonth, 1)
+      const ed = new Date(selectedYear, startMonth + 3, 0)
+      return { start: formatDate(sd), end: formatDate(ed) }
     }
-    
-    if (startStr && endStr) {
-      fetchData(startStr, endStr)
+    if (preset === 'year') {
+      const sd = new Date(selectedYear, 0, 1)
+      const ed = new Date(selectedYear, 11, 31)
+      return { start: formatDate(sd), end: formatDate(ed) }
     }
-  }, [preset, user, selectedYear, selectedQuarter])
+    return { start: '', end: '' }
+  }, [preset, activeCustom, iterConfig, selectedIter, iterOverrides, selectedYear, selectedQuarter])
 
-  // Fetch data when iteration changes
-  useEffect(() => {
-    if (!user || preset !== 'iteration' || !iterConfig || selectedIter === null) return
-    const range = getIterationRange(selectedIter, iterConfig, iterOverrides)
-    fetchData(range.start, range.end)
-  }, [selectedIter, preset, user, iterConfig, iterOverrides])
+  // ── 用计算出的范围查询数据 ──
+  const rangeEnabled = !!user && !!currentFetchRange.start && !!currentFetchRange.end
+  const { data: logsData, isFetching: fetchingLogs } = useWorkLogRange(currentFetchRange.start, currentFetchRange.end, rangeEnabled)
+  const { data: attData, isFetching: fetchingAtt } = useAttendanceRange(currentFetchRange.start, currentFetchRange.end, rangeEnabled)
+  const { data: todosData, isFetching: fetchingTodos } = useCompletedTodosRange(currentFetchRange.start, currentFetchRange.end, rangeEnabled)
 
-  const fetchData = async (start: string, end: string) => {
-    setCurrentFetchRange({ start, end })
-    setFetching(true)
-    try {
-      const [logsRes, attRes, todosRes] = await Promise.all([
-        workLogsApi.range(start, end),
-        attendanceApi.range(start, end),
-        todosApi.completedRange(start, end),
-      ])
-      setLogs(logsRes.work_logs)
-      setAttendances(attRes.attendances)
-      setCompletedTodos(todosRes.todos || [])
-    } catch (e) {
-      console.error(e)
-    }
-    setFetching(false)
-  }
+  const fetching = fetchingLogs || fetchingAtt || fetchingTodos
+  const logs: WorkLog[] = logsData?.work_logs ?? []
+  const attendances: Attendance[] = attData?.attendances ?? []
+  const completedTodos: Todo[] = todosData?.todos ?? []
 
   const handleCustomSearch = () => {
-    if (customStart && customEnd) {
-      fetchData(customStart, customEnd)
-    }
+    if (customStart && customEnd) setActiveCustom({ start: customStart, end: customEnd })
   }
 
   const presets: { key: RangePreset | 'custom' | 'iteration'; label: string }[] = [
@@ -446,7 +417,7 @@ function HistoryPage() {
         <div className="space-y-3">
           {sortedDates.map(date => {
             const entry = dateMap.get(date)!
-            return <HistoryEntry key={date} date={date} entry={entry} getDayMarkdown={getDayMarkdown} onRefresh={() => handleCustomSearch()} preset={preset} fetchData={fetchData} currentRange={currentFetchRange} />
+            return <HistoryEntry key={date} date={date} entry={entry} getDayMarkdown={getDayMarkdown} />
           })}
         </div>
       )}
@@ -460,10 +431,10 @@ interface HistoryEntryData {
   todos: Todo[]
 }
 
-function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: { date: string, entry: HistoryEntryData, getDayMarkdown: (d: string) => string, onRefresh?: () => void, preset?: string, fetchData: (s: string, e: string) => void, currentRange: { start: string, end: string } }) {
+function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: HistoryEntryData, getDayMarkdown: (d: string) => string }) {
   const [isEditing, setIsEditing] = useState(false)
   const [logContent, setLogContent] = useState('')
-  const [saving, setSaving] = useState(false)
+  const saveLogMut = useSaveWorkLog()
 
   const handleEdit = () => {
     setLogContent((entry.log?.content || '').replace(/^\s+/, ''))
@@ -471,15 +442,11 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
   }
 
   const handleSave = async () => {
-    setSaving(true)
     try {
-      await workLogsApi.save(date, logContent)
+      await saveLogMut.mutateAsync({ date, content: logContent })
       setIsEditing(false)
-      fetchData(currentRange.start, currentRange.end)
     } catch (e: unknown) {
       alert('保存失败: ' + (e instanceof Error ? e.message : '未知错误'))
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -508,7 +475,7 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
                 date={date}
                 isOvertime={!!entry.attendance.is_overtime}
                 isLeave={entry.attendance.status === 'leave'}
-                onChanged={() => fetchData(currentRange.start, currentRange.end)}
+                onChanged={() => {}}
               />
               <span>上班 {formatTime(entry.attendance.clock_in)}</span>
               <span>下班 {formatTime(entry.attendance.clock_out)}</span>
@@ -532,14 +499,14 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
           <div className="flex items-center gap-3 pt-2">
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saveLogMut.isPending}
               className="rounded-md bg-[var(--color-solid)] px-5 py-2 font-mono text-sm text-[var(--color-solid-text)] hover:bg-[var(--color-solid-hover)] disabled:opacity-50"
             >
-              {saving ? '保存中...' : '保存修改'}
+              {saveLogMut.isPending ? '保存中...' : '保存修改'}
             </button>
             <button
               onClick={() => setIsEditing(false)}
-              disabled={saving}
+              disabled={saveLogMut.isPending}
               className="rounded-md border border-[var(--color-border)] px-5 py-2 font-mono text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
             >
               取消
@@ -603,25 +570,21 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
   )
 }
 
-function OvertimeBadge({ date, isOvertime, isLeave, onChanged }: { date: string, isOvertime: boolean, isLeave: boolean, onChanged: () => void }) {
-  const [busy, setBusy] = useState(false)
+function OvertimeBadge({ date, isOvertime, isLeave }: { date: string, isOvertime: boolean, isLeave: boolean, onChanged?: () => void }) {
+  const overtimeMut = useSetOvertime()
   if (isLeave) return null
   const toggle = async () => {
-    if (busy) return
-    setBusy(true)
+    if (overtimeMut.isPending) return
     try {
-      await attendanceApi.setOvertime(date, !isOvertime)
-      onChanged()
+      await overtimeMut.mutateAsync({ date, isOvertime: !isOvertime })
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '更新失败')
-    } finally {
-      setBusy(false)
     }
   }
   return (
     <button
       onClick={toggle}
-      disabled={busy}
+      disabled={overtimeMut.isPending}
       title={isOvertime ? '点击取消加班标记' : '点击标记为加班'}
       className="px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors disabled:opacity-50"
       style={{

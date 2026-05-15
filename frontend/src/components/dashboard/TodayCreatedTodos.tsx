@@ -1,51 +1,33 @@
 import { useNavigate } from '@tanstack/react-router'
-import { useState, useEffect, useCallback, useRef, type FormEvent, type KeyboardEvent } from 'react'
-import { todos as todosApi, type Todo } from '../../lib/api'
+import { useState, useRef, type FormEvent, type KeyboardEvent } from 'react'
+import { type Todo } from '../../lib/api'
+import { useCreatedTodosToday, useCreateTodo, useUpdateTodo, useDeleteTodo } from '../../lib/queries'
 
-export function useTodayCreatedTodos() {
-  const [items, setItems] = useState<Todo[]>([])
-  const [loading, setLoading] = useState(true)
+function useTodayCreatedTodos() {
+  const { data, isLoading } = useCreatedTodosToday()
+  const createMut = useCreateTodo()
+  const updateMut = useUpdateTodo()
+  const deleteMut = useDeleteTodo()
 
-  const load = useCallback(() => {
-    todosApi.createdToday()
-      .then(d => setItems(d.todos || []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => { load() }, [load])
-
-  // Poll every 30s
-  useEffect(() => {
-    const timer = setInterval(() => {
-      todosApi.createdToday()
-        .then(d => setItems(d.todos || []))
-        .catch(() => {})
-    }, 30000)
-    return () => clearInterval(timer)
-  }, [])
+  const items = data?.todos ?? []
 
   const toggleDone = async (todo: Todo) => {
-    const { todo: updated } = await todosApi.update(todo.id, { done: !todo.done })
-    setItems(prev => prev.map(t => t.id === todo.id ? updated : t))
+    await updateMut.mutateAsync({ id: todo.id, data: { done: !todo.done } })
   }
 
-  const updateTodo = async (id: number, data: { content?: string; url?: string }) => {
-    const { todo: updated } = await todosApi.update(id, data)
-    setItems(prev => prev.map(t => t.id === id ? updated : t))
+  const updateTodo = async (id: number, d: { content?: string; url?: string }) => {
+    await updateMut.mutateAsync({ id, data: d })
   }
 
   const deleteTodo = async (id: number) => {
-    await todosApi.delete(id)
-    setItems(prev => prev.filter(t => t.id !== id))
+    await deleteMut.mutateAsync(id)
   }
 
   const addTodo = async (content: string, url: string) => {
-    const { todo } = await todosApi.create(content, url)
-    setItems(prev => [todo, ...prev])
+    await createMut.mutateAsync({ content, url })
   }
 
-  return { items, loading, toggleDone, updateTodo, deleteTodo, addTodo }
+  return { items, loading: isLoading, toggleDone, updateTodo, deleteTodo, addTodo }
 }
 
 function AddTodoForm({ onAdd }: { onAdd: (content: string, url: string) => Promise<void> }) {
