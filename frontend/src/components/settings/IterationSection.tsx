@@ -314,7 +314,7 @@ export function IterationSection() {
                 return (
                   <div
                     key={iter.num}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] ${
+                    className={`flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] ${
                       isCurrent
                         ? 'bg-[var(--color-surface)] border border-[var(--color-border-strong,#ccc)]'
                         : ''
@@ -323,10 +323,10 @@ export function IterationSection() {
                     <span className="font-mono text-sm font-semibold min-w-16 text-[var(--color-ink)]">
                       Iter {iter.num}
                     </span>
-                    <span className="font-mono text-xs text-[var(--color-ink-secondary)] min-w-[160px]">
+                    <span className="font-mono text-xs text-[var(--color-ink-secondary)]">
                       {iter.start} ~ {iter.end}
                     </span>
-                    <span className="font-mono text-xs hidden sm:inline text-[var(--color-ink-faint)] min-w-10">
+                    <span className="font-mono text-xs hidden sm:inline text-[var(--color-ink-faint)]">
                       {days} 天
                     </span>
                     {isCurrent && (
@@ -377,8 +377,8 @@ export function IterationSection() {
               const defaultDays = parseInt(durationDays, 10) || 14
               const diff = days - defaultDays
               return (
-                <div key={n} className="flex items-center gap-2 font-mono text-xs py-1">
-                  <span className="min-w-14 font-semibold">Iter {n}</span>
+                <div key={n} className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs py-1">
+                  <span className="font-semibold">Iter {n}</span>
                   <span className="text-[var(--color-ink-secondary)]">
                     {o.start} ~ {o.end}
                   </span>
@@ -391,18 +391,20 @@ export function IterationSection() {
                       {diff}天
                     </span>
                   )}
-                  <button
-                    onClick={() => setViewCenter(n)}
-                    className="ml-auto font-mono text-xs px-2 py-0.5 rounded-md border border-[var(--color-border)] text-[var(--color-ink-muted)]"
-                  >
-                    查看
-                  </button>
-                  <button
-                    onClick={() => removeOverride(n)}
-                    className="font-mono text-xs px-2 py-0.5 rounded-md border border-[var(--color-danger-border,#fca5a5)] text-[var(--color-danger-text,#dc2626)]"
-                  >
-                    删除
-                  </button>
+                  <div className="flex gap-1 ml-auto">
+                    <button
+                      onClick={() => setViewCenter(n)}
+                      className="font-mono text-xs px-2 py-0.5 rounded-md border border-[var(--color-border)] text-[var(--color-ink-muted)]"
+                    >
+                      查看
+                    </button>
+                    <button
+                      onClick={() => removeOverride(n)}
+                      className="font-mono text-xs px-2 py-0.5 rounded-md border border-[var(--color-danger-border,#fca5a5)] text-[var(--color-danger-text,#dc2626)]"
+                    >
+                      删除
+                    </button>
+                  </div>
                 </div>
               )
             })}

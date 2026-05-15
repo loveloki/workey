@@ -213,9 +213,11 @@ body,
   min-height: 100%;
 }
 
-/* Prevent pinch-zoom and double-tap-zoom on mobile (PWA) */
+/* 禁止移动端橡皮筋过度滚动 + 防止子元素撑出水平滚动（PWA 原生体感） */
 html {
   touch-action: manipulation;
+  overscroll-behavior: none;
+  overflow-x: hidden;
 }
 
 body {
@@ -226,6 +228,7 @@ body {
   line-height: 1.6;
   background-color: var(--color-bg);
   overflow-x: hidden;
+  overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

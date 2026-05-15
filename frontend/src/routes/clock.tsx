@@ -184,7 +184,7 @@ function ClockWidget() {
       )}
 
       <div
-        className="mt-10 flex items-center gap-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] px-8 py-5"
+        className="mt-10 flex items-center gap-4 sm:gap-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] px-4 sm:px-8 py-5"
       >
         <div className="text-center">
           <p className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">上班</p>
