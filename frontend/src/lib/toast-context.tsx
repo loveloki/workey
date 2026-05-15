@@ -46,9 +46,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast, toastError, toastSuccess }}>
       {children}
-      {/* Toast 容器 - 固定在屏幕底部中央 */}
+      {/* Toast 容器 - 固定在屏幕右上角 */}
       {items.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 pointer-events-none">
+        <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
           {items.map(item => {
             const typeStyles: Record<ToastType, string> = {
               error: 'bg-[var(--color-danger-bg)] border-[var(--color-danger-border)] text-[var(--color-danger-text)]',

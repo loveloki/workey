@@ -19,6 +19,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.100.10",
     "@tanstack/react-router": "^1.120.0",
+    "jszip": "^3.10.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
