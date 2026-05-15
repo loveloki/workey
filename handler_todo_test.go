@@ -2,9 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,7 +17,7 @@ func TestHandleTodos_CRUD(t *testing.T) {
 
 	userID := createTestUser(t, "todouser", "password123")
 
-	var createdTodoID float64
+	var createdTodoID int64
 
 	t.Run("创建待办", func(t *testing.T) {
 		body := `{"content":"完成单元测试","url":"https://example.com"}`
@@ -28,13 +28,12 @@ func TestHandleTodos_CRUD(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp TodoResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		todo := resp["todo"].(map[string]interface{})
-		assert.Equal(t, "完成单元测试", todo["content"])
-		assert.Equal(t, "https://example.com", todo["url"])
-		assert.Equal(t, false, todo["done"])
-		createdTodoID = todo["id"].(float64)
+		assert.Equal(t, "完成单元测试", resp.Todo.Content)
+		assert.Equal(t, "https://example.com", resp.Todo.URL)
+		assert.Equal(t, false, resp.Todo.Done)
+		createdTodoID = resp.Todo.ID
 	})
 
 	t.Run("获取待办列表", func(t *testing.T) {
@@ -45,15 +44,14 @@ func TestHandleTodos_CRUD(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp TodoListResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		todos := resp["todos"].([]interface{})
-		assert.Len(t, todos, 1)
+		assert.Len(t, resp.Todos, 1)
 	})
 
 	t.Run("更新待办为已完成", func(t *testing.T) {
 		body := `{"done":true}`
-		url := "/api/todos?id=" + formatFloat(createdTodoID)
+		url := "/api/todos?id=" + strconv.FormatInt(createdTodoID, 10)
 		req := createAuthenticatedRequest(t, "PUT", url, body, userID)
 		rr := httptest.NewRecorder()
 
@@ -61,14 +59,13 @@ func TestHandleTodos_CRUD(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp TodoResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		todo := resp["todo"].(map[string]interface{})
-		assert.Equal(t, true, todo["done"])
+		assert.Equal(t, true, resp.Todo.Done)
 	})
 
 	t.Run("删除待办", func(t *testing.T) {
-		url := "/api/todos?id=" + formatFloat(createdTodoID)
+		url := "/api/todos?id=" + strconv.FormatInt(createdTodoID, 10)
 		req := createAuthenticatedRequest(t, "DELETE", url, "", userID)
 		rr := httptest.NewRecorder()
 
@@ -135,9 +132,9 @@ func TestHandleUpdateTodo_Details(t *testing.T) {
 	handleTodos(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 
-	var resp map[string]interface{}
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	todoID := formatFloat(resp["todo"].(map[string]interface{})["id"].(float64))
+	var createResp TodoResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &createResp))
+	todoID := strconv.FormatInt(createResp.Todo.ID, 10)
 
 	t.Run("只更新内容", func(t *testing.T) {
 		body := `{"content":"新内容"}`
@@ -147,11 +144,10 @@ func TestHandleUpdateTodo_Details(t *testing.T) {
 		handleTodos(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp TodoResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		todo := resp["todo"].(map[string]interface{})
-		assert.Equal(t, "新内容", todo["content"])
-		assert.Equal(t, "https://old.url", todo["url"])
+		assert.Equal(t, "新内容", resp.Todo.Content)
+		assert.Equal(t, "https://old.url", resp.Todo.URL)
 	})
 
 	t.Run("只更新 URL", func(t *testing.T) {
@@ -203,10 +199,6 @@ func TestHandleUpdateTodo_Details(t *testing.T) {
 	})
 }
 
-func formatFloat(f float64) string {
-	return fmt.Sprintf("%.0f", f)
-}
-
 func TestHandleCreatedTodayTodos(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
@@ -228,10 +220,9 @@ func TestHandleCreatedTodayTodos(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp TodoListResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		todos := resp["todos"].([]interface{})
-		assert.Len(t, todos, 1)
+		assert.Len(t, resp.Todos, 1)
 	})
 
 	t.Run("POST 方法不允许", func(t *testing.T) {
@@ -271,13 +262,13 @@ func TestHandleCompletedTodayTodos(t *testing.T) {
 	handleTodos(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 
-	var resp map[string]interface{}
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	todoID := resp["todo"].(map[string]interface{})["id"].(float64)
+	var createResp TodoResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &createResp))
+	todoIDStr := strconv.FormatInt(createResp.Todo.ID, 10)
 
 	// 标记为完成
 	body = `{"done":true}`
-	req = createAuthenticatedRequest(t, "PUT", "/api/todos?id="+formatFloat(todoID), body, userID)
+	req = createAuthenticatedRequest(t, "PUT", "/api/todos?id="+todoIDStr, body, userID)
 	rr = httptest.NewRecorder()
 	handleTodos(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
@@ -290,10 +281,9 @@ func TestHandleCompletedTodayTodos(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp TodoListResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		todos := resp["todos"].([]interface{})
-		assert.Len(t, todos, 1)
+		assert.Len(t, resp.Todos, 1)
 	})
 }
 
@@ -320,11 +310,11 @@ func TestHandleCompletedRangeTodos(t *testing.T) {
 		handleTodos(rr, req)
 		require.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
-		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		todoID := resp["todo"].(map[string]interface{})["id"].(float64)
+		var createResp TodoResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &createResp))
+		todoIDStr := strconv.FormatInt(createResp.Todo.ID, 10)
 
-		req = createAuthenticatedRequest(t, "PUT", "/api/todos?id="+formatFloat(todoID), `{"done":true}`, userID)
+		req = createAuthenticatedRequest(t, "PUT", "/api/todos?id="+todoIDStr, `{"done":true}`, userID)
 		rr = httptest.NewRecorder()
 		handleTodos(rr, req)
 		require.Equal(t, http.StatusOK, rr.Code)
@@ -337,9 +327,9 @@ func TestHandleCompletedRangeTodos(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		todos := resp["todos"].([]interface{})
-		assert.Len(t, todos, 1)
+		var listResp TodoListResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &listResp))
+		assert.Len(t, listResp.Todos, 1)
 	})
 
 	t.Run("POST 方法不允许", func(t *testing.T) {
@@ -365,11 +355,11 @@ func TestHandleGetTodosAll(t *testing.T) {
 	handleTodos(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 
-	var resp map[string]interface{}
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	todoID := resp["todo"].(map[string]interface{})["id"].(float64)
+	var createResp TodoResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &createResp))
+	todoIDStr := strconv.FormatInt(createResp.Todo.ID, 10)
 
-	req = createAuthenticatedRequest(t, "PUT", "/api/todos?id="+formatFloat(todoID), `{"done":true}`, userID)
+	req = createAuthenticatedRequest(t, "PUT", "/api/todos?id="+todoIDStr, `{"done":true}`, userID)
 	rr = httptest.NewRecorder()
 	handleTodos(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
@@ -387,10 +377,9 @@ func TestHandleGetTodosAll(t *testing.T) {
 
 		handleTodos(rr, req)
 
-		var resp map[string]interface{}
+		var resp TodoListResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		todos := resp["todos"].([]interface{})
-		assert.Len(t, todos, 1)
+		assert.Len(t, resp.Todos, 1)
 	})
 
 	t.Run("all=1 返回所有", func(t *testing.T) {
@@ -399,9 +388,8 @@ func TestHandleGetTodosAll(t *testing.T) {
 
 		handleTodos(rr, req)
 
-		var resp map[string]interface{}
+		var resp TodoListResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		todos := resp["todos"].([]interface{})
-		assert.Len(t, todos, 2)
+		assert.Len(t, resp.Todos, 2)
 	})
 }

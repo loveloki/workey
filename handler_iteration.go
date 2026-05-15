@@ -40,7 +40,7 @@ func handleGetIterationOverrides(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&o.ID, &o.UserID, &o.IterationNumber, &o.StartDate, &o.EndDate, &o.CreatedAt, &o.UpdatedAt)
 		overrides = append(overrides, o)
 	}
-	jsonOK(w, map[string]interface{}{"overrides": overrides})
+	jsonOK(w, IterationOverrideListResponse{Overrides: overrides})
 }
 
 func handleCreateIterationOverride(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +111,7 @@ func handleCreateIterationOverride(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonOK(w, map[string]interface{}{"override": o})
+	jsonOK(w, IterationOverrideResponse{Override: o})
 }
 
 func handleDeleteIterationOverride(w http.ResponseWriter, r *http.Request) {
@@ -134,5 +134,5 @@ func handleDeleteIterationOverride(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonOK(w, map[string]string{"message": "Override deleted"})
+	jsonOK(w, MessageResponse{Message: "Override deleted"})
 }

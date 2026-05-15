@@ -495,21 +495,14 @@ func handlePasskeyList(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	type PasskeyInfo struct {
-		ID         int64   `json:"id"`
-		Name       string  `json:"name"`
-		CreatedAt  string  `json:"created_at"`
-		LastUsedAt *string `json:"last_used_at"`
-	}
-
-	passkeys := []PasskeyInfo{}
+	passkeys := []Passkey{}
 	for rows.Next() {
-		var p PasskeyInfo
+		var p Passkey
 		rows.Scan(&p.ID, &p.Name, &p.CreatedAt, &p.LastUsedAt)
 		passkeys = append(passkeys, p)
 	}
 
-	jsonOK(w, map[string]interface{}{"passkeys": passkeys})
+	jsonOK(w, PasskeyListResponse{Passkeys: passkeys})
 }
 
 func handlePasskeyDelete(w http.ResponseWriter, r *http.Request) {

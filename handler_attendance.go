@@ -61,7 +61,7 @@ func handleClockIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	attendance := getAttendance(userID, date)
-	jsonOK(w, attendance)
+	jsonOK(w, AttendanceResponse{Attendance: attendance})
 }
 
 func handleAttendanceOvertime(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +104,7 @@ func handleAttendanceOvertime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonOK(w, getAttendance(userID, req.Date))
+	jsonOK(w, AttendanceResponse{Attendance: getAttendance(userID, req.Date)})
 }
 
 func handleLeave(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +141,7 @@ func handleLeave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	attendance := getAttendance(userID, date)
-	jsonOK(w, attendance)
+	jsonOK(w, AttendanceResponse{Attendance: attendance})
 }
 
 func handleClockOut(w http.ResponseWriter, r *http.Request) {
@@ -171,7 +171,7 @@ func handleClockOut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	attendance := getAttendance(userID, date)
-	jsonOK(w, attendance)
+	jsonOK(w, AttendanceResponse{Attendance: attendance})
 }
 
 func handleAttendanceToday(w http.ResponseWriter, r *http.Request) {
@@ -183,10 +183,10 @@ func handleAttendanceToday(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
 	attendance := getAttendance(userID, today())
 	if attendance == nil {
-		jsonOK(w, map[string]interface{}{"attendance": nil})
+		jsonOK(w, AttendanceResponse{})
 		return
 	}
-	jsonOK(w, map[string]interface{}{"attendance": attendance})
+	jsonOK(w, AttendanceResponse{Attendance: attendance})
 }
 
 func handleAttendanceStats(w http.ResponseWriter, r *http.Request) {
@@ -212,10 +212,10 @@ func handleAttendanceStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonOK(w, map[string]interface{}{
-		"global_overtime_days": overtimeDays,
-		"global_leave_days":    leaveDays,
-		"global_remaining":     overtimeDays - leaveDays,
+	jsonOK(w, AttendanceStatsResponse{
+		GlobalOvertimeDays: int64(overtimeDays),
+		GlobalLeaveDays:    int64(leaveDays),
+		GlobalRemaining:    int64(overtimeDays - leaveDays),
 	})
 }
 
@@ -251,7 +251,7 @@ func handleAttendanceRange(w http.ResponseWriter, r *http.Request) {
 		a.IsOvertime = ov == 1
 		attendances = append(attendances, a)
 	}
-	jsonOK(w, map[string]interface{}{"attendances": attendances})
+	jsonOK(w, AttendanceListResponse{Attendances: attendances})
 }
 
 // getAttendance 查询指定用户指定日期的考勤记录

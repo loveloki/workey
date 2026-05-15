@@ -16,13 +16,7 @@ func handleSystemVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type Version struct {
-		Commit  string `json:"commit"`
-		Date    string `json:"date"`
-		Content string `json:"content"`
-	}
-
-	var v Version
+	var v VersionResponse
 	data, err := os.ReadFile("version.json")
 	if err == nil {
 		if err := json.Unmarshal(data, &v); err == nil && v.Commit != "" {
@@ -70,9 +64,11 @@ func handleHistoryDateRange(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !earliest.Valid {
-		jsonOK(w, map[string]interface{}{"earliest": nil, "latest": nil})
+		jsonOK(w, VersionRangeResponse{})
 		return
 	}
 
-	jsonOK(w, map[string]interface{}{"earliest": earliest.String, "latest": latest.String})
+	e := earliest.String
+	l := latest.String
+	jsonOK(w, VersionRangeResponse{Earliest: &e, Latest: &l})
 }

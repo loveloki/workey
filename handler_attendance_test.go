@@ -24,9 +24,10 @@ func TestHandleClockIn(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp AttendanceResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.NotNil(t, resp["clock_in"])
+		require.NotNil(t, resp.Attendance)
+		assert.NotNil(t, resp.Attendance.ClockIn)
 	})
 
 	t.Run("重复打卡应返回冲突", func(t *testing.T) {
@@ -84,9 +85,9 @@ func TestHandleAttendanceToday(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp AttendanceResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Nil(t, resp["attendance"])
+		assert.Nil(t, resp.Attendance)
 	})
 }
 
@@ -104,9 +105,10 @@ func TestHandleLeave(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp AttendanceResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Equal(t, "leave", resp["status"])
+		require.NotNil(t, resp.Attendance)
+		assert.Equal(t, "leave", resp.Attendance.Status)
 	})
 }
 
@@ -123,10 +125,10 @@ func TestHandleAttendanceStats(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var resp map[string]interface{}
+	var resp AttendanceStatsResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	assert.Equal(t, float64(0), resp["global_overtime_days"])
-	assert.Equal(t, float64(0), resp["global_leave_days"])
+	assert.Equal(t, int64(0), resp.GlobalOvertimeDays)
+	assert.Equal(t, int64(0), resp.GlobalLeaveDays)
 }
 
 func TestHandleAttendanceRange(t *testing.T) {
@@ -152,9 +154,9 @@ func TestHandleAttendanceRange(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp AttendanceListResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.IsType(t, []interface{}{}, resp["attendances"])
+		assert.Empty(t, resp.Attendances)
 	})
 }
 
@@ -170,9 +172,10 @@ func TestHandleAttendanceOvertime(t *testing.T) {
 	handleClockIn(rrIn, reqIn)
 	require.Equal(t, http.StatusOK, rrIn.Code)
 
-	var clockResp map[string]interface{}
+	var clockResp AttendanceResponse
 	require.NoError(t, json.Unmarshal(rrIn.Body.Bytes(), &clockResp))
-	date := clockResp["date"].(string)
+	require.NotNil(t, clockResp.Attendance)
+	date := clockResp.Attendance.Date
 
 	t.Run("设置加班标记", func(t *testing.T) {
 		body := `{"date":"` + date + `","is_overtime":true}`
@@ -183,9 +186,10 @@ func TestHandleAttendanceOvertime(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp AttendanceResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Equal(t, true, resp["is_overtime"])
+		require.NotNil(t, resp.Attendance)
+		assert.True(t, resp.Attendance.IsOvertime)
 	})
 
 	t.Run("缺少日期字段", func(t *testing.T) {
@@ -255,9 +259,10 @@ func TestHandleLeaveOverwritesClockIn(t *testing.T) {
 	handleLeave(rrLeave, reqLeave)
 
 	assert.Equal(t, http.StatusOK, rrLeave.Code)
-	var resp map[string]interface{}
+	var resp AttendanceResponse
 	require.NoError(t, json.Unmarshal(rrLeave.Body.Bytes(), &resp))
-	assert.Equal(t, "leave", resp["status"])
+	require.NotNil(t, resp.Attendance)
+	assert.Equal(t, "leave", resp.Attendance.Status)
 }
 
 func TestHandleClockInWithOvertime(t *testing.T) {
@@ -275,9 +280,10 @@ func TestHandleClockInWithOvertime(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp AttendanceResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Equal(t, true, resp["is_overtime"])
+		require.NotNil(t, resp.Attendance)
+		assert.True(t, resp.Attendance.IsOvertime)
 	})
 }
 
@@ -381,13 +387,10 @@ func TestHandleAttendanceRangeWithData(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var resp map[string]interface{}
+	var resp AttendanceListResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	atts := resp["attendances"].([]interface{})
-	assert.Len(t, atts, 2)
-
-	first := atts[0].(map[string]interface{})
-	assert.Equal(t, true, first["is_overtime"])
+	assert.Len(t, resp.Attendances, 2)
+	assert.True(t, resp.Attendances[0].IsOvertime)
 }
 
 func TestHandleAttendanceStatsWithData(t *testing.T) {
@@ -408,9 +411,9 @@ func TestHandleAttendanceStatsWithData(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var resp map[string]interface{}
+	var resp AttendanceStatsResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	assert.Equal(t, float64(2), resp["global_overtime_days"])
-	assert.Equal(t, float64(1), resp["global_leave_days"])
-	assert.Equal(t, float64(1), resp["global_remaining"])
+	assert.Equal(t, int64(2), resp.GlobalOvertimeDays)
+	assert.Equal(t, int64(1), resp.GlobalLeaveDays)
+	assert.Equal(t, int64(1), resp.GlobalRemaining)
 }

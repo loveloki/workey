@@ -211,12 +211,10 @@ func TestHandlePasskeyList(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var resp map[string]interface{}
+	var resp PasskeyListResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	passkeys := resp["passkeys"].([]interface{})
-	assert.Len(t, passkeys, 1)
-	pk := passkeys[0].(map[string]interface{})
-	assert.Equal(t, "My Key", pk["name"])
+	assert.Len(t, resp.Passkeys, 1)
+	assert.Equal(t, "My Key", resp.Passkeys[0].Name)
 }
 
 func TestHandlePasskeyDelete(t *testing.T) {

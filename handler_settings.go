@@ -67,7 +67,13 @@ func handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonOK(w, map[string]string{"timezone": timezone, "kanban_url": kanbanURL, "theme": theme, "iteration_start_date": iterationStartDate, "iteration_duration_days": iterationDurationDays})
+	jsonOK(w, SettingsResponse{
+		Timezone:              timezone,
+		KanbanURL:             kanbanURL,
+		Theme:                 theme,
+		IterationStartDate:    iterationStartDate,
+		IterationDurationDays: iterationDurationDays,
+	})
 }
 
 func handlePostSettings(w http.ResponseWriter, r *http.Request) {
@@ -115,15 +121,26 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		"iteration_start_date":    "2019-09-02",
 		"iteration_duration_days": "14",
 	}
-	result := map[string]string{}
+	var resp SettingsResponse
 	for key, defaultVal := range defaults {
 		var val string
 		err := db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = ?", userID, key).Scan(&val)
 		if err != nil {
 			val = defaultVal
 		}
-		result[key] = val
+		switch key {
+		case "timezone":
+			resp.Timezone = val
+		case "kanban_url":
+			resp.KanbanURL = val
+		case "theme":
+			resp.Theme = val
+		case "iteration_start_date":
+			resp.IterationStartDate = val
+		case "iteration_duration_days":
+			resp.IterationDurationDays = val
+		}
 	}
 
-	jsonOK(w, result)
+	jsonOK(w, resp)
 }

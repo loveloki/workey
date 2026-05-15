@@ -17,7 +17,7 @@ func TestHandleChecklists_CRUD(t *testing.T) {
 
 	userID := createTestUser(t, "cluser", "password123")
 
-	var checklistID float64
+	var checklistID int64
 
 	t.Run("创建检查清单", func(t *testing.T) {
 		body := `{"title":"每日检查","items":[{"text":"item1","checked":false}]}`
@@ -28,11 +28,10 @@ func TestHandleChecklists_CRUD(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp ChecklistResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		cl := resp["checklist"].(map[string]interface{})
-		assert.Equal(t, "每日检查", cl["title"])
-		checklistID = cl["id"].(float64)
+		assert.Equal(t, "每日检查", resp.Checklist.Title)
+		checklistID = resp.Checklist.ID
 	})
 
 	t.Run("获取检查清单列表", func(t *testing.T) {
@@ -43,15 +42,14 @@ func TestHandleChecklists_CRUD(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp ChecklistListResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		cls := resp["checklists"].([]interface{})
-		assert.Len(t, cls, 1)
+		assert.Len(t, resp.Checklists, 1)
 	})
 
 	t.Run("更新检查清单标题", func(t *testing.T) {
 		body := `{"title":"更新后的标题"}`
-		url := fmt.Sprintf("/api/checklists?id=%.0f", checklistID)
+		url := fmt.Sprintf("/api/checklists?id=%d", checklistID)
 		req := createAuthenticatedRequest(t, "PUT", url, body, userID)
 		rr := httptest.NewRecorder()
 
@@ -59,14 +57,13 @@ func TestHandleChecklists_CRUD(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp ChecklistResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		cl := resp["checklist"].(map[string]interface{})
-		assert.Equal(t, "更新后的标题", cl["title"])
+		assert.Equal(t, "更新后的标题", resp.Checklist.Title)
 	})
 
 	t.Run("删除检查清单", func(t *testing.T) {
-		url := fmt.Sprintf("/api/checklists?id=%.0f", checklistID)
+		url := fmt.Sprintf("/api/checklists?id=%d", checklistID)
 		req := createAuthenticatedRequest(t, "DELETE", url, "", userID)
 		rr := httptest.NewRecorder()
 
@@ -127,14 +124,14 @@ func TestHandleChecklistSnapshots_CRUD(t *testing.T) {
 	handleChecklists(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 
-	var clResp map[string]interface{}
+	var clResp ChecklistResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &clResp))
-	clID := clResp["checklist"].(map[string]interface{})["id"].(float64)
+	clID := clResp.Checklist.ID
 
-	var snapshotID float64
+	var snapshotID int64
 
 	t.Run("创建快照", func(t *testing.T) {
-		body := fmt.Sprintf(`{"checklist_id":%.0f,"title":"v1","items_hash":"abc123","data":{"checked":[true]}}`, clID)
+		body := fmt.Sprintf(`{"checklist_id":%d,"title":"v1","items_hash":"abc123","data":{"checked":[true]}}`, clID)
 		req := createAuthenticatedRequest(t, "POST", "/api/checklist-snapshots", body, userID)
 		rr := httptest.NewRecorder()
 
@@ -142,15 +139,14 @@ func TestHandleChecklistSnapshots_CRUD(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp SnapshotResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		snap := resp["snapshot"].(map[string]interface{})
-		assert.Equal(t, "v1", snap["title"])
-		snapshotID = snap["id"].(float64)
+		assert.Equal(t, "v1", resp.Snapshot.Title)
+		snapshotID = resp.Snapshot.ID
 	})
 
 	t.Run("获取快照列表", func(t *testing.T) {
-		url := fmt.Sprintf("/api/checklist-snapshots?checklist_id=%.0f", clID)
+		url := fmt.Sprintf("/api/checklist-snapshots?checklist_id=%d", clID)
 		req := createAuthenticatedRequest(t, "GET", url, "", userID)
 		rr := httptest.NewRecorder()
 
@@ -158,10 +154,9 @@ func TestHandleChecklistSnapshots_CRUD(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp SnapshotListResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		snaps := resp["snapshots"].([]interface{})
-		assert.Len(t, snaps, 1)
+		assert.Len(t, resp.Snapshots, 1)
 	})
 
 	t.Run("缺少 checklist_id 获取快照", func(t *testing.T) {
@@ -184,7 +179,7 @@ func TestHandleChecklistSnapshots_CRUD(t *testing.T) {
 	})
 
 	t.Run("删除快照", func(t *testing.T) {
-		url := fmt.Sprintf("/api/checklist-snapshots?id=%.0f", snapshotID)
+		url := fmt.Sprintf("/api/checklist-snapshots?id=%d", snapshotID)
 		req := createAuthenticatedRequest(t, "DELETE", url, "", userID)
 		rr := httptest.NewRecorder()
 
@@ -244,13 +239,13 @@ func TestHandleChecklistUpdate_Items(t *testing.T) {
 	handleChecklists(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 
-	var resp map[string]interface{}
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	clID := resp["checklist"].(map[string]interface{})["id"].(float64)
+	var clResp ChecklistResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &clResp))
+	clID := clResp.Checklist.ID
 
 	t.Run("更新 items", func(t *testing.T) {
 		body := `{"items":[{"text":"更新后","checked":true}]}`
-		url := fmt.Sprintf("/api/checklists?id=%.0f", clID)
+		url := fmt.Sprintf("/api/checklists?id=%d", clID)
 		req := createAuthenticatedRequest(t, "PUT", url, body, userID)
 		rr := httptest.NewRecorder()
 
@@ -260,7 +255,7 @@ func TestHandleChecklistUpdate_Items(t *testing.T) {
 	})
 
 	t.Run("无效 JSON 请求体", func(t *testing.T) {
-		url := fmt.Sprintf("/api/checklists?id=%.0f", clID)
+		url := fmt.Sprintf("/api/checklists?id=%d", clID)
 		req := createAuthenticatedRequest(t, "PUT", url, "bad json", userID)
 		rr := httptest.NewRecorder()
 

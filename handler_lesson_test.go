@@ -25,10 +25,10 @@ func TestHandleLesson(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp LessonResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		lesson := resp["lesson"].(map[string]interface{})
-		assert.Equal(t, "学到了新知识", lesson["content"])
+		require.NotNil(t, resp.Lesson)
+		assert.Equal(t, "学到了新知识", resp.Lesson.Content)
 	})
 
 	t.Run("Upsert 同日期", func(t *testing.T) {
@@ -40,10 +40,10 @@ func TestHandleLesson(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp LessonResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		lesson := resp["lesson"].(map[string]interface{})
-		assert.Equal(t, "更新后的教训", lesson["content"])
+		require.NotNil(t, resp.Lesson)
+		assert.Equal(t, "更新后的教训", resp.Lesson.Content)
 	})
 
 	t.Run("获取今日教训", func(t *testing.T) {
@@ -63,10 +63,9 @@ func TestHandleLesson(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp LessonListResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		lessons := resp["lessons"].([]interface{})
-		assert.Len(t, lessons, 1)
+		assert.Len(t, resp.Lessons, 1)
 	})
 
 	t.Run("GET 方法不允许", func(t *testing.T) {

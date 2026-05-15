@@ -24,11 +24,11 @@ func TestHandleSettings(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]string
+		var resp SettingsResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Equal(t, "+8", resp["timezone"])
-		assert.Equal(t, "light", resp["theme"])
-		assert.Equal(t, "14", resp["iteration_duration_days"])
+		assert.Equal(t, "+8", resp.Timezone)
+		assert.Equal(t, "light", resp.Theme)
+		assert.Equal(t, "14", resp.IterationDurationDays)
 	})
 
 	t.Run("更新设置", func(t *testing.T) {
@@ -40,10 +40,10 @@ func TestHandleSettings(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]string
+		var resp SettingsResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Equal(t, "+9", resp["timezone"])
-		assert.Equal(t, "dark", resp["theme"])
+		assert.Equal(t, "+9", resp.Timezone)
+		assert.Equal(t, "dark", resp.Theme)
 	})
 
 	t.Run("更新后读取验证持久化", func(t *testing.T) {
@@ -52,10 +52,10 @@ func TestHandleSettings(t *testing.T) {
 
 		handleSettings(rr, req)
 
-		var resp map[string]string
+		var resp SettingsResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Equal(t, "+9", resp["timezone"])
-		assert.Equal(t, "dark", resp["theme"])
+		assert.Equal(t, "+9", resp.Timezone)
+		assert.Equal(t, "dark", resp.Theme)
 	})
 
 	t.Run("更新所有设置", func(t *testing.T) {
@@ -67,13 +67,13 @@ func TestHandleSettings(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]string
+		var resp SettingsResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Equal(t, "+0", resp["timezone"])
-		assert.Equal(t, "auto", resp["theme"])
-		assert.Equal(t, "https://custom.url", resp["kanban_url"])
-		assert.Equal(t, "2024-01-01", resp["iteration_start_date"])
-		assert.Equal(t, "7", resp["iteration_duration_days"])
+		assert.Equal(t, "+0", resp.Timezone)
+		assert.Equal(t, "auto", resp.Theme)
+		assert.Equal(t, "https://custom.url", resp.KanbanURL)
+		assert.Equal(t, "2024-01-01", resp.IterationStartDate)
+		assert.Equal(t, "7", resp.IterationDurationDays)
 	})
 
 	t.Run("PUT 方法不允许", func(t *testing.T) {
@@ -102,12 +102,12 @@ func TestHandleSettings(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]string
+		var resp SettingsResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Equal(t, "+0", resp["timezone"])
-		assert.Equal(t, "auto", resp["theme"])
-		assert.Equal(t, "https://custom.url", resp["kanban_url"])
-		assert.Equal(t, "2024-01-01", resp["iteration_start_date"])
-		assert.Equal(t, "7", resp["iteration_duration_days"])
+		assert.Equal(t, "+0", resp.Timezone)
+		assert.Equal(t, "auto", resp.Theme)
+		assert.Equal(t, "https://custom.url", resp.KanbanURL)
+		assert.Equal(t, "2024-01-01", resp.IterationStartDate)
+		assert.Equal(t, "7", resp.IterationDurationDays)
 	})
 }

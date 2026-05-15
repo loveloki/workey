@@ -77,6 +77,13 @@ type IterationOverride struct {
 	UpdatedAt       string `json:"updated_at"`
 }
 
+type Passkey struct {
+	ID         int64   `json:"id"`
+	Name       string  `json:"name"`
+	CreatedAt  string  `json:"created_at"`
+	LastUsedAt *string `json:"last_used_at"`
+}
+
 // 数据导出结构
 type ExportData struct {
 	Attendance         []Attendance        `json:"attendance"`

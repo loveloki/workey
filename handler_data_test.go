@@ -163,11 +163,11 @@ func TestHandleDataImport(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp DataImportResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Equal(t, float64(1), resp["attendance_count"])
-		assert.Equal(t, float64(1), resp["work_log_count"])
-		assert.Equal(t, float64(1), resp["lesson_count"])
+		assert.Equal(t, 1, resp.AttendanceCount)
+		assert.Equal(t, 1, resp.WorkLogCount)
+		assert.Equal(t, 1, resp.LessonCount)
 	})
 
 	t.Run("无效 ZIP 文件", func(t *testing.T) {
@@ -282,9 +282,9 @@ func TestHandleHistoryDateRange(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp VersionRangeResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Nil(t, resp["earliest"])
+		assert.Nil(t, resp.Earliest)
 	})
 
 	t.Run("有数据时返回日期范围", func(t *testing.T) {
@@ -298,9 +298,11 @@ func TestHandleHistoryDateRange(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp VersionRangeResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Equal(t, "2024-03-01", resp["earliest"])
-		assert.Equal(t, "2024-06-15", resp["latest"])
+		require.NotNil(t, resp.Earliest)
+		require.NotNil(t, resp.Latest)
+		assert.Equal(t, "2024-03-01", *resp.Earliest)
+		assert.Equal(t, "2024-06-15", *resp.Latest)
 	})
 }

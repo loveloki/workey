@@ -55,7 +55,7 @@ func handleLessonCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lesson := getLesson(userID, req.Date)
-	jsonOK(w, map[string]interface{}{"lesson": lesson})
+	jsonOK(w, LessonResponse{Lesson: lesson})
 }
 
 func handleLessonToday(w http.ResponseWriter, r *http.Request) {
@@ -67,10 +67,10 @@ func handleLessonToday(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
 	lesson := getLesson(userID, today())
 	if lesson == nil {
-		jsonOK(w, map[string]interface{}{"lesson": nil})
+		jsonOK(w, LessonResponse{})
 		return
 	}
-	jsonOK(w, map[string]interface{}{"lesson": lesson})
+	jsonOK(w, LessonResponse{Lesson: lesson})
 }
 
 func handleLessonRange(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +103,7 @@ func handleLessonRange(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&l.ID, &l.UserID, &l.Date, &l.Content, &l.CreatedAt, &l.UpdatedAt)
 		lessons = append(lessons, l)
 	}
-	jsonOK(w, map[string]interface{}{"lessons": lessons})
+	jsonOK(w, LessonListResponse{Lessons: lessons})
 }
 
 func getLesson(userID int64, date string) *Lesson {

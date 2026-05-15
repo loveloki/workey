@@ -12,6 +12,11 @@ import (
 )
 
 func TestHandleSPA_NoFrontend(t *testing.T) {
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	os.Chdir(t.TempDir())
+	defer os.Chdir(origDir)
+
 	req := httptest.NewRequest("GET", "/", nil)
 	rr := httptest.NewRecorder()
 

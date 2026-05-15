@@ -42,7 +42,7 @@ func handleGetChecklists(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&c.ID, &c.UserID, &c.Title, &c.Items, &c.CreatedAt, &c.UpdatedAt)
 		checklists = append(checklists, c)
 	}
-	jsonOK(w, map[string]interface{}{"checklists": checklists})
+	jsonOK(w, ChecklistListResponse{Checklists: checklists})
 }
 
 func handleCreateChecklist(w http.ResponseWriter, r *http.Request) {
@@ -86,7 +86,7 @@ func handleCreateChecklist(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	jsonOK(w, map[string]interface{}{"checklist": checklist})
+	jsonOK(w, ChecklistResponse{Checklist: checklist})
 }
 
 func handleUpdateChecklist(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +135,7 @@ func handleUpdateChecklist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	existing.UpdatedAt = now
-	jsonOK(w, map[string]interface{}{"checklist": existing})
+	jsonOK(w, ChecklistResponse{Checklist: existing})
 }
 
 func handleDeleteChecklist(w http.ResponseWriter, r *http.Request) {
@@ -158,7 +158,7 @@ func handleDeleteChecklist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonOK(w, map[string]string{"message": "Checklist deleted"})
+	jsonOK(w, MessageResponse{Message: "Checklist deleted"})
 }
 
 // --- 检查清单快照 ---
@@ -198,7 +198,7 @@ func handleGetChecklistSnapshots(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&s.ID, &s.UserID, &s.ChecklistID, &s.Title, &s.ItemsHash, &s.Data, &s.CreatedAt)
 		snapshots = append(snapshots, s)
 	}
-	jsonOK(w, map[string]interface{}{"snapshots": snapshots})
+	jsonOK(w, SnapshotListResponse{Snapshots: snapshots})
 }
 
 func handleCreateChecklistSnapshot(w http.ResponseWriter, r *http.Request) {
@@ -233,7 +233,7 @@ func handleCreateChecklistSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := result.LastInsertId()
-	jsonOK(w, map[string]interface{}{"snapshot": ChecklistSnapshot{
+	jsonOK(w, SnapshotResponse{Snapshot: ChecklistSnapshot{
 		ID: id, UserID: userID, ChecklistID: req.ChecklistID,
 		Title: req.Title, ItemsHash: req.ItemsHash, Data: string(dataBytes), CreatedAt: now,
 	}})
@@ -255,5 +255,5 @@ func handleDeleteChecklistSnapshot(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Snapshot not found", http.StatusNotFound)
 		return
 	}
-	jsonOK(w, map[string]string{"message": "Snapshot deleted"})
+	jsonOK(w, MessageResponse{Message: "Snapshot deleted"})
 }

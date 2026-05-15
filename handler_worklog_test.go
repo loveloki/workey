@@ -25,10 +25,10 @@ func TestHandleWorkLog(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp WorkLogResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		wl := resp["work_log"].(map[string]interface{})
-		assert.Equal(t, "完成了功能开发", wl["content"])
+		require.NotNil(t, resp.WorkLog)
+		assert.Equal(t, "完成了功能开发", resp.WorkLog.Content)
 	})
 
 	t.Run("更新工作日志（同日期 upsert）", func(t *testing.T) {
@@ -40,10 +40,10 @@ func TestHandleWorkLog(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp WorkLogResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		wl := resp["work_log"].(map[string]interface{})
-		assert.Equal(t, "更新了内容", wl["content"])
+		require.NotNil(t, resp.WorkLog)
+		assert.Equal(t, "更新了内容", resp.WorkLog.Content)
 	})
 
 	t.Run("获取今日工作日志", func(t *testing.T) {
@@ -63,10 +63,9 @@ func TestHandleWorkLog(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp WorkLogListResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		logs := resp["work_logs"].([]interface{})
-		assert.Len(t, logs, 1)
+		assert.Len(t, resp.WorkLogs, 1)
 	})
 
 	t.Run("GET 方法不允许", func(t *testing.T) {
@@ -123,9 +122,9 @@ func TestHandleWorkLog(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp WorkLogResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		wl := resp["work_log"].(map[string]interface{})
-		assert.Equal(t, today(), wl["date"])
+		require.NotNil(t, resp.WorkLog)
+		assert.Equal(t, today(), resp.WorkLog.Date)
 	})
 }

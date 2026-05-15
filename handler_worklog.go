@@ -55,7 +55,7 @@ func handleWorkLogCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	workLog := getWorkLog(userID, req.Date)
-	jsonOK(w, map[string]interface{}{"work_log": workLog})
+	jsonOK(w, WorkLogResponse{WorkLog: workLog})
 }
 
 func handleWorkLogToday(w http.ResponseWriter, r *http.Request) {
@@ -67,10 +67,10 @@ func handleWorkLogToday(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
 	workLog := getWorkLog(userID, today())
 	if workLog == nil {
-		jsonOK(w, map[string]interface{}{"work_log": nil})
+		jsonOK(w, WorkLogResponse{})
 		return
 	}
-	jsonOK(w, map[string]interface{}{"work_log": workLog})
+	jsonOK(w, WorkLogResponse{WorkLog: workLog})
 }
 
 func handleWorkLogRange(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +103,7 @@ func handleWorkLogRange(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&wl.ID, &wl.UserID, &wl.Date, &wl.Content, &wl.CreatedAt, &wl.UpdatedAt)
 		logs = append(logs, wl)
 	}
-	jsonOK(w, map[string]interface{}{"work_logs": logs})
+	jsonOK(w, WorkLogListResponse{WorkLogs: logs})
 }
 
 func getWorkLog(userID int64, date string) *WorkLog {

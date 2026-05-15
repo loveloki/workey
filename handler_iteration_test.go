@@ -25,11 +25,10 @@ func TestHandleIterationOverrides(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp IterationOverrideResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		o := resp["override"].(map[string]interface{})
-		assert.Equal(t, float64(1), o["iteration_number"])
-		assert.Equal(t, "2024-01-01", o["start_date"])
+		assert.Equal(t, int64(1), resp.Override.IterationNumber)
+		assert.Equal(t, "2024-01-01", resp.Override.StartDate)
 	})
 
 	t.Run("获取迭代覆盖列表", func(t *testing.T) {
@@ -40,10 +39,9 @@ func TestHandleIterationOverrides(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp IterationOverrideListResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		overrides := resp["overrides"].([]interface{})
-		assert.Len(t, overrides, 1)
+		assert.Len(t, resp.Overrides, 1)
 	})
 
 	t.Run("更新已存在的迭代覆盖", func(t *testing.T) {
@@ -55,10 +53,9 @@ func TestHandleIterationOverrides(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp IterationOverrideResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		o := resp["override"].(map[string]interface{})
-		assert.Equal(t, "2024-01-08", o["start_date"])
+		assert.Equal(t, "2024-01-08", resp.Override.StartDate)
 	})
 
 	t.Run("删除迭代覆盖", func(t *testing.T) {

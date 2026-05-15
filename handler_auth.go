@@ -60,7 +60,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	var user User
 	db.QueryRow("SELECT id, username, created_at FROM users WHERE id = ?", userID).Scan(&user.ID, &user.Username, &user.CreatedAt)
 
-	jsonOK(w, map[string]interface{}{"token": token, "user": user})
+	jsonOK(w, AuthResponse{Token: token, User: user})
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +103,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	var user User
 	db.QueryRow("SELECT id, username, created_at FROM users WHERE id = ?", userID).Scan(&user.ID, &user.Username, &user.CreatedAt)
 
-	jsonOK(w, map[string]interface{}{"token": token, "user": user})
+	jsonOK(w, AuthResponse{Token: token, User: user})
 }
 
 func handleMe(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +119,7 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "User not found", http.StatusNotFound)
 		return
 	}
-	jsonOK(w, map[string]interface{}{"user": user})
+	jsonOK(w, MeResponse{User: user})
 }
 
 func handleChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -173,5 +173,5 @@ func handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonOK(w, map[string]string{"message": "Password changed successfully"})
+	jsonOK(w, MessageResponse{Message: "Password changed successfully"})
 }

@@ -51,7 +51,7 @@ func handleCreatedTodayTodos(w http.ResponseWriter, r *http.Request) {
 		t.Done = done != 0
 		todos = append(todos, t)
 	}
-	jsonOK(w, map[string]interface{}{"todos": todos})
+	jsonOK(w, TodoListResponse{Todos: todos})
 }
 
 func handleCompletedTodayTodos(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +81,7 @@ func handleCompletedTodayTodos(w http.ResponseWriter, r *http.Request) {
 		t.Done = done != 0
 		todos = append(todos, t)
 	}
-	jsonOK(w, map[string]interface{}{"todos": todos})
+	jsonOK(w, TodoListResponse{Todos: todos})
 }
 
 func handleCompletedRangeTodos(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +116,7 @@ func handleCompletedRangeTodos(w http.ResponseWriter, r *http.Request) {
 		t.Done = done != 0
 		todos = append(todos, t)
 	}
-	jsonOK(w, map[string]interface{}{"todos": todos})
+	jsonOK(w, TodoListResponse{Todos: todos})
 }
 
 func handleGetTodos(w http.ResponseWriter, r *http.Request) {
@@ -150,7 +150,7 @@ func handleGetTodos(w http.ResponseWriter, r *http.Request) {
 		t.Done = done != 0
 		todos = append(todos, t)
 	}
-	jsonOK(w, map[string]interface{}{"todos": todos})
+	jsonOK(w, TodoListResponse{Todos: todos})
 }
 
 func handleCreateTodo(w http.ResponseWriter, r *http.Request) {
@@ -190,7 +190,7 @@ func handleCreateTodo(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	jsonOK(w, map[string]interface{}{"todo": todo})
+	jsonOK(w, TodoResponse{Todo: todo})
 }
 
 func handleUpdateTodo(w http.ResponseWriter, r *http.Request) {
@@ -248,7 +248,7 @@ func handleUpdateTodo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	existing.UpdatedAt = now
-	jsonOK(w, map[string]interface{}{"todo": existing})
+	jsonOK(w, TodoResponse{Todo: existing})
 }
 
 func handleDeleteTodo(w http.ResponseWriter, r *http.Request) {
@@ -271,5 +271,5 @@ func handleDeleteTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonOK(w, map[string]string{"message": "Todo deleted"})
+	jsonOK(w, MessageResponse{Message: "Todo deleted"})
 }

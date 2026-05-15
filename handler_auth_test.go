@@ -25,11 +25,10 @@ func TestHandleRegister(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp AuthResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.NotEmpty(t, resp["token"])
-		user := resp["user"].(map[string]interface{})
-		assert.Equal(t, "newuser", user["username"])
+		assert.NotEmpty(t, resp.Token)
+		assert.Equal(t, "newuser", resp.User.Username)
 	})
 
 	t.Run("用户名重复", func(t *testing.T) {
@@ -91,9 +90,9 @@ func TestHandleLogin(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp AuthResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.NotEmpty(t, resp["token"])
+		assert.NotEmpty(t, resp.Token)
 	})
 
 	t.Run("密码错误", func(t *testing.T) {
@@ -133,10 +132,9 @@ func TestHandleMe(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp MeResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		user := resp["user"].(map[string]interface{})
-		assert.Equal(t, "meuser", user["username"])
+		assert.Equal(t, "meuser", resp.User.Username)
 	})
 }
 

@@ -21,9 +21,9 @@ func TestHandleSystemVersion(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 		assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
 
-		var resp map[string]interface{}
+		var resp VersionResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Contains(t, resp, "commit")
+		assert.NotEmpty(t, resp.Commit)
 	})
 
 	t.Run("不允许 POST 方法", func(t *testing.T) {
@@ -50,8 +50,8 @@ func TestHandleSystemVersion(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		var resp map[string]interface{}
+		var resp VersionResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Equal(t, "abc123", resp["commit"])
+		assert.Equal(t, "abc123", resp.Commit)
 	})
 }

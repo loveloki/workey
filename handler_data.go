@@ -381,13 +381,13 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	jsonOK(w, map[string]interface{}{
-		"message":          "Data imported successfully",
-		"attendance_count": attendanceCount,
-		"work_log_count":   workLogCount,
-		"lesson_count":     lessonCount,
-		"checklist_count":  checklistCount,
-		"snapshot_count":   snapshotCount,
+	jsonOK(w, DataImportResponse{
+		Message:         "Data imported successfully",
+		AttendanceCount: attendanceCount,
+		WorkLogCount:    workLogCount,
+		LessonCount:     lessonCount,
+		ChecklistCount:  checklistCount,
+		SnapshotCount:   snapshotCount,
 	})
 }
 
@@ -431,11 +431,11 @@ func handleDataDelete(w http.ResponseWriter, r *http.Request) {
 		counts[table] = n
 	}
 
-	jsonOK(w, map[string]interface{}{
-		"message":          "All data deleted successfully",
-		"attendance_count": counts["attendance"],
-		"work_log_count":   counts["work_logs"],
-		"lesson_count":     counts["lessons"],
-		"todo_count":       counts["todos"],
+	jsonOK(w, DataDeleteResponse{
+		Message:         "All data deleted successfully",
+		AttendanceCount: counts["attendance"],
+		WorkLogCount:    counts["work_logs"],
+		LessonCount:     counts["lessons"],
+		TodoCount:       counts["todos"],
 	})
 }
