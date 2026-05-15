@@ -5,6 +5,7 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { checklists as checklistsApi, type Checklist, type ChecklistItem } from '../../lib/api'
+import { useToast } from '../../lib/toast-context'
 
 export function ChecklistForm({
   initial,
@@ -24,6 +25,7 @@ export function ChecklistForm({
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
   const titleRef = useRef<HTMLInputElement>(null)
   const itemRefs = useRef<(HTMLInputElement | null)[]>([])
+  const { toastError } = useToast()
 
   const reorder = (from: number, to: number) => {
     if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return
@@ -86,7 +88,7 @@ export function ChecklistForm({
         onSave(checklist)
       }
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : '操作失败')
+      toastError(e instanceof Error ? e.message : '操作失败')
     } finally {
       setSaving(false)
     }

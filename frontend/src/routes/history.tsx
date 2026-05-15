@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useAuthGuard } from '../lib/useAuthGuard'
+import { useToast } from '../lib/toast-context'
 import { useState, useEffect, useMemo } from 'react'
 import { type Todo, type Attendance, type WorkLog } from '../lib/api'
 import { getDateRange, formatDate, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration, makeIterationConfig, type IterationConfig, type IterationOverrideMap } from '../lib/date-utils'
@@ -435,6 +436,7 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
   const [isEditing, setIsEditing] = useState(false)
   const [logContent, setLogContent] = useState('')
   const saveLogMut = useSaveWorkLog()
+  const { toastError } = useToast()
 
   const handleEdit = () => {
     setLogContent((entry.log?.content || '').replace(/^\s+/, ''))
@@ -446,7 +448,7 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
       await saveLogMut.mutateAsync({ date, content: logContent })
       setIsEditing(false)
     } catch (e: unknown) {
-      alert('保存失败: ' + (e instanceof Error ? e.message : '未知错误'))
+      toastError('保存失败: ' + (e instanceof Error ? e.message : '未知错误'))
     }
   }
 
@@ -572,13 +574,14 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
 
 function OvertimeBadge({ date, isOvertime, isLeave }: { date: string, isOvertime: boolean, isLeave: boolean, onChanged?: () => void }) {
   const overtimeMut = useSetOvertime()
+  const { toastError } = useToast()
   if (isLeave) return null
   const toggle = async () => {
     if (overtimeMut.isPending) return
     try {
       await overtimeMut.mutateAsync({ date, isOvertime: !isOvertime })
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : '更新失败')
+      toastError(e instanceof Error ? e.message : '更新失败')
     }
   }
   return (

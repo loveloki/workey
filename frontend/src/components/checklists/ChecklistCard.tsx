@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { checklists as checklistsApi, type Checklist, type ChecklistItem } from '../../lib/api'
+import { useToast } from '../../lib/toast-context'
 import { ChecklistForm } from './ChecklistForm'
 import { parseItems } from './checklist-utils'
 
@@ -16,6 +17,7 @@ export function ChecklistCard({
 }) {
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const { toastError } = useToast()
 
   const parsedItems = parseItems(checklist.items)
 
@@ -29,7 +31,7 @@ export function ChecklistCard({
       onUpdated(updated)
       setEditing(false)
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : '保存失败')
+      toastError(e instanceof Error ? e.message : '保存失败')
     }
   }
 
@@ -38,7 +40,7 @@ export function ChecklistCard({
       await checklistsApi.delete(checklist.id)
       onDeleted()
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : '操作失败')
+      toastError(e instanceof Error ? e.message : '操作失败')
     }
   }
 

@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuthGuard } from '../lib/useAuthGuard'
+import { useToast } from '../lib/toast-context'
 import { useState, useEffect } from 'react'
 import { type Attendance } from '../lib/api'
 import { formatTime } from '../lib/date-utils'
@@ -32,7 +33,7 @@ function ClockPage() {
 
 function ClockWidget() {
   const { data: queryData, isLoading } = useAttendanceToday()
-  // 本地 data 用于即时更新 UI（mutation 返回后立即反映）
+  const { toastError } = useToast()
   const [localData, setLocalData] = useState<Attendance | null>(null)
   const [now, setNow] = useState(new Date())
   const [isOvertime, setIsOvertime] = useState(false)
@@ -67,7 +68,7 @@ function ClockWidget() {
       setLocalData(res.attendance)
       setTimeout(() => navigate({ to: '/' }), 600)
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : '操作失败')
+      toastError(e instanceof Error ? e.message : '操作失败')
     }
   }
 
@@ -77,7 +78,7 @@ function ClockWidget() {
       const res = await setOvertimeMut.mutateAsync({ date: data.date, isOvertime: !data.is_overtime })
       setLocalData(res.attendance)
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : '操作失败')
+      toastError(e instanceof Error ? e.message : '操作失败')
     }
   }
 
@@ -86,7 +87,7 @@ function ClockWidget() {
       const res = await clockOutMut.mutateAsync()
       setLocalData(res.attendance)
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : '操作失败')
+      toastError(e instanceof Error ? e.message : '操作失败')
     }
   }
 
@@ -95,7 +96,7 @@ function ClockWidget() {
       const res = await leaveMut.mutateAsync()
       setLocalData(res.attendance)
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : '操作失败')
+      toastError(e instanceof Error ? e.message : '操作失败')
     }
   }
 

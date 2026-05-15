@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useAuthGuard } from '../lib/useAuthGuard'
+import { useToast } from '../lib/toast-context'
 import { useState, useRef } from 'react'
 import { type Todo } from '../lib/api'
 import { LoadingScreen } from '../components/LoadingScreen'
@@ -67,6 +68,7 @@ function TodoList() {
   const [newContent, setNewContent] = useState('')
   const [newUrl, setNewUrl] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const { toastError } = useToast()
 
   const { data, isLoading } = useTodoList(showAll)
   const createMut = useCreateTodo()
@@ -84,7 +86,7 @@ function TodoList() {
       setNewUrl('')
       inputRef.current?.focus()
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : '添加失败')
+      toastError(e instanceof Error ? e.message : '添加失败')
     }
   }
 
@@ -201,6 +203,7 @@ function TodoItem({
   const [editUrl, setEditUrl] = useState(todo.url)
   const [saving, setSaving] = useState(false)
   const contentRef = useRef<HTMLInputElement>(null)
+  const { toastError } = useToast()
 
   const startEdit = () => {
     setEditContent(todo.content)
@@ -220,7 +223,7 @@ function TodoItem({
       await onUpdate({ content: editContent.trim(), url: editUrl.trim() })
       setEditing(false)
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : '保存失败')
+      toastError(e instanceof Error ? e.message : '保存失败')
     } finally {
       setSaving(false)
     }

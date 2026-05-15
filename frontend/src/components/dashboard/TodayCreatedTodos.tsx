@@ -1,6 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useState, useRef, type FormEvent, type KeyboardEvent } from 'react'
 import { type Todo } from '../../lib/api'
+import { useToast } from '../../lib/toast-context'
 import { useCreatedTodosToday, useCreateTodo, useUpdateTodo, useDeleteTodo } from '../../lib/queries'
 
 function useTodayCreatedTodos() {
@@ -36,6 +37,7 @@ function AddTodoForm({ onAdd }: { onAdd: (content: string, url: string) => Promi
   const [showUrl, setShowUrl] = useState(false)
   const [adding, setAdding] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const { toastError } = useToast()
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -48,7 +50,7 @@ function AddTodoForm({ onAdd }: { onAdd: (content: string, url: string) => Promi
       setShowUrl(false)
       inputRef.current?.focus()
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : '操作失败')
+      toastError(e instanceof Error ? e.message : '操作失败')
     } finally {
       setAdding(false)
     }
@@ -124,6 +126,8 @@ function TodoItemInteractive({
 
   const cancelEdit = () => setEditing(false)
 
+  const { toastError } = useToast()
+
   const saveEdit = async () => {
     if (!editContent.trim() && !editUrl.trim()) return
     setSaving(true)
@@ -131,7 +135,7 @@ function TodoItemInteractive({
       await onUpdate({ content: editContent.trim(), url: editUrl.trim() })
       setEditing(false)
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : '保存失败')
+      toastError(e instanceof Error ? e.message : '保存失败')
     } finally {
       setSaving(false)
     }

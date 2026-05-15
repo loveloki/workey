@@ -621,3 +621,10 @@ select:focus {
 
 .markdown-body *:first-child { margin-top: 0; }
 .markdown-body *:last-child { margin-bottom: 0; }
+
+/* Toast 入场动画 */
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up { animation: slide-up 0.2s ease-out; }

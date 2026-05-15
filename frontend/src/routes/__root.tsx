@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from '../lib/auth-context'
 import { ThemeProvider } from '../lib/theme-context'
+import { ToastProvider } from '../lib/toast-context'
 import { PWAReloadPrompt } from '../lib/pwa-reload-prompt'
 
 const queryClient = new QueryClient({
@@ -24,14 +25,16 @@ function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <div className="min-h-screen flex flex-col">
-            <Header />
-            <main className="flex-1">
-              <Outlet />
-            </main>
-            <Footer />
-            <PWAReloadPrompt />
-          </div>
+          <ToastProvider>
+            <div className="min-h-screen flex flex-col">
+              <Header />
+              <main className="flex-1">
+                <Outlet />
+              </main>
+              <Footer />
+              <PWAReloadPrompt />
+            </div>
+          </ToastProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

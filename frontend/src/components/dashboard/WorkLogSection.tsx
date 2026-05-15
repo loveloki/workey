@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getToday } from '../../lib/date-utils'
+import { useToast } from '../../lib/toast-context'
 import { MarkdownEditor } from '../../lib/markdown-editor'
 import { useWorkLogToday, useSaveWorkLog } from '../../lib/queries'
 
@@ -8,8 +9,8 @@ export function WorkLogSection() {
   const [saved, setSaved] = useState(false)
   const { data, isLoading } = useWorkLogToday()
   const saveMut = useSaveWorkLog()
+  const { toastError } = useToast()
 
-  // 服务端数据加载后同步到编辑器
   useEffect(() => {
     if (data?.work_log) {
       setContent((data.work_log.content || '').replace(/^\s+/, ''))
@@ -22,7 +23,7 @@ export function WorkLogSection() {
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : '保存失败')
+      toastError(e instanceof Error ? e.message : '保存失败')
     }
   }
 

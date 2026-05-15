@@ -4,6 +4,7 @@ import {
   type ChecklistSnapshot,
   type SnapshotData,
 } from '../../lib/api'
+import { useToast } from '../../lib/toast-context'
 import { AutoTextarea } from './AutoTextarea'
 import { parseItems, itemsHash as computeItemsHash } from './checklist-utils'
 import { useChecklistSnapshots, useCreateSnapshot, useDeleteSnapshot } from '../../lib/queries'
@@ -18,6 +19,7 @@ type DraftRun = {
 }
 
 export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBack: () => void }) {
+  const { toastError } = useToast()
   const parsedItems = parseItems(checklist.items)
   const draftKey = `checklist-run:${checklist.id}`
   const hash = computeItemsHash(parsedItems)
@@ -80,7 +82,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
       setSnapshotTitle('')
       setShowSavedList(true)
     } catch (e: unknown) {
-      alert('保存失败：' + (e instanceof Error ? e.message : '未知错误'))
+      toastError('保存失败：' + (e instanceof Error ? e.message : '未知错误'))
     }
   }
 
@@ -101,7 +103,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
       setEditingNote(null)
       setEditingExtraNote(null)
     } catch (e: unknown) {
-      alert('加载失败：' + (e instanceof Error ? e.message : '未知错误'))
+      toastError('加载失败：' + (e instanceof Error ? e.message : '未知错误'))
     }
   }
 
@@ -110,7 +112,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
       await deleteSnapshotMut.mutateAsync({ id, checklistId: checklist.id })
       if (viewingRunId === id) setViewingRunId(null)
     } catch (e: unknown) {
-      alert('删除失败：' + (e instanceof Error ? e.message : '未知错误'))
+      toastError('删除失败：' + (e instanceof Error ? e.message : '未知错误'))
     } finally {
       setConfirmDeleteRunId(null)
     }
