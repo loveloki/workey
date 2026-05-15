@@ -1,193 +1,67 @@
-Welcome to your new TanStack Start app! 
+# Workey Frontend
 
-# Getting Started
+React 19 单页应用，为 Workey 后端 API 提供 Web 界面。
 
-To run this application:
+## 技术栈
+
+- **React 19** — UI 框架
+- **TanStack Router** — 文件路由，类型安全的路由参数
+- **TanStack Query** — 服务端状态管理，自动缓存/去重/轮询
+- **Tailwind CSS v4** — 原子化样式 + CSS 变量设计系统（Radix Colors）
+- **Vite 6** — 构建工具，HMR 极速
+- **vite-plugin-pwa** — 离线支持 + Service Worker
+- **Vitest + Testing Library** — 单元/集成测试
+
+## 开发
 
 ```bash
 pnpm install
-pnpm dev
+pnpm dev          # 启动开发服务器 :3000
+pnpm build        # 生产构建
+pnpm test         # 运行测试（watch 模式）
+pnpm test:run     # 运行测试（单次）
+pnpm test:coverage  # 覆盖率报告
 ```
 
-# Building For Production
+## 目录结构
 
-To build this application for production:
-
-```bash
-pnpm build
+```
+src/
+├── routes/                 # TanStack Router 文件路由
+│   ├── __root.tsx          # 根布局（Header/Footer/Providers）
+│   ├── index.tsx           # 首页 Dashboard
+│   ├── clock.tsx           # 打卡签到
+│   ├── todos.tsx           # 待办事项
+│   ├── checklists.tsx      # 检查清单
+│   ├── history.tsx         # 历史记录
+│   ├── trends.tsx          # 趋势分析
+│   ├── settings.tsx        # 设置入口
+│   └── login.tsx           # 登录/注册
+├── components/
+│   ├── dashboard/          # 首页模块（工作日志、待办、已完成统计）
+│   ├── checklists/         # 检查清单子组件
+│   ├── settings/           # 设置子组件（主题/时区/密码/Passkey 等）
+│   ├── Card.tsx            # 通用卡片容器
+│   ├── CopyButton.tsx      # 复制到剪贴板
+│   ├── InputField.tsx      # 通用输入框
+│   └── LoadingScreen.tsx   # 加载状态
+├── lib/
+│   ├── api.ts              # HTTP API 层（类型安全的请求/响应）
+│   ├── queries.ts          # TanStack Query hooks（30+ query/mutation）
+│   ├── auth-context.tsx    # 认证状态 Context
+│   ├── useAuthGuard.ts     # 路由级认证守卫 hook
+│   ├── toast-context.tsx   # Toast 通知系统
+│   ├── theme-context.tsx   # 主题切换 Context
+│   ├── date-utils.ts       # 日期/迭代周期工具函数
+│   ├── report-utils.ts     # Markdown 报告生成
+│   ├── markdown-editor.tsx # Markdown 编辑/预览组件
+│   └── pwa-reload-prompt.tsx # PWA 更新提示
+├── styles.css              # Tailwind 入口 + 设计系统 CSS 变量
+└── tests/                  # 测试文件
 ```
 
-## Testing
+## 设计系统
 
-This project uses [Vitest](https://vitest.dev/) for testing. You can run the tests with:
+基于 Radix Colors Sand 色阶，通过 CSS 变量定义语义化 token（`--color-ink`、`--color-surface`、`--color-border` 等），支持亮色/暗色主题自动切换。
 
-```bash
-pnpm test
-```
-
-## Styling
-
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
-
-### Removing Tailwind CSS
-
-If you prefer not to use Tailwind CSS:
-
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Uninstall the packages: `pnpm add @tailwindcss/vite tailwindcss --dev`
-
-
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
-```
-
-Then anywhere in your JSX you can use it like so:
-
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
-
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'My App' },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-})
-```
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from '@tanstack/react-start'
-
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-  
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-  
-  return <div>Server time: {time}</div>
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-# Demo files
-
-Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
+字体使用等宽字体（UI 默认）+ Georgia 衬线体（标题/正文强调），营造技术感与可读性的平衡。

@@ -1,43 +1,22 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useAuth } from '../lib/auth-context'
-import { useState, useEffect } from 'react'
-import { workLogs as workLogsApi, attendance as attendanceApi, todos as todosApi, history as historyApi, iterationOverrides as overridesApi, type Todo } from '../lib/api'
+import { createFileRoute } from '@tanstack/react-router'
+import { useAuthGuard } from '../lib/useAuthGuard'
+import { useToast } from '../lib/toast-context'
+import { useState, useEffect, useMemo } from 'react'
+import { type Todo, type Attendance, type WorkLog } from '../lib/api'
 import { getDateRange, formatDate, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration, makeIterationConfig, type IterationConfig, type IterationOverrideMap } from '../lib/date-utils'
-import { settings as settingsApi } from '../lib/api'
+import {
+  useSettings, useIterationOverrides, useHistoryDateRange,
+  useWorkLogRange, useAttendanceRange, useCompletedTodosRange,
+  useSaveWorkLog, useSetOvertime,
+} from '../lib/queries'
 import { MarkdownContent, MarkdownEditor } from '../lib/markdown-editor'
 import { formatDayMarkdown } from '../lib/report-utils'
+import { CopyButton } from '../components/CopyButton'
 
 export const Route = createFileRoute('/history')({
   component: HistoryPage,
 })
 
-function CopyButton({ getText, className = '' }: { getText: () => Promise<string> | string; className?: string }) {
-  const [copied, setCopied] = useState(false)
-  const handleCopy = async () => {
-    const text = await getText()
-    await navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-  return (
-    <button
-      onClick={handleCopy}
-      className={`font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] shrink-0 whitespace-nowrap ${className}`}
-      style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
-      title="复制为 Markdown"
-    >
-      {copied ? '✓ 已复制' : (
-        <span className="flex items-center gap-1">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-          </svg>
-          复制
-        </span>
-      )}
-    </button>
-  )
-}
 
 const WINDOW_RADIUS = 3 // show ±3 iterations around selected
 
@@ -80,8 +59,7 @@ function IterationSelector({
     <button
       onClick={() => onSelect(target)}
       disabled={disabled}
-      className="rounded-md border px-2 py-1.5 font-mono text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--color-surface-hover)]"
-      style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+      className="rounded-md border border-[var(--color-border)] px-2 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:cursor-not-allowed disabled:opacity-30"
       title={label}
     >
       {label}
@@ -91,7 +69,7 @@ function IterationSelector({
   return (
     <div className="mb-4 space-y-2">
       {/* Row 1: nav arrows + window buttons — scrollable on narrow screens */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin' }}>
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:thin]">
         {navBtn('«', maxIter, selectedIter === maxIter)}
         {navBtn('‹', clamp(selectedIter + 1), selectedIter === maxIter)}
 
@@ -119,7 +97,7 @@ function IterationSelector({
       {/* Row 2: jump input + date range hint */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-1.5">
-          <span className="font-mono text-xs" style={{ color: 'var(--color-ink-muted)' }}>跳转到</span>
+          <span className="font-mono text-xs text-[var(--color-ink-muted)]">跳转到</span>
           <input
             type="number"
             min={minIter}
@@ -128,18 +106,16 @@ function IterationSelector({
             onChange={e => setJumpValue(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleJump()}
             placeholder={`${minIter}–${maxIter}`}
-            className="font-mono text-xs px-2 py-1 w-20 bg-[var(--color-surface-strong)] text-center"
-            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', outline: 'none', color: 'var(--color-ink)' }}
+            className="w-20 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-strong)] px-2 py-1 text-center font-mono text-xs text-[var(--color-ink)] outline-none"
           />
           <button
             onClick={handleJump}
-            className="font-mono text-xs px-2.5 py-1 rounded-md transition-colors hover:bg-[var(--color-surface-hover)]"
-            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+            className="rounded-md border border-[var(--color-border)] px-2.5 py-1 font-mono text-xs text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-hover)]"
           >
             Go
           </button>
         </div>
-        <span className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>
+        <span className="font-mono text-xs text-[var(--color-ink-faint)]">
           {currentRange.start} ~ {currentRange.end}
         </span>
       </div>
@@ -148,132 +124,94 @@ function IterationSelector({
 }
 
 function HistoryPage() {
-  const { user, loading } = useAuth()
-  const navigate = useNavigate()
+  const { user, loading } = useAuthGuard()
   const [preset, setPreset] = useState<RangePreset | 'custom' | 'iteration'>('iteration')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
-  const [currentFetchRange, setCurrentFetchRange] = useState({ start: '', end: '' })
-  const [logs, setLogs] = useState<any[]>([])
-  const [attendances, setAttendances] = useState<any[]>([])
-  const [completedTodos, setCompletedTodos] = useState<Todo[]>([])
-  const [fetching, setFetching] = useState(false)
-  // Iteration config from settings
-  const [iterConfig, setIterConfig] = useState<IterationConfig | null>(null)
-  const [iterOverrides, setIterOverrides] = useState<IterationOverrideMap>({})
-  // Iteration state
+  const [activeCustom, setActiveCustom] = useState<{ start: string; end: string } | null>(null)
   const [selectedIter, setSelectedIter] = useState<number | null>(null)
-  const [minIter, setMinIter] = useState<number | null>(null)
-  const [maxIter, setMaxIter] = useState<number | null>(null)
-  
-  // Year / Quarter state
+
   const currentYear = new Date().getFullYear()
-  const [availableYears, setAvailableYears] = useState<number[]>([currentYear])
   const [selectedYear, setSelectedYear] = useState<number>(currentYear)
   const [selectedQuarter, setSelectedQuarter] = useState<number>(Math.floor(new Date().getMonth() / 3) + 1)
 
-  useEffect(() => {
-    if (!loading && !user) navigate({ to: '/login' })
-  }, [loading, user, navigate])
+  // ── 从 TanStack Query 获取配置数据 ──
+  const { data: settingsData } = useSettings(!!user)
+  const { data: ovData } = useIterationOverrides(!!user)
+  const { data: dateRangeData } = useHistoryDateRange(!!user)
 
-  // Load iteration config + overrides from settings
-  useEffect(() => {
-    if (!user) return
-    Promise.all([settingsApi.get(), overridesApi.list()]).then(([data, ovRes]) => {
-      const cfg = makeIterationConfig(data.iteration_start_date, data.iteration_duration_days)
-      setIterConfig(cfg)
-      const ovMap: IterationOverrideMap = {}
-      for (const o of ovRes.overrides) {
-        ovMap[o.iteration_number] = { start: o.start_date, end: o.end_date }
-      }
-      setIterOverrides(ovMap)
-      const cur = getCurrentIteration(cfg, ovMap)
-      setSelectedIter(cur)
-      setMaxIter(cur)
-    }).catch(console.error)
-  }, [user])
+  const iterOverrides = useMemo<IterationOverrideMap>(() => {
+    if (!ovData) return {}
+    const map: IterationOverrideMap = {}
+    for (const o of ovData.overrides) {
+      map[o.iteration_number] = { start: o.start_date, end: o.end_date }
+    }
+    return map
+  }, [ovData])
 
-  // Load history date range to determine available iterations and years
-  useEffect(() => {
-    if (!user || !iterConfig) return
-    historyApi.dateRange().then(res => {
-      if (res.earliest) {
-        const earliestDate = new Date(res.earliest + 'T00:00:00')
-        setMinIter(getIterationNumber(earliestDate, iterConfig, iterOverrides))
-        
-        const earliestYear = earliestDate.getFullYear()
-        const cy = new Date().getFullYear()
-        const years = []
-        for (let y = cy; y >= earliestYear; y--) {
-          years.push(y)
-        }
-        if (years.length === 0) years.push(cy)
-        setAvailableYears(years)
-      }
-    }).catch(console.error)
-  }, [user, iterConfig, iterOverrides])
+  const iterConfig = useMemo<IterationConfig | null>(() => {
+    if (!settingsData) return null
+    return makeIterationConfig(settingsData.iteration_start_date, settingsData.iteration_duration_days)
+  }, [settingsData])
 
+  const maxIter = iterConfig ? getCurrentIteration(iterConfig, iterOverrides) : null
+
+  // 初始化 selectedIter
   useEffect(() => {
-    if (!user || preset === 'custom' || preset === 'iteration') return
-    
-    let startStr = ''
-    let endStr = ''
-    const now = new Date()
-    
-    if (preset === 'month') {
-      const range = getDateRange('month')
-      startStr = range.start
-      endStr = range.end
-    } else if (preset === 'quarter') {
+    if (iterConfig && selectedIter === null) {
+      setSelectedIter(getCurrentIteration(iterConfig, iterOverrides))
+    }
+  }, [iterConfig, iterOverrides, selectedIter])
+
+  // 从 dateRange 派生 minIter 和 availableYears
+  const { minIter, availableYears } = useMemo(() => {
+    if (!dateRangeData?.earliest || !iterConfig) {
+      return { minIter: null, availableYears: [currentYear] }
+    }
+    const earliestDate = new Date(dateRangeData.earliest + 'T00:00:00')
+    const mi = getIterationNumber(earliestDate, iterConfig, iterOverrides)
+    const earliestYear = earliestDate.getFullYear()
+    const cy = new Date().getFullYear()
+    const years: number[] = []
+    for (let y = cy; y >= earliestYear; y--) years.push(y)
+    if (years.length === 0) years.push(cy)
+    return { minIter: mi, availableYears: years }
+  }, [dateRangeData, iterConfig, iterOverrides, currentYear])
+
+  // ── 计算当前查询的日期范围 ──
+  const currentFetchRange = useMemo(() => {
+    if (preset === 'custom' && activeCustom) return activeCustom
+    if (preset === 'iteration' && iterConfig && selectedIter !== null) {
+      return getIterationRange(selectedIter, iterConfig, iterOverrides)
+    }
+    if (preset === 'month') return getDateRange('month')
+    if (preset === 'quarter') {
       const startMonth = (selectedQuarter - 1) * 3
-      const startDate = new Date(selectedYear, startMonth, 1)
-      const endDate = new Date(selectedYear, startMonth + 3, 0) // last day of quarter
-      
-      startStr = formatDate(startDate)
-      // if it's the current quarter and year, we might want to cap it to today, 
-      // but typically historical query just sends the end of the quarter
-      endStr = formatDate(endDate)
-    } else if (preset === 'year') {
-      const startDate = new Date(selectedYear, 0, 1)
-      const endDate = new Date(selectedYear, 11, 31)
-      startStr = formatDate(startDate)
-      endStr = formatDate(endDate)
+      const sd = new Date(selectedYear, startMonth, 1)
+      const ed = new Date(selectedYear, startMonth + 3, 0)
+      return { start: formatDate(sd), end: formatDate(ed) }
     }
-    
-    if (startStr && endStr) {
-      fetchData(startStr, endStr)
+    if (preset === 'year') {
+      const sd = new Date(selectedYear, 0, 1)
+      const ed = new Date(selectedYear, 11, 31)
+      return { start: formatDate(sd), end: formatDate(ed) }
     }
-  }, [preset, user, selectedYear, selectedQuarter])
+    return { start: '', end: '' }
+  }, [preset, activeCustom, iterConfig, selectedIter, iterOverrides, selectedYear, selectedQuarter])
 
-  // Fetch data when iteration changes
-  useEffect(() => {
-    if (!user || preset !== 'iteration' || !iterConfig || selectedIter === null) return
-    const range = getIterationRange(selectedIter, iterConfig, iterOverrides)
-    fetchData(range.start, range.end)
-  }, [selectedIter, preset, user, iterConfig, iterOverrides])
+  // ── 用计算出的范围查询数据 ──
+  const rangeEnabled = !!user && !!currentFetchRange.start && !!currentFetchRange.end
+  const { data: logsData, isFetching: fetchingLogs } = useWorkLogRange(currentFetchRange.start, currentFetchRange.end, rangeEnabled)
+  const { data: attData, isFetching: fetchingAtt } = useAttendanceRange(currentFetchRange.start, currentFetchRange.end, rangeEnabled)
+  const { data: todosData, isFetching: fetchingTodos } = useCompletedTodosRange(currentFetchRange.start, currentFetchRange.end, rangeEnabled)
 
-  const fetchData = async (start: string, end: string) => {
-    setCurrentFetchRange({ start, end })
-    setFetching(true)
-    try {
-      const [logsRes, attRes, todosRes] = await Promise.all([
-        workLogsApi.range(start, end),
-        attendanceApi.range(start, end),
-        todosApi.completedRange(start, end),
-      ])
-      setLogs(logsRes.work_logs)
-      setAttendances(attRes.attendances)
-      setCompletedTodos(todosRes.todos || [])
-    } catch (e) {
-      console.error(e)
-    }
-    setFetching(false)
-  }
+  const fetching = fetchingLogs || fetchingAtt || fetchingTodos
+  const logs: WorkLog[] = logsData?.work_logs ?? []
+  const attendances: Attendance[] = attData?.attendances ?? []
+  const completedTodos: Todo[] = todosData?.todos ?? []
 
   const handleCustomSearch = () => {
-    if (customStart && customEnd) {
-      fetchData(customStart, customEnd)
-    }
+    if (customStart && customEnd) setActiveCustom({ start: customStart, end: customEnd })
   }
 
   const presets: { key: RangePreset | 'custom' | 'iteration'; label: string }[] = [
@@ -294,7 +232,7 @@ function HistoryPage() {
   })
 
   // Merge logs, attendance and todos by date
-  const dateMap = new Map<string, { attendance?: any; log?: any; todos: Todo[] }>()
+  const dateMap = new Map<string, { attendance?: Attendance; log?: WorkLog; todos: Todo[] }>()
   attendances.forEach(a => {
     const entry = dateMap.get(a.date) || { todos: [] }
     entry.attendance = a
@@ -317,7 +255,7 @@ function HistoryPage() {
     const entry = dateMap.get(date)!
     return formatDayMarkdown(
       date,
-      entry.attendance,
+      entry.attendance ?? null,
       entry.log?.content || '',
       entry.todos,
     )
@@ -345,15 +283,14 @@ function HistoryPage() {
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
           <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">历史记录</p>
-          <h1 className="text-3xl font-normal tracking-tight text-[var(--color-ink)]" style={{ fontFamily: 'Georgia, serif' }}>
+          <h1 className="font-serif text-3xl font-normal tracking-tight text-[var(--color-ink)]">
             工作回顾
           </h1>
         </div>
         {sortedDates.length > 0 && (
           <button
             onClick={downloadAll}
-            className="mt-2 flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] shrink-0 whitespace-nowrap"
-            style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
+            className="mt-2 flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-[var(--color-border)] px-3 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-hover)]"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -450,7 +387,7 @@ function HistoryPage() {
             onChange={e => setCustomStart(e.target.value)}
             className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3.5 font-mono text-sm text-[var(--color-ink)] focus:border-[var(--color-border-focus)] focus:outline-none"
           />
-          <span className="text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>至</span>
+          <span className="font-serif text-sm text-[var(--color-ink-muted)]">至</span>
           <input
             type="date"
             value={customEnd}
@@ -471,13 +408,13 @@ function HistoryPage() {
         <p className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
       ) : sortedDates.length === 0 ? (
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-8 text-center">
-          <p className="text-sm text-[var(--color-ink-muted)]" style={{ fontFamily: 'Georgia, serif' }}>暂无记录</p>
+          <p className="font-serif text-sm text-[var(--color-ink-muted)]">暂无记录</p>
         </div>
       ) : (
         <div className="space-y-3">
           {sortedDates.map(date => {
             const entry = dateMap.get(date)!
-            return <HistoryEntry key={date} date={date} entry={entry} getDayMarkdown={getDayMarkdown} onRefresh={() => handleCustomSearch()} preset={preset} fetchData={fetchData} currentRange={currentFetchRange} />
+            return <HistoryEntry key={date} date={date} entry={entry} getDayMarkdown={getDayMarkdown} />
           })}
         </div>
       )}
@@ -485,10 +422,17 @@ function HistoryPage() {
   )
 }
 
-function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: { date: string, entry: any, getDayMarkdown: (d: string) => string, onRefresh?: () => void, preset?: string, fetchData: (s: string, e: string) => void, currentRange: { start: string, end: string } }) {
+interface HistoryEntryData {
+  attendance?: Attendance
+  log?: WorkLog
+  todos: Todo[]
+}
+
+function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: HistoryEntryData, getDayMarkdown: (d: string) => string }) {
   const [isEditing, setIsEditing] = useState(false)
   const [logContent, setLogContent] = useState('')
-  const [saving, setSaving] = useState(false)
+  const saveLogMut = useSaveWorkLog()
+  const { toastError } = useToast()
 
   const handleEdit = () => {
     setLogContent((entry.log?.content || '').replace(/^\s+/, ''))
@@ -496,15 +440,11 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
   }
 
   const handleSave = async () => {
-    setSaving(true)
     try {
-      await workLogsApi.save(date, logContent)
+      await saveLogMut.mutateAsync({ date, content: logContent })
       setIsEditing(false)
-      fetchData(currentRange.start, currentRange.end)
-    } catch (e: any) {
-      alert('保存失败: ' + (e.message || '未知错误'))
-    } finally {
-      setSaving(false)
+    } catch (e: unknown) {
+      toastError('保存失败: ' + (e instanceof Error ? e.message : '未知错误'))
     }
   }
 
@@ -519,8 +459,7 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
           {!isEditing && (
             <button
               onClick={handleEdit}
-              className="font-mono text-xs px-2 py-1 rounded transition-colors hover:bg-[var(--color-surface-hover)] text-[var(--color-ink-muted)]"
-              style={{ border: '1px solid var(--color-border)' }}
+              className="rounded border border-[var(--color-border)] px-2 py-1 font-mono text-xs text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-hover)]"
             >
               编辑
             </button>
@@ -533,7 +472,7 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
                 date={date}
                 isOvertime={!!entry.attendance.is_overtime}
                 isLeave={entry.attendance.status === 'leave'}
-                onChanged={() => fetchData(currentRange.start, currentRange.end)}
+                onChanged={() => {}}
               />
               <span>上班 {formatTime(entry.attendance.clock_in)}</span>
               <span>下班 {formatTime(entry.attendance.clock_out)}</span>
@@ -557,14 +496,14 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
           <div className="flex items-center gap-3 pt-2">
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saveLogMut.isPending}
               className="rounded-md bg-[var(--color-solid)] px-5 py-2 font-mono text-sm text-[var(--color-solid-text)] hover:bg-[var(--color-solid-hover)] disabled:opacity-50"
             >
-              {saving ? '保存中...' : '保存修改'}
+              {saveLogMut.isPending ? '保存中...' : '保存修改'}
             </button>
             <button
               onClick={() => setIsEditing(false)}
-              disabled={saving}
+              disabled={saveLogMut.isPending}
               className="rounded-md border border-[var(--color-border)] px-5 py-2 font-mono text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
             >
               取消
@@ -574,11 +513,11 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
       ) : (
         <>
           {entry.log ? (
-            <div className="markdown-body text-sm text-[var(--color-ink-secondary)] mt-2" style={{ fontFamily: 'Georgia, serif' }}>
+            <div className="markdown-body mt-2 font-serif text-sm text-[var(--color-ink-secondary)]">
               <MarkdownContent content={entry.log.content} />
             </div>
           ) : (
-            <p className="m-0 mt-2 text-sm italic text-[var(--color-ink-faint)]" style={{ fontFamily: 'Georgia, serif' }}>
+            <p className="m-0 mt-2 font-serif text-sm italic text-[var(--color-ink-faint)]">
               未记录工作内容
             </p>
           )}
@@ -587,11 +526,10 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
             <div className="mt-3 border-t border-dashed border-[var(--color-border)] pt-3">
               <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">§ 已完成待办 §</p>
               <div className="space-y-1">
-                {entry.todos.map((todo: any) => (
+                {entry.todos.map((todo) => (
                   <div key={todo.id} className="flex items-start gap-2 px-1">
                     <div
-                      className="w-3.5 h-3.5 mt-0.5 rounded flex items-center justify-center shrink-0"
-                      style={{ background: 'var(--color-solid)' }}
+                      className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded bg-[var(--color-solid)]"
                     >
                       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--color-solid-text)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="20 6 9 17 4 12" />
@@ -599,8 +537,7 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
                     </div>
                     <div className="flex-1 min-w-0">
                       <span
-                        className="text-sm"
-                        style={{ color: 'var(--color-ink-muted)', fontFamily: 'Georgia, serif' }}
+                        className="text-sm font-serif text-[var(--color-ink-muted)]"
                       >
                         {todo.content}
                       </span>
@@ -609,8 +546,7 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
                           href={todo.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-mono text-xs ml-2"
-                          style={{ color: 'var(--color-ink-faint)', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+                          className="ml-2 font-mono text-xs text-[var(--color-ink-faint)] underline underline-offset-2"
                         >
                           ⇗
                         </a>
@@ -628,32 +564,24 @@ function HistoryEntry({ date, entry, getDayMarkdown, fetchData, currentRange }: 
   )
 }
 
-function OvertimeBadge({ date, isOvertime, isLeave, onChanged }: { date: string, isOvertime: boolean, isLeave: boolean, onChanged: () => void }) {
-  const [busy, setBusy] = useState(false)
+function OvertimeBadge({ date, isOvertime, isLeave }: { date: string, isOvertime: boolean, isLeave: boolean, onChanged?: () => void }) {
+  const overtimeMut = useSetOvertime()
+  const { toastError } = useToast()
   if (isLeave) return null
   const toggle = async () => {
-    if (busy) return
-    setBusy(true)
+    if (overtimeMut.isPending) return
     try {
-      await attendanceApi.setOvertime(date, !isOvertime)
-      onChanged()
-    } catch (e: any) {
-      alert(e.message || '更新失败')
-    } finally {
-      setBusy(false)
+      await overtimeMut.mutateAsync({ date, isOvertime: !isOvertime })
+    } catch (e: unknown) {
+      toastError(e instanceof Error ? e.message : '更新失败')
     }
   }
   return (
     <button
       onClick={toggle}
-      disabled={busy}
+      disabled={overtimeMut.isPending}
       title={isOvertime ? '点击取消加班标记' : '点击标记为加班'}
-      className="px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors disabled:opacity-50"
-      style={{
-        background: isOvertime ? '#fee2e2' : 'transparent',
-        color: isOvertime ? '#dc2626' : 'var(--color-ink-faint)',
-        border: isOvertime ? '1px solid transparent' : '1px dashed var(--color-border)',
-      }}
+      className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors disabled:opacity-50 ${isOvertime ? 'border border-transparent bg-red-100 text-red-600' : 'border border-dashed border-[var(--color-border)] bg-transparent text-[var(--color-ink-faint)]'}`}
     >
       {isOvertime ? '加班' : '+ 加班'}
     </button>

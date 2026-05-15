@@ -1,10 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { auth as authApi, setToken, clearToken, isLoggedIn } from './api'
-
-interface User {
-  id: number
-  username: string
-}
+import { auth as authApi, setToken, clearToken, isLoggedIn, ApiError } from './api'
+import type { User } from './models.gen'
 
 interface AuthContextType {
   user: User | null
@@ -25,8 +21,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isLoggedIn()) {
       authApi.me().then(data => {
         setUser(data.user)
-      }).catch((err: any) => {
-        if (err.status === 401) {
+      }).catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 401) {
           clearToken()
         }
       }).finally(() => setLoading(false))

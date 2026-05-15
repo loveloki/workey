@@ -14,7 +14,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN git log -1 --format='{"commit":"%h","date":"%cd","content":"%s"}' --date=short > version.json || echo '{"commit":"unknown","date":"unknown","content":"unknown"}' > version.json
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o workey .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o workey ./cmd/workey
 
 # ── Stage 3: Runtime ──────────────────────────────────────
 FROM alpine:3.19

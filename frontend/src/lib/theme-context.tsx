@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { settings } from './api'
 import { isLoggedIn } from './api'
+import { useSettings } from './queries'
 
 export type Theme = 'light' | 'dark' | 'auto'
 
@@ -25,34 +25,30 @@ function applyTheme(theme: Theme) {
   } else if (theme === 'light') {
     root.setAttribute('data-theme', 'light')
   } else {
-    // auto: remove attribute, let CSS @media handle it
     root.removeAttribute('data-theme')
   }
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    // Read from localStorage for instant apply before API loads
     const stored = localStorage.getItem('workey-theme') as Theme | null
     return stored && ['light', 'dark', 'auto'].includes(stored) ? stored : 'light'
   })
 
-  // Apply theme to DOM whenever it changes
+  // 仅在已登录时拉取服务端主题设置（query 自动去重，多个组件共享同一份缓存）
+  const { data } = useSettings(isLoggedIn())
+
   useEffect(() => {
     applyTheme(theme)
   }, [theme])
 
-  // Fetch from server on mount (if logged in)
+  // 服务端主题同步
   useEffect(() => {
-    if (isLoggedIn()) {
-      settings.get().then(data => {
-        if (data.theme && ['light', 'dark', 'auto'].includes(data.theme)) {
-          setThemeState(data.theme as Theme)
-          localStorage.setItem('workey-theme', data.theme)
-        }
-      }).catch(() => {})
+    if (data?.theme && ['light', 'dark', 'auto'].includes(data.theme)) {
+      setThemeState(data.theme as Theme)
+      localStorage.setItem('workey-theme', data.theme)
     }
-  }, [])
+  }, [data])
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t)

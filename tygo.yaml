@@ -1,0 +1,6 @@
+packages:
+  - path: "workey/internal/app"
+    output_path: "frontend/src/lib/models.gen.ts"
+    include_files:
+      - "models.go"
+      - "responses.go"

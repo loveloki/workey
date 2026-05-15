@@ -1,8 +1,20 @@
 import { createRootRoute, Outlet, Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import { useState, useRef, useEffect } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from '../lib/auth-context'
 import { ThemeProvider } from '../lib/theme-context'
+import { ToastProvider } from '../lib/toast-context'
 import { PWAReloadPrompt } from '../lib/pwa-reload-prompt'
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: 1,
+      refetchOnWindowFocus: true,
+    },
+  },
+})
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -10,18 +22,22 @@ export const Route = createRootRoute({
 
 function RootLayout() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <div className="min-h-screen flex flex-col">
-          <Header />
-          <main className="flex-1">
-            <Outlet />
-          </main>
-          <Footer />
-          <PWAReloadPrompt />
-        </div>
-      </AuthProvider>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <div className="min-h-screen flex flex-col">
+              <Header />
+              <main className="flex-1">
+                <Outlet />
+              </main>
+              <Footer />
+              <PWAReloadPrompt />
+            </div>
+          </ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   )
 }
 
@@ -75,7 +91,7 @@ function Header() {
   const isSecondaryActive = secondaryLinks.some(l => routerState.location.pathname === l.to)
 
   return (
-    <header className="sticky top-0 z-50 border-b" style={{ background: 'var(--color-surface-strong)', borderColor: 'var(--color-border)' }}>
+    <header className="sticky top-0 z-50 border-b bg-[var(--color-surface-strong)] border-[var(--color-border)]">
       <nav className="max-w-5xl mx-auto flex items-center justify-between px-4 py-3">
         {/* Left: Logo */}
         <Link
@@ -92,8 +108,7 @@ function Header() {
               <Link
                 key={link.to}
                 to={link.to}
-                className="font-mono text-sm no-underline transition-colors"
-                style={{ color: 'var(--color-ink-muted)' }}
+                className="font-mono text-sm no-underline transition-colors text-[var(--color-ink-muted)]"
                 {...(link.exact ? { activeOptions: { exact: true } } : {})}
                 activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
               >
@@ -110,8 +125,7 @@ function Header() {
               <Link
                 key={link.to}
                 to={link.to}
-                className="font-mono text-sm no-underline transition-colors"
-                style={{ color: 'var(--color-ink-muted)' }}
+                className="font-mono text-sm no-underline transition-colors text-[var(--color-ink-muted)]"
                 {...(link.exact ? { activeOptions: { exact: true } } : {})}
                 activeProps={{ className: 'font-mono text-sm no-underline font-medium text-[var(--color-ink)]' }}
               >
@@ -123,27 +137,24 @@ function Header() {
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen(v => !v)}
-                className="font-mono text-sm px-2 py-1 rounded transition-colors"
-                style={{
-                  color: isSecondaryActive ? 'var(--color-ink)' : 'var(--color-ink-muted)',
-                  fontWeight: isSecondaryActive ? 500 : 400,
-                  background: menuOpen ? 'var(--color-surface-hover)' : 'transparent',
-                }}
+                className={`font-mono text-sm px-2 py-1 rounded transition-colors ${
+                  isSecondaryActive
+                    ? 'text-[var(--color-ink)] font-medium'
+                    : 'text-[var(--color-ink-muted)] font-normal'
+                } ${menuOpen ? 'bg-[var(--color-surface-hover)]' : 'bg-transparent'}`}
               >
                 更多
                 <span className="ml-0.5 text-xs">▾</span>
               </button>
               {menuOpen && (
                 <div
-                  className="absolute right-0 top-full mt-1 py-1 rounded-md shadow-lg min-w-[120px]"
-                  style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)' }}
+                  className="absolute right-0 top-full mt-1 py-1 rounded-md shadow-lg min-w-[120px] bg-[var(--color-surface-strong)] border border-[var(--color-border)]"
                 >
                   {secondaryLinks.map(link => (
                     <Link
                       key={link.to}
                       to={link.to}
-                      className="block px-4 py-2 font-mono text-sm no-underline transition-colors hover:bg-[var(--color-surface-hover)]"
-                      style={{ color: 'var(--color-ink-muted)' }}
+                      className="block px-4 py-2 font-mono text-sm no-underline transition-colors hover:bg-[var(--color-surface-hover)] text-[var(--color-ink-muted)]"
                       activeProps={{ className: 'block px-4 py-2 font-mono text-sm no-underline font-medium text-[var(--color-ink)] bg-[var(--color-surface-hover)]' }}
                     >
                       {link.label}
@@ -164,8 +175,7 @@ function Header() {
               </span>
               <button
                 onClick={() => { logout(); navigate({ to: '/login' }) }}
-                className="font-mono text-sm px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] whitespace-nowrap"
-                style={{ background: 'var(--color-surface-strong)', border: '1px solid var(--color-border)', borderRadius: '6px' }}
+                className="font-mono text-sm px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] whitespace-nowrap bg-[var(--color-surface-strong)] border border-[var(--color-border)]"
               >
                 退出
               </button>
@@ -180,7 +190,7 @@ function Header() {
 function Footer() {
   return (
     <footer className="py-8 text-center">
-      <p className="font-mono text-xs" style={{ color: 'var(--color-ink-faint)' }}>
+      <p className="font-mono text-xs text-[var(--color-ink-faint)]">
         Workey · 工作记录
       </p>
     </footer>

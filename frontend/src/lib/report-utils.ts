@@ -1,12 +1,11 @@
-import type { Todo } from './api'
+import type { Todo, Attendance } from './api'
 
 /** Format a single day's data as markdown (content only, no date/attendance/lesson). */
 export function formatDayMarkdown(
   _date: string,
-  _att: any,
+  _att: Attendance | null,
   logContent: string,
   completedTodos: Todo[],
-  _lessonContent?: string,
 ): string {
   const lines: string[] = []
   if (logContent.trim()) {

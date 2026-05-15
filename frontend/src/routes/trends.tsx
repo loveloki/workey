@@ -1,21 +1,15 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useAuth } from '../lib/auth-context'
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { attendance as attendanceApi } from '../lib/api'
+import { createFileRoute } from '@tanstack/react-router'
+import { useAuthGuard } from '../lib/useAuthGuard'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { type Attendance } from '../lib/api'
 import { getDateRange, type RangePreset } from '../lib/date-utils'
+import { useAttendanceRange, useAttendanceStats } from '../lib/queries'
 
 export const Route = createFileRoute('/trends')({
   component: TrendsPage,
 })
 
-interface AttendanceRecord {
-  date: string
-  clock_in: string | null
-  clock_out: string | null
-  status: string
-}
-
-function timeToMinutes(datetime: string | null): number | null {
+function timeToMinutes(datetime: string | undefined): number | null {
   if (!datetime) return null
   const d = new Date(datetime)
   if (isNaN(d.getTime())) return null
@@ -29,46 +23,29 @@ function minutesToTime(minutes: number): string {
 }
 
 function TrendsPage() {
-  const { user, loading } = useAuth()
-  const navigate = useNavigate()
+  const { user, loading } = useAuthGuard()
   const [preset, setPreset] = useState<RangePreset | 'custom'>('month')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
-  const [data, setData] = useState<AttendanceRecord[]>([])
-  const [fetching, setFetching] = useState(false)
-  const [hasLoaded, setHasLoaded] = useState(false)
+  // 自定义搜索时，确认后才更新 activeCustom 触发查询
+  const [activeCustom, setActiveCustom] = useState<{ start: string; end: string } | null>(null)
 
-  const [globalStats, setGlobalStats] = useState<{ global_overtime_days: number; global_leave_days: number; global_remaining: number } | null>(null)
+  // 计算当前查询的日期范围
+  const { start, end } = useMemo(() => {
+    if (preset === 'custom' && activeCustom) return activeCustom
+    if (preset !== 'custom') return getDateRange(preset as RangePreset)
+    return { start: '', end: '' }
+  }, [preset, activeCustom])
 
-  useEffect(() => {
-    if (!loading && !user) navigate({ to: '/login' })
-  }, [loading, user, navigate])
+  const { data: statsData } = useAttendanceStats(!!user)
+  const { data: rangeData, isFetching: fetching } = useAttendanceRange(start, end, !!user)
 
-  useEffect(() => {
-    if (!user) return
-    attendanceApi.stats().then(res => setGlobalStats(res)).catch(() => {})
-  }, [user])
-
-  useEffect(() => {
-    if (!user || preset === 'custom') return
-    const range = getDateRange(preset as RangePreset)
-    fetchData(range.start, range.end)
-  }, [preset, user])
-
-  const fetchData = async (start: string, end: string) => {
-    setFetching(true)
-    try {
-      const res = await attendanceApi.range(start, end)
-      setData(res.attendances)
-      setHasLoaded(true)
-    } catch (e) {
-      console.error(e)
-    }
-    setFetching(false)
-  }
+  const globalStats = statsData ?? null
+  const data: Attendance[] = rangeData?.attendances ?? []
+  const hasLoaded = !!rangeData
 
   const handleCustomSearch = () => {
-    if (customStart && customEnd) fetchData(customStart, customEnd)
+    if (customStart && customEnd) setActiveCustom({ start: customStart, end: customEnd })
   }
 
   const presets: { key: RangePreset | 'custom'; label: string }[] = [
@@ -85,8 +62,8 @@ function TrendsPage() {
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
       <div className="mb-6">
-        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em]" style={{ color: 'var(--color-ink-secondary)' }}>数据趋势</p>
-        <h1 className="text-3xl font-normal tracking-tight" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink)' }}>
+        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">数据趋势</p>
+        <h1 className="text-3xl font-normal tracking-tight font-serif text-[var(--color-ink)]">
           上下班时间
         </h1>
       </div>
@@ -98,14 +75,9 @@ function TrendsPage() {
             onClick={() => setPreset(p.key)}
             className={`rounded-md border px-4 py-2 font-mono text-sm ${
               preset === p.key
-                ? 'font-medium'
-                : 'hover:bg-[var(--color-surface-hover)]'
+                ? 'font-medium border-[var(--color-border-strong)] bg-[var(--color-surface-hover)] text-[var(--color-ink)]'
+                : 'border-[var(--color-border)] bg-[var(--color-surface-strong)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]'
             }`}
-            style={
-              preset === p.key
-                ? { borderColor: 'var(--color-border-strong)', background: 'var(--color-surface-hover)', color: 'var(--color-ink)' }
-                : { borderColor: 'var(--color-border)', background: 'var(--color-surface-strong)', color: 'var(--color-ink-muted)' }
-            }
           >
             {p.label}
           </button>
@@ -118,27 +90,18 @@ function TrendsPage() {
             type="date"
             value={customStart}
             onChange={e => setCustomStart(e.target.value)}
-            className="rounded-lg border px-4 py-3.5 font-mono text-sm focus:outline-none"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-ink)' }}
-            onFocus={e => e.currentTarget.style.borderColor = 'var(--color-border-focus)'}
-            onBlur={e => e.currentTarget.style.borderColor = 'var(--color-border)'}
+            className="rounded-lg border px-4 py-3.5 font-mono text-sm focus:outline-none border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] focus:border-[var(--color-border-focus)]"
           />
-          <span className="text-sm" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>至</span>
+          <span className="text-sm font-serif text-[var(--color-ink-muted)]">至</span>
           <input
             type="date"
             value={customEnd}
             onChange={e => setCustomEnd(e.target.value)}
-            className="rounded-lg border px-4 py-3.5 font-mono text-sm focus:outline-none"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-ink)' }}
-            onFocus={e => e.currentTarget.style.borderColor = 'var(--color-border-focus)'}
-            onBlur={e => e.currentTarget.style.borderColor = 'var(--color-border)'}
+            className="rounded-lg border px-4 py-3.5 font-mono text-sm focus:outline-none border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] focus:border-[var(--color-border-focus)]"
           />
           <button
             onClick={handleCustomSearch}
-            className="rounded-md px-5 py-2.5 font-mono text-sm"
-            style={{ background: 'var(--color-solid)', color: 'var(--color-solid-text)' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--color-solid-hover)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'var(--color-solid)'}
+            className="rounded-md px-5 py-2.5 font-mono text-sm bg-[var(--color-solid)] text-[var(--color-solid-text)] hover:bg-[var(--color-solid-hover)]"
           >
             查询
           </button>
@@ -147,14 +110,14 @@ function TrendsPage() {
 
       {/* Chart area: always mounted after first load so it transitions smoothly */}
       {hasLoaded ? (
-        <div className="rounded-lg border p-6" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-strong)' }}>
+        <div className="rounded-lg border p-6 border-[var(--color-border)] bg-[var(--color-surface-strong)]">
           <TrendChart data={data} loading={fetching} />
         </div>
       ) : fetching ? (
-        <p className="font-mono text-sm" style={{ color: 'var(--color-ink-muted)' }}>加载中...</p>
+        <p className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
       ) : (
-        <div className="rounded-lg border p-8 text-center" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-strong)' }}>
-          <p className="text-sm" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>暂无打卡数据</p>
+        <div className="rounded-lg border p-8 text-center border-[var(--color-border)] bg-[var(--color-surface-strong)]">
+          <p className="text-sm font-serif text-[var(--color-ink-muted)]">暂无打卡数据</p>
         </div>
       )}
 
@@ -210,14 +173,14 @@ function avgTime(minutes: number[]): string {
 
 function StatCard({ label, value, valueColor = 'var(--color-ink)' }: { label: string; value: string; valueColor?: string }) {
   return (
-    <div className="rounded-lg border p-5 text-center" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface-strong)' }}>
-      <p className="mb-1 font-mono text-xs uppercase tracking-[0.3em]" style={{ color: 'var(--color-ink-muted)' }}>{label}</p>
+    <div className="rounded-lg border p-5 text-center border-[var(--color-border)] bg-[var(--color-surface-strong)]">
+      <p className="mb-1 font-mono text-xs uppercase tracking-[0.3em] text-[var(--color-ink-muted)]">{label}</p>
       <p className="font-mono text-2xl font-bold" style={{ color: valueColor }}>{value}</p>
     </div>
   )
 }
 
-function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: boolean }) {
+function TrendChart({ data, loading }: { data: Attendance[]; loading: boolean }) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
   // Compute chart data from props
@@ -246,11 +209,11 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
   const selectedIdx = selectedDate !== null ? sorted.findIndex(d => d.date === selectedDate) : -1
 
   if (loading && data.length === 0) {
-    return <p className="font-mono text-sm" style={{ color: 'var(--color-ink-muted)' }}>加载中...</p>
+    return <p className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
   }
 
   if (allMinutes.length === 0) {
-    return <p className="text-sm" style={{ fontFamily: 'Georgia, serif', color: 'var(--color-ink-muted)' }}>暂无打卡数据</p>
+    return <p className="text-sm font-serif text-[var(--color-ink-muted)]">暂无打卡数据</p>
   }
 
   const minY = Math.floor(Math.min(...allMinutes) / 60) * 60 - 30
@@ -293,7 +256,7 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4 font-mono text-xs">
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2 w-4 rounded-sm" style={{ background: 'var(--color-ink)' }} />
+            <span className="inline-block h-2 w-4 rounded-sm bg-[var(--color-ink)]" />
             上班时间
           </span>
           <span className="flex items-center gap-1.5">
@@ -302,23 +265,19 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
           </span>
         </div>
         <div className="flex items-center gap-2 font-mono text-xs">
-          <label style={{ color: 'var(--color-ink-secondary)' }}>标记日期</label>
+          <label className="text-[var(--color-ink-secondary)]">标记日期</label>
           <input
             type="date"
             value={selectedDate || ''}
             min={dateMin}
             max={dateMax}
             onChange={e => setSelectedDate(e.target.value || null)}
-            className="rounded border px-2 py-1 font-mono text-xs focus:outline-none"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-ink)' }}
-            onFocus={e => e.currentTarget.style.borderColor = 'var(--color-border-focus)'}
-            onBlur={e => e.currentTarget.style.borderColor = 'var(--color-border)'}
+            className="rounded border px-2 py-1 font-mono text-xs focus:outline-none border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] focus:border-[var(--color-border-focus)]"
           />
           {selectedDate && (
             <button
               onClick={() => setSelectedDate(null)}
-              className="rounded px-1.5 py-0.5 text-xs"
-              style={{ color: 'var(--color-ink-muted)' }}
+              className="rounded px-1.5 py-0.5 text-xs text-[var(--color-ink-muted)]"
               title="清除选择"
             >
               ✕
@@ -326,7 +285,10 @@ function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: bool
           )}
         </div>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: '350px', opacity: loading ? 0.5 : 1, transition: 'opacity 0.2s' }}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className={`w-full max-h-[350px] transition-opacity duration-200 ${loading ? 'opacity-50' : 'opacity-100'}`}
+      >
         {/* Grid lines */}
         {yTicks.map(m => (
           <g key={m}>

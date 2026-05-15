@@ -7,9 +7,11 @@ interface MarkdownEditorProps {
   onChange: (v: string) => void
   placeholder?: string
   rows?: number
+  /** 渲染在预览按钮左侧的额外操作区 */
+  toolbarExtra?: React.ReactNode
 }
 
-export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: MarkdownEditorProps) {
+export function MarkdownEditor({ value, onChange, placeholder, rows = 6, toolbarExtra }: MarkdownEditorProps) {
   const [preview, setPreview] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -77,15 +79,12 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: Markd
         <ToolbarBtn title="链接" onClick={() => wrapSelection('[', '](url)')}>🔗</ToolbarBtn>
         <ToolbarBtn title="列表" onClick={() => appendAtEnd('- ')}>•</ToolbarBtn>
         <div className="flex-1" />
+        {toolbarExtra}
         <button
           onClick={() => setPreview(!preview)}
-          className="font-mono text-xs px-3 py-1 rounded transition-colors"
-          style={{
-            border: '1px solid var(--color-border)',
-            borderRadius: '4px',
-            background: preview ? 'var(--color-surface-hover)' : 'var(--color-surface-strong)',
-            color: 'var(--color-ink-secondary)',
-          }}
+          className={`font-mono text-xs px-3 py-1 rounded transition-colors border border-[var(--color-border)] text-[var(--color-ink-secondary)] ${
+            preview ? 'bg-[var(--color-surface-hover)]' : 'bg-[var(--color-surface-strong)]'
+          }`}
         >
           {preview ? '编辑' : '预览'}
         </button>
@@ -94,8 +93,7 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: Markd
       {/* Editor / Preview */}
       {preview ? (
         <div
-          className="markdown-body rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 min-h-[160px]"
-          style={{ fontFamily: 'Georgia, serif' }}
+          className="markdown-body rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 min-h-[160px] font-serif"
         >
           {value ? (
             <MarkdownContent content={value} />
@@ -109,8 +107,7 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: Markd
           value={value}
           onChange={e => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-base text-[var(--color-ink-secondary)] placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-border-focus)] focus:outline-none resize-y"
-          style={{ fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace', fontSize: '14px', lineHeight: '1.6' }}
+          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-base text-[var(--color-ink-secondary)] placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-border-focus)] focus:outline-none resize-y font-mono text-sm leading-[1.6]"
           rows={rows}
         />
       )}
@@ -128,18 +125,23 @@ export function MarkdownContent({ content }: { content: string }) {
     <Markdown
       remarkPlugins={[remarkGfm]}
       components={{
-        img: ({ src, alt, ...props }) => (
+        img: ({ src, alt, className, ...props }) => (
           <img
             src={src}
             alt={alt || ''}
             {...props}
-            style={{ maxWidth: '100%', borderRadius: '6px', margin: '8px 0' }}
+            className={['max-w-full rounded-md my-2', className].filter(Boolean).join(' ')}
             loading="lazy"
           />
         ),
-        a: ({ href, children, ...props }) => (
-          <a href={href} target="_blank" rel="noopener noreferrer" {...props}
-            style={{ color: 'var(--color-ink-secondary)', textDecoration: 'underline' }}>
+        a: ({ href, children, className, ...props }) => (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            {...props}
+            className={['text-[var(--color-ink-secondary)] underline', className].filter(Boolean).join(' ')}
+          >
             {children}
           </a>
         ),
@@ -167,8 +169,7 @@ function ToolbarBtn({
       onClick={onClick}
       title={title}
       disabled={disabled}
-      className="font-mono text-sm w-8 h-8 flex items-center justify-center rounded transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-40"
-      style={{ border: '1px solid var(--color-border)', borderRadius: '4px', background: 'var(--color-surface-strong)' }}
+      className="font-mono text-sm w-8 h-8 flex items-center justify-center rounded transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-40 border border-[var(--color-border)] bg-[var(--color-surface-strong)]"
     >
       {children}
     </button>

@@ -11,10 +11,15 @@
   "scripts": {
     "dev": "vite --port 3000",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.100.10",
     "@tanstack/react-router": "^1.120.0",
+    "jszip": "^3.10.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
@@ -26,12 +31,17 @@
     "@tailwindcss/oxide-linux-x64-musl": "4.2.1",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/router-plugin": "^1.120.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^4.5.2",
+    "@vitest/coverage-v8": "^4.1.6",
+    "happy-dom": "^20.9.0",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.7.2",
     "vite": "^6.3.0",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite-plugin-pwa": "^1.2.0",
+    "vitest": "^4.1.6"
   }
 }
