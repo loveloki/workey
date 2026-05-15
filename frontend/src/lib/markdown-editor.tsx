@@ -7,9 +7,11 @@ interface MarkdownEditorProps {
   onChange: (v: string) => void
   placeholder?: string
   rows?: number
+  /** 渲染在预览按钮左侧的额外操作区 */
+  toolbarExtra?: React.ReactNode
 }
 
-export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: MarkdownEditorProps) {
+export function MarkdownEditor({ value, onChange, placeholder, rows = 6, toolbarExtra }: MarkdownEditorProps) {
   const [preview, setPreview] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -77,6 +79,7 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6 }: Markd
         <ToolbarBtn title="链接" onClick={() => wrapSelection('[', '](url)')}>🔗</ToolbarBtn>
         <ToolbarBtn title="列表" onClick={() => appendAtEnd('- ')}>•</ToolbarBtn>
         <div className="flex-1" />
+        {toolbarExtra}
         <button
           onClick={() => setPreview(!preview)}
           className={`font-mono text-xs px-3 py-1 rounded transition-colors border border-[var(--color-border)] text-[var(--color-ink-secondary)] ${

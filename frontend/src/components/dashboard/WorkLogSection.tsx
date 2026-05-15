@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { getToday } from '../../lib/date-utils'
 import { useToast } from '../../lib/toast-context'
 import { MarkdownEditor } from '../../lib/markdown-editor'
 import { useWorkLogToday, useSaveWorkLog } from '../../lib/queries'
 
-export function WorkLogSection() {
+export function WorkLogSection({ toolbarExtra }: { toolbarExtra?: React.ReactNode }) {
   const [content, setContent] = useState('')
   const [saved, setSaved] = useState(false)
   const { data, isLoading } = useWorkLogToday()
@@ -41,6 +41,7 @@ export function WorkLogSection() {
               onChange={setContent}
               placeholder="记录今天的工作内容..."
               rows={10}
+              toolbarExtra={toolbarExtra}
             />
           </div>
           <div className="flex items-center gap-3">

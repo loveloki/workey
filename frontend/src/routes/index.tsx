@@ -49,18 +49,17 @@ function Dashboard() {
   if (authLoading || checking) return <LoadingScreen />
   if (!user) return null
 
+  const copyBtn = <CopyButton getText={copyTodayReport} />
+
   return (
     <main className="max-w-7xl mx-auto px-4 pb-8 pt-8">
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">今日工作</p>
-          <h1
-            className="text-3xl font-normal tracking-tight text-[var(--color-ink)] sm:text-4xl font-serif"
-          >
-            {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
-          </h1>
-        </div>
-        <CopyButton getText={copyTodayReport} className="mt-2" />
+      <div className="mb-6">
+        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">今日工作</p>
+        <h1
+          className="text-3xl font-normal tracking-tight text-[var(--color-ink)] sm:text-4xl font-serif"
+        >
+          {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
+        </h1>
       </div>
 
       {/* Desktop: two-column layout */}
@@ -70,7 +69,7 @@ function Dashboard() {
         >
           {todayData && <AttendanceStatusBar data={todayData} />}
           <div className="border-t border-dashed border-t-[var(--color-border)]" />
-          <WorkLogSection />
+          <WorkLogSection toolbarExtra={copyBtn} />
           <div className="border-t border-dashed border-t-[var(--color-border)]" />
           <CompletedTodosSection />
         </div>
@@ -91,7 +90,7 @@ function Dashboard() {
           <TodayCreatedTodosInline />
 
           <div className="border-t border-dashed border-t-[var(--color-border)]" />
-          <WorkLogSection />
+          <WorkLogSection toolbarExtra={copyBtn} />
           <div className="border-t border-dashed border-t-[var(--color-border)]" />
           <CompletedTodosSection />
         </div>
