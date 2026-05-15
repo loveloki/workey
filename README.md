@@ -43,7 +43,7 @@ docker compose up -d
 mise install
 
 # 启动后端
-go run .
+go run ./cmd/workey
 
 # 启动前端开发服务器（另一个终端）
 cd frontend && pnpm install && pnpm dev
@@ -62,8 +62,8 @@ cd frontend && pnpm install && pnpm dev
 
 ```
 .
-├── *.go                    # Go 后端（handler/model/middleware/database）
-├── *_test.go               # Go 单元测试
+├── cmd/workey/             # 程序入口（main.go）
+├── internal/app/           # 服务逻辑（handler/model/middleware/database）
 ├── frontend/
 │   ├── src/
 │   │   ├── routes/         # TanStack Router 文件路由
