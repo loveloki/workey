@@ -5,36 +5,11 @@ import { attendance, workLogs, todos as todosApi, type Todo, type Attendance } f
 import { formatTime, getToday } from '../lib/date-utils'
 import { MarkdownEditor } from '../lib/markdown-editor'
 import { formatDayMarkdown } from '../lib/report-utils'
+import { CopyButton } from '../components/CopyButton'
+import { LoadingScreen } from '../components/LoadingScreen'
 
 export const Route = createFileRoute('/')({ component: Dashboard })
 
-function CopyButton({ getText, className = '' }: { getText: () => Promise<string> | string; className?: string }) {
-  const [copied, setCopied] = useState(false)
-  const handleCopy = async () => {
-    const text = await getText()
-    await navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-  return (
-    <button
-      onClick={handleCopy}
-      className={`font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] ${className}`}
-      style={{ border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-ink-muted)' }}
-      title="复制为 Markdown"
-    >
-      {copied ? '✓ 已复制' : (
-        <span className="flex items-center gap-1">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-          </svg>
-          复制
-        </span>
-      )}
-    </button>
-  )
-}
 
 function Dashboard() {
   const { user, loading: authLoading } = useAuth()
@@ -711,10 +686,3 @@ function TodayCreatedTodosInline() {
   )
 }
 
-function LoadingScreen() {
-  return (
-    <main className="flex min-h-[60vh] items-center justify-center px-4">
-      <p className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
-    </main>
-  )
-}

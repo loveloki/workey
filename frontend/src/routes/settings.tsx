@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { settings, system, passkeys as passkeysApi, iterationOverrides as overridesApi, base64urlToBuffer, type Passkey, type IterationOverride } from '../lib/api'
 import { makeIterationConfig, getCurrentIteration, getIterationRange, computeIterations, type IterationConfig, type IterationOverrideMap } from '../lib/date-utils'
 import { useTheme, type Theme } from '../lib/theme-context'
+import { LoadingScreen } from '../components/LoadingScreen'
+import { Card } from '../components/Card'
 
 export const Route = createFileRoute('/settings')({ component: SettingsPage })
 
@@ -1067,24 +1069,6 @@ function VersionSection() {
 
 /* ── Shared Components ──────────────────────────────── */
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div
-      className="rounded-lg p-5 sm:p-6"
-      style={{
-        background: 'var(--color-surface-strong)',
-        border: '1px solid var(--color-border)',
-        borderRadius: '8px',
-      }}
-    >
-      <h2 className="font-mono text-xs uppercase tracking-[0.2em] mb-4" style={{ color: 'var(--color-ink-secondary)' }}>
-        {title}
-      </h2>
-      {children}
-    </div>
-  )
-}
-
 function InputField({
   label,
   type,
@@ -1115,12 +1099,3 @@ function InputField({
   )
 }
 
-function LoadingScreen() {
-  return (
-    <main className="max-w-5xl mx-auto px-4 py-16 text-center">
-      <p className="font-mono text-sm" style={{ color: 'var(--color-ink-muted)' }}>
-        加载中...
-      </p>
-    </main>
-  )
-}

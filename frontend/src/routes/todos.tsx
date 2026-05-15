@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect, useRef } from 'react'
 import { todos as todosApi, settings, type Todo } from '../lib/api'
+import { LoadingScreen } from '../components/LoadingScreen'
 
 export const Route = createFileRoute('/todos')({ component: TodosPage })
 
@@ -388,10 +389,3 @@ function TodoItem({
   )
 }
 
-function LoadingScreen() {
-  return (
-    <main className="flex min-h-[60vh] items-center justify-center px-4">
-      <p className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
-    </main>
-  )
-}

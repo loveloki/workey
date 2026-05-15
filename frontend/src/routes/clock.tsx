@@ -3,6 +3,7 @@ import { useAuth } from '../lib/auth-context'
 import { useState, useEffect, useCallback } from 'react'
 import { attendance, type Attendance } from '../lib/api'
 import { formatTime } from '../lib/date-utils'
+import { LoadingScreen } from '../components/LoadingScreen'
 
 export const Route = createFileRoute('/clock')({ component: ClockPage })
 
@@ -14,7 +15,7 @@ function ClockPage() {
     if (!authLoading && !user) navigate({ to: '/login' })
   }, [authLoading, user, navigate])
 
-  if (authLoading) return <Loading />
+  if (authLoading) return <LoadingScreen />
   if (!user) return null
 
   return (
@@ -105,7 +106,7 @@ function ClockWidget() {
     setActing(false)
   }
 
-  if (loading) return <Loading />
+  if (loading) return <LoadingScreen />
 
   const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 
@@ -280,10 +281,3 @@ function calcDuration(clockIn: string, clockOut: string): string {
   return `${h}h${m.toString().padStart(2, '0')}m`
 }
 
-function Loading() {
-  return (
-    <main className="flex min-h-[60vh] items-center justify-center px-4">
-      <p className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
-    </main>
-  )
-}

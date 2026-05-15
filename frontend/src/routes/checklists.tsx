@@ -8,6 +8,7 @@ import {
   type ChecklistItem,
   type ChecklistSnapshot,
 } from '../lib/api'
+import { LoadingScreen } from '../components/LoadingScreen'
 
 export const Route = createFileRoute('/checklists')({ component: ChecklistsPage })
 
@@ -1064,10 +1065,3 @@ function ChecklistUse({
   )
 }
 
-function LoadingScreen() {
-  return (
-    <main className="flex min-h-[60vh] items-center justify-center px-4">
-      <p className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
-    </main>
-  )
-}
