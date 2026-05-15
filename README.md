@@ -65,12 +65,11 @@ cd frontend && pnpm install && pnpm dev
 ├── cmd/workey/             # 程序入口（main.go）
 ├── internal/app/           # 服务逻辑（handler/model/middleware/database）
 ├── frontend/
-│   ├── src/
-│   │   ├── routes/         # TanStack Router 文件路由
-│   │   ├── components/     # React 组件（按功能分组）
-│   │   ├── lib/            # 工具函数、API 层、Context
-│   │   └── styles.css      # Tailwind + 设计系统变量
-│   └── tests/              # 前端测试
+│   └── src/
+│       ├── routes/         # TanStack Router 文件路由
+│       ├── components/     # React 组件（按功能分组）
+│       ├── lib/            # 工具函数、API 层、Context、测试
+│       └── styles.css      # Tailwind + 设计系统变量
 ├── Dockerfile              # 多阶段构建
 └── docker-compose.yml
 ```

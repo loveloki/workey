@@ -81,13 +81,17 @@ frontend/src/
 │   ├── InputField.tsx
 │   └── LoadingScreen.tsx
 └── lib/
-    ├── api.ts           # HTTP API 层
-    ├── queries.ts       # TanStack Query hooks
-    ├── models.gen.ts    # 自动生成的类型（勿改）
-    ├── toast-context.tsx # Toast 通知系统
-    ├── auth-context.tsx  # 认证 Context
-    ├── useAuthGuard.ts   # 路由认证守卫
-    └── theme-context.tsx # 主题 Context
+    ├── api.ts              # HTTP API 层
+    ├── queries.ts          # TanStack Query hooks
+    ├── models.gen.ts       # 自动生成的类型（勿改）
+    ├── toast-context.tsx   # Toast 通知系统
+    ├── auth-context.tsx    # 认证 Context
+    ├── useAuthGuard.ts     # 路由认证守卫
+    ├── theme-context.tsx   # 主题 Context
+    ├── date-utils.ts       # 日期计算工具
+    ├── report-utils.ts     # 报告导出工具
+    ├── markdown-editor.tsx # Markdown 编辑器组件
+    └── pwa-reload-prompt.tsx # PWA 更新提示
 ```
 
 ## 后端代码规范
