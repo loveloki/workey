@@ -39,7 +39,7 @@ function Dashboard() {
     ])
     return formatDayMarkdown(
       today,
-      attRes.attendance,
+      attRes.attendance ?? null,
       logRes.work_log?.content || '',
       todosRes.todos || [],
     )

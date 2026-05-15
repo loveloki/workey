@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useAuthGuard } from '../lib/useAuthGuard'
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { type Attendance } from '../lib/api'
 import { getDateRange, type RangePreset } from '../lib/date-utils'
 import { useAttendanceRange, useAttendanceStats } from '../lib/queries'
 
@@ -8,14 +9,7 @@ export const Route = createFileRoute('/trends')({
   component: TrendsPage,
 })
 
-interface AttendanceRecord {
-  date: string
-  clock_in: string | null
-  clock_out: string | null
-  status: string
-}
-
-function timeToMinutes(datetime: string | null): number | null {
+function timeToMinutes(datetime: string | undefined): number | null {
   if (!datetime) return null
   const d = new Date(datetime)
   if (isNaN(d.getTime())) return null
@@ -47,7 +41,7 @@ function TrendsPage() {
   const { data: rangeData, isFetching: fetching } = useAttendanceRange(start, end, !!user)
 
   const globalStats = statsData ?? null
-  const data: AttendanceRecord[] = rangeData?.attendances ?? []
+  const data: Attendance[] = rangeData?.attendances ?? []
   const hasLoaded = !!rangeData
 
   const handleCustomSearch = () => {
@@ -186,7 +180,7 @@ function StatCard({ label, value, valueColor = 'var(--color-ink)' }: { label: st
   )
 }
 
-function TrendChart({ data, loading }: { data: AttendanceRecord[]; loading: boolean }) {
+function TrendChart({ data, loading }: { data: Attendance[]; loading: boolean }) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
   // Compute chart data from props

@@ -87,7 +87,7 @@ export function PasskeySection() {
     }
   }
 
-  const formatDate = (dateStr: string | null) => {
+  const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return '从未使用'
     const d = new Date(dateStr.replace(' ', 'T') + 'Z')
     if (isNaN(d.getTime())) return dateStr

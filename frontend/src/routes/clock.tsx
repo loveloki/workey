@@ -33,7 +33,7 @@ function ClockPage() {
 function ClockWidget() {
   const { data: queryData, isLoading } = useAttendanceToday()
   const { toastError } = useToast()
-  const [localData, setLocalData] = useState<Attendance | null>(null)
+  const [localData, setLocalData] = useState<Attendance | null | undefined>(null)
   const [now, setNow] = useState(new Date())
   const [isOvertime, setIsOvertime] = useState(false)
   const navigate = useNavigate()
