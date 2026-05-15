@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useAuth } from '../lib/auth-context'
+import { useAuthGuard } from '../lib/useAuthGuard'
 import { useState, useEffect, useCallback } from 'react'
 import { attendance, type Attendance } from '../lib/api'
 import { formatTime } from '../lib/date-utils'
@@ -8,14 +8,9 @@ import { LoadingScreen } from '../components/LoadingScreen'
 export const Route = createFileRoute('/clock')({ component: ClockPage })
 
 function ClockPage() {
-  const { user, loading: authLoading } = useAuth()
-  const navigate = useNavigate()
+  const { user, loading } = useAuthGuard()
 
-  useEffect(() => {
-    if (!authLoading && !user) navigate({ to: '/login' })
-  }, [authLoading, user, navigate])
-
-  if (authLoading) return <LoadingScreen />
+  if (loading) return <LoadingScreen />
   if (!user) return null
 
   return (

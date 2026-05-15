@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useAuth } from '../lib/auth-context'
+import { useAuthGuard } from '../lib/useAuthGuard'
 import { useState, useEffect, useCallback } from 'react'
 import { attendance, workLogs, todos as todosApi, type Attendance } from '../lib/api'
 import { formatTime, getToday } from '../lib/date-utils'
@@ -14,14 +14,10 @@ export const Route = createFileRoute('/')({ component: Dashboard })
 
 
 function Dashboard() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading } = useAuthGuard()
   const navigate = useNavigate()
   const [todayData, setTodayData] = useState<Attendance | null>(null)
   const [checking, setChecking] = useState(true)
-
-  useEffect(() => {
-    if (!authLoading && !user) navigate({ to: '/login' })
-  }, [authLoading, user, navigate])
 
   // Check if clocked in today
   useEffect(() => {

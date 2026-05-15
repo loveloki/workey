@@ -1,5 +1,5 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useAuth } from '../lib/auth-context'
+import { createFileRoute } from '@tanstack/react-router'
+import { useAuthGuard } from '../lib/useAuthGuard'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { attendance as attendanceApi } from '../lib/api'
 import { getDateRange, type RangePreset } from '../lib/date-utils'
@@ -29,8 +29,7 @@ function minutesToTime(minutes: number): string {
 }
 
 function TrendsPage() {
-  const { user, loading } = useAuth()
-  const navigate = useNavigate()
+  const { user, loading } = useAuthGuard()
   const [preset, setPreset] = useState<RangePreset | 'custom'>('month')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
@@ -39,10 +38,6 @@ function TrendsPage() {
   const [hasLoaded, setHasLoaded] = useState(false)
 
   const [globalStats, setGlobalStats] = useState<{ global_overtime_days: number; global_leave_days: number; global_remaining: number } | null>(null)
-
-  useEffect(() => {
-    if (!loading && !user) navigate({ to: '/login' })
-  }, [loading, user, navigate])
 
   useEffect(() => {
     if (!user) return

@@ -1,5 +1,5 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useAuth } from '../lib/auth-context'
+import { createFileRoute } from '@tanstack/react-router'
+import { useAuthGuard } from '../lib/useAuthGuard'
 import { useState, useEffect, useRef } from 'react'
 import { todos as todosApi, settings, type Todo } from '../lib/api'
 import { LoadingScreen } from '../components/LoadingScreen'
@@ -7,14 +7,9 @@ import { LoadingScreen } from '../components/LoadingScreen'
 export const Route = createFileRoute('/todos')({ component: TodosPage })
 
 function TodosPage() {
-  const { user, loading: authLoading } = useAuth()
-  const navigate = useNavigate()
+  const { user, loading } = useAuthGuard()
 
-  useEffect(() => {
-    if (!authLoading && !user) navigate({ to: '/login' })
-  }, [authLoading, user, navigate])
-
-  if (authLoading) return <LoadingScreen />
+  if (loading) return <LoadingScreen />
   if (!user) return null
 
   return (

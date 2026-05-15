@@ -1,5 +1,5 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useAuth } from '../lib/auth-context'
+import { createFileRoute } from '@tanstack/react-router'
+import { useAuthGuard } from '../lib/useAuthGuard'
 import { useState, useEffect } from 'react'
 import { checklists as checklistsApi, type Checklist } from '../lib/api'
 import { LoadingScreen } from '../components/LoadingScreen'
@@ -10,14 +10,9 @@ import { ChecklistUse } from '../components/checklists/ChecklistUse'
 export const Route = createFileRoute('/checklists')({ component: ChecklistsPage })
 
 function ChecklistsPage() {
-  const { user, loading: authLoading } = useAuth()
-  const navigate = useNavigate()
+  const { user, loading } = useAuthGuard()
 
-  useEffect(() => {
-    if (!authLoading && !user) navigate({ to: '/login' })
-  }, [authLoading, user, navigate])
-
-  if (authLoading) return <LoadingScreen />
+  if (loading) return <LoadingScreen />
   if (!user) return null
 
   return (

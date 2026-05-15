@@ -1,6 +1,5 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useEffect } from 'react'
-import { useAuth } from '../lib/auth-context'
+import { createFileRoute } from '@tanstack/react-router'
+import { useAuthGuard } from '../lib/useAuthGuard'
 import { LoadingScreen } from '../components/LoadingScreen'
 import { ThemeSection } from '../components/settings/ThemeSection'
 import { TimezoneSection } from '../components/settings/TimezoneSection'
@@ -15,12 +14,7 @@ import { VersionSection } from '../components/settings/VersionSection'
 export const Route = createFileRoute('/settings')({ component: SettingsPage })
 
 function SettingsPage() {
-  const { user, loading } = useAuth()
-  const navigate = useNavigate()
-
-  useEffect(() => {
-    if (!loading && !user) navigate({ to: '/login' })
-  }, [loading, user, navigate])
+  const { user, loading } = useAuthGuard()
 
   if (loading) return <LoadingScreen />
   if (!user) return null

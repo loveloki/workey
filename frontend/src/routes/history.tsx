@@ -1,5 +1,5 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useAuth } from '../lib/auth-context'
+import { createFileRoute } from '@tanstack/react-router'
+import { useAuthGuard } from '../lib/useAuthGuard'
 import { useState, useEffect } from 'react'
 import { workLogs as workLogsApi, attendance as attendanceApi, todos as todosApi, history as historyApi, iterationOverrides as overridesApi, type Todo, type Attendance, type WorkLog } from '../lib/api'
 import { getDateRange, formatDate, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration, makeIterationConfig, type IterationConfig, type IterationOverrideMap } from '../lib/date-utils'
@@ -122,8 +122,7 @@ function IterationSelector({
 }
 
 function HistoryPage() {
-  const { user, loading } = useAuth()
-  const navigate = useNavigate()
+  const { user, loading } = useAuthGuard()
   const [preset, setPreset] = useState<RangePreset | 'custom' | 'iteration'>('iteration')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
@@ -145,10 +144,6 @@ function HistoryPage() {
   const [availableYears, setAvailableYears] = useState<number[]>([currentYear])
   const [selectedYear, setSelectedYear] = useState<number>(currentYear)
   const [selectedQuarter, setSelectedQuarter] = useState<number>(Math.floor(new Date().getMonth() / 3) + 1)
-
-  useEffect(() => {
-    if (!loading && !user) navigate({ to: '/login' })
-  }, [loading, user, navigate])
 
   // Load iteration config + overrides from settings
   useEffect(() => {
