@@ -213,11 +213,9 @@ body,
   min-height: 100%;
 }
 
-/* 禁止移动端橡皮筋过度滚动 + 防止子元素撑出水平滚动（PWA 原生体感） */
+/* 禁止移动端双击缩放（PWA 原生体感），滚动限制统一由 body 处理 */
 html {
   touch-action: manipulation;
-  overscroll-behavior: none;
-  overflow-x: hidden;
 }
 
 body {
