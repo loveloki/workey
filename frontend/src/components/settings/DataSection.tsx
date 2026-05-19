@@ -3,6 +3,7 @@ import JSZip from 'jszip'
 import { settings } from '../../lib/api'
 import { Card } from '../../components/Card'
 import { useToast } from '../../lib/toast-context'
+import { useQueryClient } from '@tanstack/react-query'
 import { formatDateDisplay, formatTime } from '../../lib/date-utils'
 
 interface AttendancePreview {
@@ -33,6 +34,7 @@ export function DataSection() {
   const [previewMonth, setPreviewMonth] = useState('all')
   const fileRef = useRef<HTMLInputElement>(null)
   const { toastSuccess, toastError } = useToast()
+  const qc = useQueryClient()
 
   const handleExport = async () => {
     setExporting(true)
@@ -101,6 +103,8 @@ export function DataSection() {
       setMsg(`导入成功：${summary}`)
       setIsError(false)
       setPreview(null)
+      // 导入会引入考勤/工作日志等多类数据，平推刷新所有缓存
+      qc.invalidateQueries()
       toastSuccess(`导入成功：${summary}`)
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : '导入失败'

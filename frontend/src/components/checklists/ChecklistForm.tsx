@@ -4,8 +4,9 @@ import {
   useRef,
   type KeyboardEvent,
 } from 'react'
-import { checklists as checklistsApi, type Checklist, type ChecklistItem } from '../../lib/api'
+import { type Checklist, type ChecklistItem } from '../../lib/api'
 import { useToast } from '../../lib/toast-context'
+import { useCreateChecklist } from '../../lib/queries'
 
 export function ChecklistForm({
   initial,
@@ -26,6 +27,7 @@ export function ChecklistForm({
   const titleRef = useRef<HTMLInputElement>(null)
   const itemRefs = useRef<(HTMLInputElement | null)[]>([])
   const { toastError } = useToast()
+  const createMut = useCreateChecklist()
 
   const reorder = (from: number, to: number) => {
     if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return
@@ -84,7 +86,7 @@ export function ChecklistForm({
       if (initial) {
         onSave({ title: title.trim(), items: JSON.stringify(filtered) })
       } else {
-        const { checklist } = await checklistsApi.create(title.trim(), filtered)
+        const { checklist } = await createMut.mutateAsync({ title: title.trim(), items: filtered })
         onSave(checklist)
       }
     } catch (e: unknown) {

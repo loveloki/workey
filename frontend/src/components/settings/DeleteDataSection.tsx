@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { settings } from '../../lib/api'
 import { Card } from '../../components/Card'
+import { useQueryClient } from '@tanstack/react-query'
 
 export function DeleteDataSection() {
   const [step, setStep] = useState<'idle' | 'confirm' | 'password'>('idle')
@@ -8,6 +9,7 @@ export function DeleteDataSection() {
   const [deleting, setDeleting] = useState(false)
   const [msg, setMsg] = useState('')
   const [isError, setIsError] = useState(false)
+  const qc = useQueryClient()
 
   const handleDelete = async () => {
     if (!password) {
@@ -27,6 +29,8 @@ export function DeleteDataSection() {
       setIsError(false)
       setStep('idle')
       setPassword('')
+      // 删除数据后刷新所有缓存
+      qc.invalidateQueries()
     } catch (e: unknown) {
       setMsg(e instanceof Error ? e.message : '删除失败')
       setIsError(true)
