@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { checklists as checklistsApi, type Checklist, type ChecklistItem } from '../../lib/api'
+import { type Checklist, type ChecklistItem } from '../../lib/api'
 import { useToast } from '../../lib/toast-context'
 import { ChecklistForm } from './ChecklistForm'
 import { parseItems } from './checklist-utils'
+import { useUpdateChecklist, useDeleteChecklist } from '../../lib/queries'
 
 export function ChecklistCard({
   checklist,
@@ -18,15 +19,17 @@ export function ChecklistCard({
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const { toastError } = useToast()
+  const updateMut = useUpdateChecklist()
+  const deleteMut = useDeleteChecklist()
 
   const parsedItems = parseItems(checklist.items)
 
   const handleEditSave = async (data: Checklist | { title: string; items: string }) => {
     try {
       const items: ChecklistItem[] = JSON.parse(data.items)
-      const { checklist: updated } = await checklistsApi.update(checklist.id, {
-        title: data.title,
-        items,
+      const { checklist: updated } = await updateMut.mutateAsync({
+        id: checklist.id,
+        data: { title: data.title, items },
       })
       onUpdated(updated)
       setEditing(false)
@@ -37,7 +40,7 @@ export function ChecklistCard({
 
   const handleDelete = async () => {
     try {
-      await checklistsApi.delete(checklist.id)
+      await deleteMut.mutateAsync(checklist.id)
       onDeleted()
     } catch (e: unknown) {
       toastError(e instanceof Error ? e.message : '操作失败')
