@@ -304,6 +304,106 @@ export const iterationOverrides = {
     }),
 }
 
+// ─── WebDAV 同步 ─────────────────────────────────────────────────
+// 注意：以下类型为本地临时定义，待后端 tygo generate 后应切换到 models.gen.ts
+
+export interface SyncConfig {
+  url: string
+  username: string
+  remote_path: string
+  // 密码不回传，仅写入
+}
+
+export interface SyncConfigInput {
+  url: string
+  username: string
+  password: string
+  remote_path: string
+}
+
+export interface SyncStatus {
+  configured: boolean
+  last_push_at?: string
+  last_pull_at?: string
+  last_error?: string
+}
+
+export interface SyncCheckResult {
+  has_conflict: boolean
+  local_hash?: string
+  remote_hash?: string
+  local_updated_at?: string
+  remote_updated_at?: string
+  message?: string
+}
+
+export interface SyncLog {
+  id: number
+  direction: 'push' | 'pull'
+  status: 'success' | 'failure' | 'conflict'
+  message: string
+  created_at: string
+}
+
+export interface SyncLogsResponse {
+  logs: SyncLog[]
+}
+
+export interface SyncConfigResponse {
+  config: SyncConfig
+}
+
+export interface SyncStatusResponse {
+  status: SyncStatus
+}
+
+export interface SyncCheckResponse {
+  result: SyncCheckResult
+}
+
+export interface SyncOperationResponse {
+  message: string
+  conflict?: boolean
+}
+
+export interface SyncValidateResponse {
+  ok: boolean
+  message: string
+}
+
+export const sync = {
+  getConfig: () =>
+    request<SyncConfigResponse>('/api/sync/config'),
+  saveConfig: (data: SyncConfigInput) =>
+    request<SyncConfigResponse>('/api/sync/config', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  deleteConfig: () =>
+    request<MessageResponse>('/api/sync/config', { method: 'DELETE' }),
+  validate: (data: SyncConfigInput) =>
+    request<SyncValidateResponse>('/api/sync/validate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getStatus: () =>
+    request<SyncStatusResponse>('/api/sync/status'),
+  check: () =>
+    request<SyncCheckResponse>('/api/sync/check', { method: 'POST' }),
+  push: (force = false) =>
+    request<SyncOperationResponse>('/api/sync/push', {
+      method: 'POST',
+      body: JSON.stringify({ force }),
+    }),
+  pull: (force = false) =>
+    request<SyncOperationResponse>('/api/sync/pull', {
+      method: 'POST',
+      body: JSON.stringify({ force }),
+    }),
+  getLogs: () =>
+    request<SyncLogsResponse>('/api/sync/logs'),
+}
+
 // ─── System ─────────────────────────────────────────────────────
 
 export const system = {

@@ -1,9 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   attendance, workLogs, todos, checklists, checklistSnapshots,
-  settings, iterationOverrides, passkeys, system, history,
+  settings, iterationOverrides, passkeys, system, history, sync,
   type Attendance, type WorkLog, type Todo, type Checklist,
   type ChecklistItem, type SnapshotData, type AttendanceStats,
+  type SyncConfigInput,
 } from './api'
 
 // ─── Query Keys ──────────────────────────────────────────────────
@@ -36,6 +37,11 @@ export const queryKeys = {
   passkeys: ['passkeys'] as const,
   systemVersion: ['system', 'version'] as const,
   historyDateRange: ['history', 'dateRange'] as const,
+  sync: {
+    config: ['sync', 'config'] as const,
+    status: ['sync', 'status'] as const,
+    logs: ['sync', 'logs'] as const,
+  },
 }
 
 // ─── Attendance Queries ──────────────────────────────────────────
@@ -368,5 +374,94 @@ export function useHistoryDateRange(enabled = true) {
     queryFn: () => history.dateRange(),
     enabled,
     staleTime: 60_000,
+  })
+}
+
+// ─── Sync Queries ─────────────────────────────────────────────────
+
+export function useSyncConfig(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.sync.config,
+    queryFn: () => sync.getConfig(),
+    enabled,
+    // 配置不存在时后端返回 404，展示为未配置
+    retry: (failureCount, error: any) => {
+      if (error?.status === 404) return false
+      return failureCount < 2
+    },
+  })
+}
+
+export function useSyncStatus(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.sync.status,
+    queryFn: () => sync.getStatus(),
+    enabled,
+  })
+}
+
+export function useSyncLogs(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.sync.logs,
+    queryFn: () => sync.getLogs(),
+    enabled,
+  })
+}
+
+export function useSaveSyncConfig() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: SyncConfigInput) => sync.saveConfig(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.sync.config })
+      qc.invalidateQueries({ queryKey: queryKeys.sync.status })
+    },
+  })
+}
+
+export function useDeleteSyncConfig() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => sync.deleteConfig(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.sync.config })
+      qc.invalidateQueries({ queryKey: queryKeys.sync.status })
+    },
+  })
+}
+
+export function useValidateSyncConfig() {
+  return useMutation({
+    mutationFn: (data: SyncConfigInput) => sync.validate(data),
+  })
+}
+
+export function useSyncCheck() {
+  return useMutation({
+    mutationFn: () => sync.check(),
+  })
+}
+
+export function useSyncPush() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (force: boolean) => sync.push(force),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.sync.status })
+      qc.invalidateQueries({ queryKey: queryKeys.sync.logs })
+    },
+  })
+}
+
+export function useSyncPull() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (force: boolean) => sync.pull(force),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.sync.status })
+      qc.invalidateQueries({ queryKey: queryKeys.sync.logs })
+      // 拉取后本地数据可能发生变化，平推刷新全部缓存
+      qc.invalidateQueries()
+    },
   })
 }

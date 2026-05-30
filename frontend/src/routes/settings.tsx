@@ -10,6 +10,7 @@ import { PasswordSection } from '../components/settings/PasswordSection'
 import { DataSection } from '../components/settings/DataSection'
 import { DeleteDataSection } from '../components/settings/DeleteDataSection'
 import { VersionSection } from '../components/settings/VersionSection'
+import { SyncSection } from '../components/settings/SyncSection'
 
 export const Route = createFileRoute('/settings')({ component: SettingsPage })
 
@@ -39,6 +40,7 @@ function SettingsPage() {
         <PasswordSection />
         <DataSection />
         <DeleteDataSection />
+        <SyncSection />
         <VersionSection />
       </div>
     </main>
