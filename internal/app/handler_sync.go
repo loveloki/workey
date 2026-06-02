@@ -211,7 +211,10 @@ func handleSyncConfigDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userID := getUserID(r)
-	db.Exec("DELETE FROM sync_config WHERE user_id = ?", userID)
+	if _, err := db.Exec("DELETE FROM sync_config WHERE user_id = ?", userID); err != nil {
+		jsonError(w, "Failed to delete sync config", http.StatusInternalServerError)
+		return
+	}
 	db.Exec("DELETE FROM sync_state WHERE user_id = ?", userID)
 	jsonOK(w, MessageResponse{Message: "Sync config deleted"})
 }
@@ -243,7 +246,11 @@ func handleSyncStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userID := getUserID(r)
-	cfg, _ := getSyncConfig(userID)
+	cfg, err := getSyncConfig(userID)
+	if err != nil {
+		jsonError(w, "Failed to load config", http.StatusInternalServerError)
+		return
+	}
 	if cfg == nil {
 		jsonOK(w, SyncStatusResponse{Configured: false})
 		return
@@ -350,7 +357,10 @@ func handleSyncPush(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Force bool `json:"force"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
 
 	cfg, err := getSyncConfig(userID)
 	if err != nil || cfg == nil {
@@ -420,7 +430,7 @@ func handleSyncPush(w http.ResponseWriter, r *http.Request) {
 	fileName := snapshotFileName()
 
 	// 上传快照
-if err := client.putFile(fileName, encrypted); err != nil {
+	if err := client.putFile(fileName, encrypted); err != nil {
 		writeSyncLog(userID, "push", "error", "Failed to upload snapshot: "+err.Error())
 		jsonError(w, "Failed to upload snapshot: "+err.Error(), http.StatusBadGateway)
 		return
@@ -434,7 +444,7 @@ if err := client.putFile(fileName, encrypted); err != nil {
 		PushedAt:     time.Now().UTC().Format(time.RFC3339),
 	}
 	if err := client.putManifest(newManifest); err != nil {
-		// manifest 更新失败不更新 sync_state，避免指向坐快照
+		// manifest 更新失败不更新 sync_state，避免指向旧快照
 		writeSyncLog(userID, "push", "error", "Snapshot uploaded but manifest update failed: "+err.Error())
 		jsonError(w, "Snapshot uploaded but manifest update failed: "+err.Error(), http.StatusBadGateway)
 		return
@@ -465,7 +475,10 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Force bool `json:"force"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
 
 	cfg, err := getSyncConfig(userID)
 	if err != nil || cfg == nil {
@@ -641,7 +654,9 @@ func handleSyncLogs(w http.ResponseWriter, r *http.Request) {
 	logs := []SyncLog{}
 	for rows.Next() {
 		var l SyncLog
-		rows.Scan(&l.ID, &l.UserID, &l.Direction, &l.Status, &l.Message, &l.CreatedAt)
+		if err := rows.Scan(&l.ID, &l.UserID, &l.Direction, &l.Status, &l.Message, &l.CreatedAt); err != nil {
+			continue
+		}
 		logs = append(logs, l)
 	}
 	jsonOK(w, SyncLogListResponse{Logs: logs})

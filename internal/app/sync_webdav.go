@@ -59,7 +59,10 @@ func (c *webdavClient) mkdirAll(path string) error {
 		} else {
 			fullPath = c.BaseURL + "/" + c.RemotePath + "/" + built
 		}
-		req, _ := http.NewRequest("MKCOL", fullPath, nil)
+		req, err := http.NewRequest("MKCOL", fullPath, nil)
+		if err != nil {
+			return err
+		}
 		req.SetBasicAuth(c.Username, c.Password)
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
@@ -196,7 +199,10 @@ func (c *webdavClient) validateConnection() error {
 	}
 	if resp.StatusCode >= 400 {
 		// 尝试 PROPFIND
-		req2, _ := http.NewRequest("PROPFIND", url, nil)
+		req2, err2 := http.NewRequest("PROPFIND", url, nil)
+		if err2 != nil {
+			return fmt.Errorf("connection failed: %w", err2)
+		}
 		req2.SetBasicAuth(c.Username, c.Password)
 		req2.Header.Set("Depth", "0")
 		resp2, err := c.httpClient.Do(req2)

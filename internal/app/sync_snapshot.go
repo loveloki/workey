@@ -28,7 +28,9 @@ func buildExportData(userID int64) (*ExportData, error) {
 	for rows.Next() {
 		var a Attendance
 		var ov int
-		rows.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &ov, &a.CreatedAt, &a.UpdatedAt)
+		if err := rows.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &ov, &a.CreatedAt, &a.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan attendance: %w", err)
+		}
 		a.IsOvertime = ov == 1
 		attendances = append(attendances, a)
 	}
@@ -44,7 +46,9 @@ func buildExportData(userID int64) (*ExportData, error) {
 	defer rows2.Close()
 	for rows2.Next() {
 		var wl WorkLog
-		rows2.Scan(&wl.ID, &wl.UserID, &wl.Date, &wl.Content, &wl.CreatedAt, &wl.UpdatedAt)
+		if err := rows2.Scan(&wl.ID, &wl.UserID, &wl.Date, &wl.Content, &wl.CreatedAt, &wl.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan work_logs: %w", err)
+		}
 		workLogsList = append(workLogsList, wl)
 	}
 
@@ -60,7 +64,9 @@ func buildExportData(userID int64) (*ExportData, error) {
 	for rows3.Next() {
 		var t Todo
 		var done int
-		rows3.Scan(&t.ID, &t.UserID, &t.Content, &t.URL, &done, &t.CreatedAt, &t.UpdatedAt)
+		if err := rows3.Scan(&t.ID, &t.UserID, &t.Content, &t.URL, &done, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan todos: %w", err)
+		}
 		t.Done = done != 0
 		todosList = append(todosList, t)
 	}
@@ -76,7 +82,9 @@ func buildExportData(userID int64) (*ExportData, error) {
 	defer rows4.Close()
 	for rows4.Next() {
 		var c Checklist
-		rows4.Scan(&c.ID, &c.UserID, &c.Title, &c.Items, &c.CreatedAt, &c.UpdatedAt)
+		if err := rows4.Scan(&c.ID, &c.UserID, &c.Title, &c.Items, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan checklists: %w", err)
+		}
 		checklistsList = append(checklistsList, c)
 	}
 
@@ -91,7 +99,9 @@ func buildExportData(userID int64) (*ExportData, error) {
 	defer rows5.Close()
 	for rows5.Next() {
 		var s ChecklistSnapshot
-		rows5.Scan(&s.ID, &s.UserID, &s.ChecklistID, &s.Title, &s.ItemsHash, &s.Data, &s.CreatedAt)
+		if err := rows5.Scan(&s.ID, &s.UserID, &s.ChecklistID, &s.Title, &s.ItemsHash, &s.Data, &s.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan checklist_snapshots: %w", err)
+		}
 		snapshotsList = append(snapshotsList, s)
 	}
 
@@ -103,7 +113,9 @@ func buildExportData(userID int64) (*ExportData, error) {
 	defer rows6.Close()
 	for rows6.Next() {
 		var k, v string
-		rows6.Scan(&k, &v)
+		if err := rows6.Scan(&k, &v); err != nil {
+			return nil, fmt.Errorf("scan user_settings: %w", err)
+		}
 		userSettings[k] = v
 	}
 
@@ -118,7 +130,9 @@ func buildExportData(userID int64) (*ExportData, error) {
 	defer rows7.Close()
 	for rows7.Next() {
 		var o IterationOverride
-		rows7.Scan(&o.ID, &o.UserID, &o.IterationNumber, &o.StartDate, &o.EndDate, &o.CreatedAt, &o.UpdatedAt)
+		if err := rows7.Scan(&o.ID, &o.UserID, &o.IterationNumber, &o.StartDate, &o.EndDate, &o.CreatedAt, &o.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan iteration_overrides: %w", err)
+		}
 		overridesList = append(overridesList, o)
 	}
 
@@ -200,7 +214,9 @@ func buildEncryptedSnapshot(data *ExportData, encKey []byte) ([]byte, string, er
 	if err != nil {
 		return nil, "", err
 	}
-	fw.Write(jsonBytes)
+	if _, err := fw.Write(jsonBytes); err != nil {
+		return nil, "", err
+	}
 	zv.Close()
 
 	// AES-GCM 加密，aad 使用 "snapshot" 标识，防篁改
