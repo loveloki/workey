@@ -305,42 +305,46 @@ export const iterationOverrides = {
 }
 
 // ─── WebDAV 同步 ─────────────────────────────────────────────────
-// 注意：以下类型为本地临时定义，待后端 tygo generate 后应切换到 models.gen.ts
+// Sync 相关类型 — 与后端 responses.go 保持一致
 
 export interface SyncConfig {
-  url: string
-  username: string
+  configured: boolean
+  webdav_url: string
+  webdav_username: string
   remote_path: string
-  // 密码不回传，仅写入
+  created_at: string
+  updated_at: string
 }
 
 export interface SyncConfigInput {
-  url: string
-  username: string
-  password: string
+  webdav_url: string
+  webdav_username: string
+  webdav_password: string
   remote_path: string
 }
 
 export interface SyncStatus {
   configured: boolean
-  last_push_at?: string
-  last_pull_at?: string
-  last_error?: string
+  last_sync_at: string | null
+  last_direction: string | null
+  last_local_hash: string | null
+  last_remote_hash: string | null
 }
 
 export interface SyncCheckResult {
-  has_conflict: boolean
-  local_hash?: string
-  remote_hash?: string
-  local_updated_at?: string
-  remote_updated_at?: string
-  message?: string
+  status: string
+  current_local_hash: string
+  current_remote_hash: string
+  last_local_hash: string
+  last_remote_hash: string
+  message: string
 }
 
 export interface SyncLog {
   id: number
-  direction: 'push' | 'pull'
-  status: 'success' | 'failure' | 'conflict'
+  user_id: number
+  direction: 'push' | 'pull' | 'check'
+  status: 'success' | 'error' | 'conflict'
   message: string
   created_at: string
 }
@@ -349,25 +353,26 @@ export interface SyncLogsResponse {
   logs: SyncLog[]
 }
 
-export interface SyncConfigResponse {
-  config: SyncConfig
-}
+// GET /api/sync/config 返回扁平结构（无 config 包装）
+// 未配置时返回 { configured: false }
+export type SyncConfigResponse = SyncConfig
 
-export interface SyncStatusResponse {
-  status: SyncStatus
-}
+// GET /api/sync/status 返回扁平结构（无 status 包装）
+export type SyncStatusResponse = SyncStatus
 
-export interface SyncCheckResponse {
-  result: SyncCheckResult
-}
+// POST /api/sync/check 返回扁平结构（无 result 包装）
+export type SyncCheckResponse = SyncCheckResult
 
+// POST /api/sync/push|pull 成功时返回
 export interface SyncOperationResponse {
   message: string
-  conflict?: boolean
+  local_hash: string
+  remote_hash: string
 }
 
+// POST /api/sync/validate 返回
 export interface SyncValidateResponse {
-  ok: boolean
+  success: boolean
   message: string
 }
 

@@ -47,6 +47,7 @@ func Run() {
 
 	initDB()
 	initPasskeyDB()
+	initSyncDB()
 	jwtSecret = getOrCreateJWTSecret()
 
 	mux := http.NewServeMux()
@@ -106,6 +107,9 @@ func registerRoutes(mux *http.ServeMux) {
 
 	// Passkey
 	passkeyRoutes(mux)
+
+	// WebDAV 同步
+	syncRoutes(mux)
 
 	// 上传文件
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(filepath.Join(dataDir, "uploads")))))

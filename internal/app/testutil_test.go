@@ -27,6 +27,7 @@ func setupTestDB(t *testing.T) func() {
 
 	initDB()
 	initPasskeyDB()
+	initSyncDB()
 
 	jwtSecret = []byte("test-jwt-secret-for-unit-tests")
 

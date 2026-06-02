@@ -3,12 +3,13 @@ import { Card } from '../Card'
 import { useToast } from '../../lib/toast-context'
 import { ApiError } from '../../lib/api'
 
-// 判断是否为冲突错误
+// 判断是否为冲突错误（后端返回 HTTP 409）
 function isConflictError(e: unknown): boolean {
   if (e instanceof ApiError) return e.status === 409
-  if (e instanceof Error && (e as any).status === 409) return true
+  if (e instanceof Error && "status" in e) return (e as { status: number }).status === 409
   return false
 }
+
 import {
   useSyncConfig,
   useSyncStatus,
@@ -18,7 +19,6 @@ import {
   useValidateSyncConfig,
   useSyncPush,
   useSyncPull,
-  queryKeys,
 } from '../../lib/queries'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -104,7 +104,7 @@ function ConflictOption({
 
 // 同步日志条目
 function SyncLogItem({ log }: { log: { id: number; direction: string; status: string; message: string; created_at: string } }) {
-  const dirLabel = log.direction === 'push' ? '↑ 推送' : '↓ 拉取'
+  const dirLabel = log.direction === 'push' ? '↑ 推送' : log.direction === 'pull' ? '↓ 拉取' : '🔍 检查'
   const statusColor =
     log.status === 'success'
       ? 'text-[var(--color-success-text)]'
@@ -138,7 +138,6 @@ export function SyncSection() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [remotePath, setRemotePath] = useState('/')
-  const [formDirty, setFormDirty] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
   // 冲突弹窗
@@ -151,11 +150,12 @@ export function SyncSection() {
   const logsQuery = useSyncLogs()
 
   // 配置已保存时根据返回数据初始化表单（仅首次）
-  const config = configQuery.data?.config
+  const config = configQuery.data
+  const isConfigured = config?.configured === true
   const [formInited, setFormInited] = useState(false)
-  if (config && !formInited) {
-    setUrl(config.url)
-    setUsername(config.username)
+  if (isConfigured && config && !formInited) {
+    setUrl(config.webdav_url)
+    setUsername(config.webdav_username)
     setRemotePath(config.remote_path)
     setFormInited(true)
   }
@@ -167,18 +167,22 @@ export function SyncSection() {
   const push = useSyncPush()
   const pull = useSyncPull()
 
-  const formData = () => ({ url: url.trim(), username: username.trim(), password, remote_path: remotePath.trim() })
+  const formData = () => ({
+    webdav_url: url.trim(),
+    webdav_username: username.trim(),
+    webdav_password: password,
+    remote_path: remotePath.trim(),
+  })
 
   const handleSave = async () => {
     const data = formData()
-    if (!data.url || !data.username || !data.remote_path) {
+    if (!data.webdav_url || !data.webdav_username || !data.remote_path) {
       toastError('请填写 WebDAV 地址、用户名和远端目录')
       return
     }
     try {
       await saveConfig.mutateAsync(data)
       toastSuccess('配置已保存')
-      setFormDirty(false)
     } catch (e) {
       toastError(e instanceof Error ? e.message : '保存失败')
     }
@@ -186,13 +190,13 @@ export function SyncSection() {
 
   const handleValidate = async () => {
     const data = formData()
-    if (!data.url || !data.username || !data.remote_path) {
+    if (!data.webdav_url || !data.webdav_username || !data.remote_path) {
       toastError('请填写完整的 WebDAV 配置')
       return
     }
     try {
       const result = await validate.mutateAsync(data)
-      if (result.ok) {
+      if (result.success) {
         toastSuccess('连接成功：' + result.message)
       } else {
         toastError('连接失败：' + result.message)
@@ -210,23 +214,17 @@ export function SyncSection() {
       setPassword('')
       setRemotePath('/')
       setFormInited(false)
-      setFormDirty(false)
       toastSuccess('配置已删除')
     } catch (e) {
       toastError(e instanceof Error ? e.message : '删除失败')
     }
   }
 
-  // 触发同步（先检查冲突）
+  // 触发同步（冲突由后端返回 HTTP 409）
   const handlePush = async () => {
     try {
       const result = await push.mutateAsync(false)
-      if (result.conflict) {
-        setConflictModal('push')
-      } else {
-        toastSuccess('推送成功：' + result.message)
-        qc.invalidateQueries({ queryKey: queryKeys.sync.logs })
-      }
+      toastSuccess('推送成功：' + result.message)
     } catch (e) {
       if (isConflictError(e)) {
         setConflictModal('push')
@@ -239,11 +237,7 @@ export function SyncSection() {
   const handlePull = async () => {
     try {
       const result = await pull.mutateAsync(false)
-      if (result.conflict) {
-        setConflictModal('pull')
-      } else {
-        toastSuccess('拉取成功：' + result.message)
-      }
+      toastSuccess('拉取成功：' + result.message)
     } catch (e) {
       if (isConflictError(e)) {
         setConflictModal('pull')
@@ -282,10 +276,10 @@ export function SyncSection() {
   }
 
   const isBusy = push.isPending || pull.isPending || validate.isPending || saveConfig.isPending || deleteConfig.isPending
-  const status = statusQuery.data?.status
+  const status = statusQuery.data
   const logs = logsQuery.data?.logs ?? []
 
-  const formatDate = (s?: string) => {
+  const formatDateTime = (s?: string | null) => {
     if (!s) return '从未'
     const d = new Date(s)
     if (isNaN(d.getTime())) return s
@@ -308,7 +302,7 @@ export function SyncSection() {
             <input
               type="url"
               value={url}
-              onChange={e => { setUrl(e.target.value); setFormDirty(true) }}
+              onChange={e => setUrl(e.target.value)}
               placeholder="https://dav.example.com"
               className="font-mono text-sm w-full px-3 py-2 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none focus:border-[var(--color-border-focus)]"
               data-testid="sync-url"
@@ -321,7 +315,7 @@ export function SyncSection() {
             <input
               type="text"
               value={username}
-              onChange={e => { setUsername(e.target.value); setFormDirty(true) }}
+              onChange={e => setUsername(e.target.value)}
               placeholder="your-username"
               className="font-mono text-sm w-full px-3 py-2 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none focus:border-[var(--color-border-focus)]"
               data-testid="sync-username"
@@ -335,8 +329,8 @@ export function SyncSection() {
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={e => { setPassword(e.target.value); setFormDirty(true) }}
-                placeholder={config ? '不修改则留空' : '请输入密码'}
+                onChange={e => setPassword(e.target.value)}
+                placeholder={isConfigured ? '不修改则留空' : '请输入密码'}
                 className="font-mono text-sm w-full px-3 py-2 pr-20 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none focus:border-[var(--color-border-focus)]"
                 data-testid="sync-password"
               />
@@ -356,7 +350,7 @@ export function SyncSection() {
             <input
               type="text"
               value={remotePath}
-              onChange={e => { setRemotePath(e.target.value); setFormDirty(true) }}
+              onChange={e => setRemotePath(e.target.value)}
               placeholder="/workey"
               className="font-mono text-sm w-full px-3 py-2 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none focus:border-[var(--color-border-focus)]"
               data-testid="sync-remote-path"
@@ -364,7 +358,7 @@ export function SyncSection() {
           </div>
         </div>
 
-        {/* 配置操作按鈕 */}
+        {/* 配置操作按钮 */}
         <div className="flex flex-wrap gap-2 mb-5">
           <button
             onClick={handleSave}
@@ -382,7 +376,7 @@ export function SyncSection() {
           >
             {validate.isPending ? '测试中...' : '测试连接'}
           </button>
-          {config && (
+          {isConfigured && (
             <button
               onClick={handleDelete}
               disabled={isBusy}
@@ -395,7 +389,7 @@ export function SyncSection() {
         </div>
 
         {/* 同步操作 */}
-        {config && (
+        {isConfigured && (
           <>
             <div className="border-t border-[var(--color-border)] pt-4 mb-4">
               <p className="font-mono text-xs uppercase tracking-[0.15em] text-[var(--color-ink-muted)] mb-3">
@@ -426,14 +420,9 @@ export function SyncSection() {
               <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 mb-4">
                 <p className="font-mono text-xs uppercase tracking-[0.15em] text-[var(--color-ink-muted)] mb-2">同步状态</p>
                 <div className="grid grid-cols-2 gap-2 font-mono text-xs text-[var(--color-ink-secondary)]">
-                  <span>最近推送：{formatDate(status.last_push_at)}</span>
-                  <span>最近拉取：{formatDate(status.last_pull_at)}</span>
+                  <span>上次同步：{formatDateTime(status.last_sync_at)}</span>
+                  <span>同步方向：{status.last_direction === 'push' ? '↑ 推送' : status.last_direction === 'pull' ? '↓ 拉取' : '—'}</span>
                 </div>
-                {status.last_error && (
-                  <p className="mt-2 font-mono text-xs text-[var(--color-danger-text)]">
-                    上次错误：{status.last_error}
-                  </p>
-                )}
               </div>
             )}
 

@@ -384,11 +384,6 @@ export function useSyncConfig(enabled = true) {
     queryKey: queryKeys.sync.config,
     queryFn: () => sync.getConfig(),
     enabled,
-    // 配置不存在时后端返回 404，展示为未配置
-    retry: (failureCount, error: any) => {
-      if (error?.status === 404) return false
-      return failureCount < 2
-    },
   })
 }
 

@@ -1,0 +1,403 @@
+package app
+
+import (
+	"archive/zip"
+	"bytes"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+)
+
+// 快照生成、hash 计算、替换式导入逻辑
+
+// buildExportData 从数据库构建导出数据，与 handler_data.go 共用逻辑
+func buildExportData(userID int64) (*ExportData, error) {
+	attendances := []Attendance{}
+	rows, err := db.Query(
+		"SELECT id, user_id, date, clock_in, clock_out, status, is_overtime, created_at, updated_at FROM attendance WHERE user_id = ? ORDER BY date",
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query attendance: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var a Attendance
+		var ov int
+		rows.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &ov, &a.CreatedAt, &a.UpdatedAt)
+		a.IsOvertime = ov == 1
+		attendances = append(attendances, a)
+	}
+
+	workLogsList := []WorkLog{}
+	rows2, err := db.Query(
+		"SELECT id, user_id, date, content, created_at, updated_at FROM work_logs WHERE user_id = ? ORDER BY date",
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query work_logs: %w", err)
+	}
+	defer rows2.Close()
+	for rows2.Next() {
+		var wl WorkLog
+		rows2.Scan(&wl.ID, &wl.UserID, &wl.Date, &wl.Content, &wl.CreatedAt, &wl.UpdatedAt)
+		workLogsList = append(workLogsList, wl)
+	}
+
+	todosList := []Todo{}
+	rows3, err := db.Query(
+		"SELECT id, user_id, content, url, done, created_at, updated_at FROM todos WHERE user_id = ? ORDER BY id",
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query todos: %w", err)
+	}
+	defer rows3.Close()
+	for rows3.Next() {
+		var t Todo
+		var done int
+		rows3.Scan(&t.ID, &t.UserID, &t.Content, &t.URL, &done, &t.CreatedAt, &t.UpdatedAt)
+		t.Done = done != 0
+		todosList = append(todosList, t)
+	}
+
+	checklistsList := []Checklist{}
+	rows4, err := db.Query(
+		"SELECT id, user_id, title, items, created_at, updated_at FROM checklists WHERE user_id = ? ORDER BY id",
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query checklists: %w", err)
+	}
+	defer rows4.Close()
+	for rows4.Next() {
+		var c Checklist
+		rows4.Scan(&c.ID, &c.UserID, &c.Title, &c.Items, &c.CreatedAt, &c.UpdatedAt)
+		checklistsList = append(checklistsList, c)
+	}
+
+	snapshotsList := []ChecklistSnapshot{}
+	rows5, err := db.Query(
+		"SELECT id, user_id, checklist_id, title, items_hash, data, created_at FROM checklist_snapshots WHERE user_id = ? ORDER BY id",
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query checklist_snapshots: %w", err)
+	}
+	defer rows5.Close()
+	for rows5.Next() {
+		var s ChecklistSnapshot
+		rows5.Scan(&s.ID, &s.UserID, &s.ChecklistID, &s.Title, &s.ItemsHash, &s.Data, &s.CreatedAt)
+		snapshotsList = append(snapshotsList, s)
+	}
+
+	userSettings := map[string]string{}
+	rows6, err := db.Query("SELECT key, value FROM user_settings WHERE user_id = ?", userID)
+	if err != nil {
+		return nil, fmt.Errorf("query user_settings: %w", err)
+	}
+	defer rows6.Close()
+	for rows6.Next() {
+		var k, v string
+		rows6.Scan(&k, &v)
+		userSettings[k] = v
+	}
+
+	overridesList := []IterationOverride{}
+	rows7, err := db.Query(
+		"SELECT id, user_id, iteration_number, start_date, end_date, created_at, updated_at FROM iteration_overrides WHERE user_id = ? ORDER BY iteration_number",
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query iteration_overrides: %w", err)
+	}
+	defer rows7.Close()
+	for rows7.Next() {
+		var o IterationOverride
+		rows7.Scan(&o.ID, &o.UserID, &o.IterationNumber, &o.StartDate, &o.EndDate, &o.CreatedAt, &o.UpdatedAt)
+		overridesList = append(overridesList, o)
+	}
+
+	return &ExportData{
+		Attendance:         attendances,
+		WorkLogs:           workLogsList,
+		Todos:              todosList,
+		Checklists:         checklistsList,
+		ChecklistSnapshots: snapshotsList,
+		UserSettings:       userSettings,
+		IterationOverrides: overridesList,
+		ExportedAt:         time.Now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
+// computeDataHash 计算导出数据的确定性 hash
+// 注意：不使用 zip 字节（zip 有时间戳骏机性），而是对规范化 JSON 计算 hash
+func computeDataHash(data *ExportData) (string, error) {
+	// 对 user_settings 的 key 排序，保证确定性
+	keys := make([]string, 0, len(data.UserSettings))
+	for k := range data.UserSettings {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	orderedSettings := make([][2]string, 0, len(keys))
+	for _, k := range keys {
+		orderedSettings = append(orderedSettings, [2]string{k, data.UserSettings[k]})
+	}
+
+	// 对于 hash，建一个去除 ExportedAt 的稳定视图
+	stable := struct {
+		Attendance         []Attendance        `json:"attendance"`
+		WorkLogs           []WorkLog           `json:"work_logs"`
+		Todos              []Todo              `json:"todos"`
+		Checklists         []Checklist         `json:"checklists"`
+		ChecklistSnapshots []ChecklistSnapshot `json:"checklist_snapshots"`
+		UserSettings       [][2]string         `json:"user_settings"`
+		IterationOverrides []IterationOverride `json:"iteration_overrides"`
+	}{
+		Attendance:         data.Attendance,
+		WorkLogs:           data.WorkLogs,
+		Todos:              data.Todos,
+		Checklists:         data.Checklists,
+		ChecklistSnapshots: data.ChecklistSnapshots,
+		UserSettings:       orderedSettings,
+		IterationOverrides: data.IterationOverrides,
+	}
+
+	jsonBytes, err := json.Marshal(stable)
+	if err != nil {
+		return "", err
+	}
+	h := sha256.Sum256(jsonBytes)
+	return fmt.Sprintf("%x", h), nil
+}
+
+// buildEncryptedSnapshot 生成加密的 zip快照文件内容
+func buildEncryptedSnapshot(data *ExportData, encKey []byte) ([]byte, string, error) {
+	// 先计算 hash
+	hashStr, err := computeDataHash(data)
+	if err != nil {
+		return nil, "", fmt.Errorf("compute hash: %w", err)
+	}
+
+	// 构建 zip
+	var buf bytes.Buffer
+	zv := zip.NewWriter(&buf)
+	jsonBytes, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return nil, "", err
+	}
+	// 使用 CreateHeader 固定时间，避免 zip 时间戳影响 hash
+	header := &zip.FileHeader{
+		Name:   "data.json",
+		Method: zip.Deflate,
+	}
+	header.SetModTime(time.Unix(0, 0))
+	fw, err := zv.CreateHeader(header)
+	if err != nil {
+		return nil, "", err
+	}
+	fw.Write(jsonBytes)
+	zv.Close()
+
+	// AES-GCM 加密，aad 使用 "snapshot" 标识，防篁改
+	encrypted, err := aesGCMEncrypt(encKey, buf.Bytes(), []byte("snapshot"))
+	if err != nil {
+		return nil, "", fmt.Errorf("encrypt snapshot: %w", err)
+	}
+	return encrypted, hashStr, nil
+}
+
+// decryptSnapshot 解密快照并解析 ExportData
+func decryptSnapshot(encrypted, encKey []byte) (*ExportData, error) {
+	zipBytes, err := aesGCMDecrypt(encKey, encrypted, []byte("snapshot"))
+	if err != nil {
+		return nil, fmt.Errorf("decrypt snapshot: %w", err)
+	}
+
+	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+	if err != nil {
+		return nil, fmt.Errorf("read zip: %w", err)
+	}
+
+	for _, f := range zr.File {
+		if f.Name == "data.json" {
+			rc, err := f.Open()
+			if err != nil {
+				return nil, err
+			}
+			defer rc.Close()
+			var data ExportData
+			if err := json.NewDecoder(rc).Decode(&data); err != nil {
+				return nil, fmt.Errorf("decode data.json: %w", err)
+			}
+			return &data, nil
+		}
+	}
+	return nil, fmt.Errorf("data.json not found in snapshot")
+}
+
+// replaceImportData 在事务内删除当前用户所有数据并插入远端快照数据
+// 实现替换式导入，防止重复数据
+func replaceImportData(tx *sql.Tx, userID int64, data *ExportData) error {
+	// 删除当前用户所有数据
+	tables := []string{
+		"checklist_snapshots",
+		"checklists",
+		"iteration_overrides",
+		"todos",
+		"work_logs",
+		"attendance",
+		"user_settings",
+	}
+	for _, table := range tables {
+		_, err := tx.Exec("DELETE FROM "+table+" WHERE user_id = ?", userID)
+		if err != nil {
+			return fmt.Errorf("delete %s: %w", table, err)
+		}
+	}
+
+	// 插入 attendance
+	for _, a := range data.Attendance {
+		if a.Date == "" {
+			continue
+		}
+		status := a.Status
+		if status == "" {
+			status = "normal"
+		}
+		ov := 0
+		if a.IsOvertime {
+			ov = 1
+		}
+		_, err := tx.Exec(
+			"INSERT INTO attendance (user_id, date, clock_in, clock_out, status, is_overtime, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			userID, a.Date, a.ClockIn, a.ClockOut, status, ov, a.CreatedAt, a.UpdatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("insert attendance %s: %w", a.Date, err)
+		}
+	}
+
+	// 插入 work_logs
+	for _, wl := range data.WorkLogs {
+		if wl.Date == "" {
+			continue
+		}
+		_, err := tx.Exec(
+			"INSERT INTO work_logs (user_id, date, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+			userID, wl.Date, wl.Content, wl.CreatedAt, wl.UpdatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("insert work_log %s: %w", wl.Date, err)
+		}
+	}
+
+	// 插入 todos
+	for _, t := range data.Todos {
+		doneInt := 0
+		if t.Done {
+			doneInt = 1
+		}
+		_, err := tx.Exec(
+			"INSERT INTO todos (user_id, content, url, done, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+			userID, t.Content, t.URL, doneInt, t.CreatedAt, t.UpdatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("insert todo: %w", err)
+		}
+	}
+
+	// 插入 checklists，并建立旧 ID 到新 ID 的映射
+	checklistIDMap := map[int64]int64{}
+	for _, c := range data.Checklists {
+		items := c.Items
+		if items == "" {
+			items = "[]"
+		}
+		result, err := tx.Exec(
+			"INSERT INTO checklists (user_id, title, items, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+			userID, c.Title, items, c.CreatedAt, c.UpdatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("insert checklist '%s': %w", c.Title, err)
+		}
+		newID, _ := result.LastInsertId()
+		checklistIDMap[c.ID] = newID
+	}
+
+	// 插入 checklist_snapshots
+	for _, s := range data.ChecklistSnapshots {
+		newChecklistID, ok := checklistIDMap[s.ChecklistID]
+		if !ok {
+			// 快照对应的 checklist 不在导入数据中，跳过
+			continue
+		}
+		data_ := s.Data
+		if data_ == "" {
+			data_ = "{}"
+		}
+		_, err := tx.Exec(
+			"INSERT INTO checklist_snapshots (user_id, checklist_id, title, items_hash, data, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+			userID, newChecklistID, s.Title, s.ItemsHash, data_, s.CreatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("insert checklist_snapshot: %w", err)
+		}
+	}
+
+	// 插入 user_settings
+	for key, value := range data.UserSettings {
+		_, err := tx.Exec(
+			"INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?)",
+			userID, key, value,
+		)
+		if err != nil {
+			return fmt.Errorf("insert user_setting %s: %w", key, err)
+		}
+	}
+
+	// 插入 iteration_overrides
+	for _, o := range data.IterationOverrides {
+		if o.StartDate == "" || o.EndDate == "" {
+			continue
+		}
+		_, err := tx.Exec(
+			"INSERT INTO iteration_overrides (user_id, iteration_number, start_date, end_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+			userID, o.IterationNumber, o.StartDate, o.EndDate, o.CreatedAt, o.UpdatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("insert iteration_override: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// snapshotFileName 生成快照文件名
+func snapshotFileName() string {
+	return fmt.Sprintf("snapshots/snapshot-%s.zip.enc", time.Now().UTC().Format("20060102-150405"))
+}
+
+// 建立导出快照并返回 hash，供 push 前备份使用
+func buildLocalBackupSnapshot(userID int64, encKey []byte) ([]byte, string, string, error) {
+	data, err := buildExportData(userID)
+	if err != nil {
+		return nil, "", "", err
+	}
+	encrypted, hash, err := buildEncryptedSnapshot(data, encKey)
+	if err != nil {
+		return nil, "", "", err
+	}
+	fileName := fmt.Sprintf("snapshots/backup-before-pull-%s.zip.enc",
+		time.Now().UTC().Format("20060102-150405"))
+	return encrypted, hash, fileName, nil
+}
+
+// 干净去除字符串首尾空白
+func trimStr(s string) string {
+	return strings.TrimSpace(s)
+}
