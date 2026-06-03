@@ -11,6 +11,7 @@ import (
 	"log"
 	"sort"
 	"time"
+	"math/rand"
 )
 
 // 快照生成、hash 计算、替换式导入逻辑
@@ -438,8 +439,9 @@ func buildLocalBackupSnapshot(ctx context.Context, tx *sql.Tx, userID int64, enc
 	if err != nil {
 		return nil, "", "", err
 	}
-	fileName := fmt.Sprintf("snapshots/backup-before-pull-%s.zip.enc",
-		time.Now().UTC().Format("20060102-150405"))
+	timestamp := time.Now().UnixNano()
+	random := rand.Int63()
+	fileName := fmt.Sprintf("snapshots/backup-before-pull-%d-%d.zip.enc", timestamp, random)
 	return encrypted, hash, fileName, nil
 }
 

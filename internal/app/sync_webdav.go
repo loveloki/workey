@@ -199,25 +199,24 @@ func (c *webdavClient) validateConnection() error {
 	if resp.StatusCode == 401 {
 		return fmt.Errorf("authentication failed")
 	}
-	if resp.StatusCode >= 400 {
-		// 尝试 PROPFIND
-		req2, err2 := http.NewRequest("PROPFIND", url, nil)
-		if err2 != nil {
-			return fmt.Errorf("connection failed: %w", err2)
-		}
-		req2.SetBasicAuth(c.Username, c.Password)
-		req2.Header.Set("Depth", "0")
-		resp2, err := c.httpClient.Do(req2)
-		if err != nil {
-			return fmt.Errorf("connection failed: %w", err)
-		}
-		resp2.Body.Close()
-		if resp2.StatusCode == 401 {
-			return fmt.Errorf("authentication failed")
-		}
-		if resp2.StatusCode >= 400 && resp2.StatusCode != 404 {
-			return fmt.Errorf("server returned %s", resp2.Status)
-		}
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+	// 其他 4xx/5xx 尝试 PROPFIND
+	req2, err2 := http.NewRequest("PROPFIND", url, nil)
+	if err2 != nil {
+		return fmt.Errorf("connection failed: %w", err2)
+	}
+	req2.SetBasicAuth(c.Username, c.Password)
+	req2.Header.Set("Depth", "0")
+	resp2, err := c.httpClient.Do(req2)
+	if err != nil {
+		return fmt.Errorf("connection failed: %w", err)
+	}
+	defer resp2.Body.Close()
+	// PROPFIND 成功 (2xx/404/401) 视为连接成功
+	if resp2.StatusCode >= 400 && resp2.StatusCode != 404 && resp2.StatusCode != 401 {
+		return fmt.Errorf("server returned %s", resp2.Status)
 	}
 	return nil
 }
