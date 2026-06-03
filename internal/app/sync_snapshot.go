@@ -11,7 +11,6 @@ import (
 	"log"
 	"sort"
 	"time"
-	"math/rand"
 )
 
 // 快照生成、hash 计算、替换式导入逻辑
@@ -243,16 +242,12 @@ func buildEncryptedSnapshot(ctx context.Context, data *ExportData, encKey []byte
 const maxSnapshotSize = 100 * 1024 * 1024 // 100MB
 
 // decryptSnapshot 解密快照并解析 ExportData
-// 支持带版本前缀的格式（S2），同时兼容无前缀的旧格式
 func decryptSnapshot(ctx context.Context, encrypted, encKey []byte) (*ExportData, error) {
 	// 检查并剥离版本前缀
-	payload := encrypted
-	if len(encrypted) >= len(snapshotVersionPrefix) && string(encrypted[:len(snapshotVersionPrefix)]) == snapshotVersionPrefix {
-		payload = encrypted[len(snapshotVersionPrefix):]
-	} else {
-		// 无前缀：旧格式（WES0），直接使用
-		payload = encrypted
+	if len(encrypted) < len(snapshotVersionPrefix) || string(encrypted[:len(snapshotVersionPrefix)]) != snapshotVersionPrefix {
+		return nil, fmt.Errorf("unknown snapshot format: missing version prefix")
 	}
+	payload := encrypted[len(snapshotVersionPrefix):]
 
 	zipBytes, err := aesGCMDecrypt(encKey, payload, []byte("snapshot"))
 	if err != nil {
@@ -424,9 +419,10 @@ func replaceImportData(ctx context.Context, tx *sql.Tx, userID int64, data *Expo
 	return nil
 }
 
-// snapshotFileName 生成快照文件名
+// snapshotFileName 生成快照文件名（纳秒精度避免同一秒冲突）
 func snapshotFileName() string {
-	return fmt.Sprintf("snapshots/snapshot-%s.zip.enc", time.Now().UTC().Format("20060102-150405"))
+	now := time.Now().UTC().UnixNano()
+	return fmt.Sprintf("snapshots/snapshot-%d.zip.enc", now)
 }
 
 // 建立导出快照并返回 hash，供 pull 前备份使用
@@ -440,8 +436,7 @@ func buildLocalBackupSnapshot(ctx context.Context, tx *sql.Tx, userID int64, enc
 		return nil, "", "", err
 	}
 	timestamp := time.Now().UnixNano()
-	random := rand.Int63()
-	fileName := fmt.Sprintf("snapshots/backup-before-pull-%d-%d.zip.enc", timestamp, random)
+	fileName := fmt.Sprintf("snapshots/backup-before-pull-%d.zip.enc", timestamp)
 	return encrypted, hash, fileName, nil
 }
 

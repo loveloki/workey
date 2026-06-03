@@ -207,17 +207,9 @@ export function SyncSection() {
   }
 
   const handleValidate = async () => {
-    // 已配置状态下密码为空时提示用户重新输入（修复 M9/M13）
-    if (!passwordRef.current?.value && isConfigured) {
-      toastError('请重新输入密码后再测试连接')
-      return
-    }
-    const data = formData()
-    if (!data.webdav_url || !data.webdav_username || !data.remote_path) {
-      toastError('请填写完整的 WebDAV 配置')
-      return
-    }
     try {
+      // 已配置状态下直接使用已保存的配置（密码从 DB 读取），无需重新输入
+      const data = isConfigured ? undefined : formData()
       const result = await validate.mutateAsync(data)
       if (result.success) {
         toastSuccess('连接成功：' + result.message)

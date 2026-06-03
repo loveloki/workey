@@ -62,7 +62,7 @@ func TestComputeDataHashUserSettingsOrder(t *testing.T) {
 
 // TestBuildAndDecryptSnapshot 快照加密解密循环
 func TestBuildAndDecryptSnapshot(t *testing.T) {
-	encKey := deriveKey([]byte("test-enc-key"))
+	encKey := deriveKey([]byte("test-enc-key"), []byte("test-salt"))
 	data := makeTestExportData()
 
 	encrypted, hash, err := buildEncryptedSnapshot(context.Background(), data, encKey)
@@ -84,8 +84,8 @@ func TestBuildAndDecryptSnapshot(t *testing.T) {
 
 // TestDecryptSnapshotWrongKey 错误密鑰应失败
 func TestDecryptSnapshotWrongKey(t *testing.T) {
-	encKey := deriveKey([]byte("correct-key"))
-	wrongKey := deriveKey([]byte("wrong-key"))
+	encKey := deriveKey([]byte("correct-key"), []byte("test-salt"))
+	wrongKey := deriveKey([]byte("wrong-key"), []byte("test-salt"))
 	data := makeTestExportData()
 
 	encrypted, _, err := buildEncryptedSnapshot(context.Background(), data, encKey)

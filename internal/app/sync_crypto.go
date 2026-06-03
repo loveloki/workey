@@ -15,17 +15,12 @@ import (
 // AES-GCM 加密工具函数
 // AAD（Additional Authenticated Data）用于防篁改：加密配置时传入用途标识
 
-// deriveKey 从任意长度的秘钥派生 32 字节 AES-256 密鑰
-// 保留用于向后兼容（解密旧数据）
-func deriveKey(secret []byte) []byte {
-	h := sha256.Sum256(secret)
-	return h[:]
-}
+// PBKDF2 迭代次数（OWASP 推荐 600000 次以上）
+const pbkdf2Iterations = 600000
 
-// deriveKeyV2 使用 PBKDF2 增强密钥派生（带盐和迭代）
-// 用于所有新加密操作，提供更强的密钥保护
-func deriveKeyV2(secret, salt []byte) []byte {
-	return pbkdf2.Key(secret, salt, 600000, 32, sha256.New)
+// deriveKey 使用 PBKDF2 增强密钥派生（带盐和迭代），输出 32 字节 AES-256 密钥
+func deriveKey(secret, salt []byte) []byte {
+	return pbkdf2.Key(secret, salt, pbkdf2Iterations, 32, sha256.New)
 }
 
 // aesGCMEncrypt 使用 AES-GCM 加密明文，aad 为附加认证数据

@@ -121,7 +121,7 @@ func TestHandleSyncConfigPost_OK(t *testing.T) {
 	defer cleanup()
 	userID := createTestUser(t, "u1", "pass")
 
-	body := `{"webdav_url":"https://dav.test","webdav_username":"bob","webdav_password":"pw123","remote_path":"workey"}`
+	body := `{"webdav_url":"https://dav.test","webdav_username":"bob","webdav_password":"pw123","remote_path":"/workey"}`
 	req := createAuthenticatedRequest(t, "POST", "/api/sync/config", body, userID)
 	w := httptest.NewRecorder()
 	handleSyncConfigPost(w, req)

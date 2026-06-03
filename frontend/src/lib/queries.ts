@@ -430,7 +430,7 @@ export function useDeleteSyncConfig() {
 
 export function useValidateSyncConfig() {
   return useMutation({
-    mutationFn: (data: SyncConfigInput) => sync.validate(data),
+    mutationFn: (data?: SyncConfigInput) => sync.validate(data),
   })
 }
 

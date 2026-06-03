@@ -1,7 +1,7 @@
 package app
 
 import (
-"sync"
+	"sync"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -21,13 +21,13 @@ const aadWebDAVPassword = "webdav_password"
 // 使用 userID 作为盐的一部分，确保不同用户的配置加密密钥不同（M1）
 func getEncKey(userID int64) []byte {
 	salt := []byte(fmt.Sprintf("workey-sync-config-%d", userID))
-	return deriveKeyV2(jwtSecret, salt)
+	return deriveKey(jwtSecret, salt)
 }
 
 // getSnapshotKey 获取用于快照加密的全局 AES key
 // 不使用 userID 做盐，因为快照需要跨会话可解密（同一应用实例的同一用户）
 func getSnapshotKey() []byte {
-	return deriveKeyV2(jwtSecret, []byte("workey-snapshot"))
+	return deriveKey(jwtSecret, []byte("workey-snapshot"))
 }
 
 // initSyncDB 创建同步相关数据表
@@ -83,16 +83,10 @@ func getSyncConfig(userID int64) (*SyncConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	// 使用新密钥派生方式解密，失败则尝试旧方式（向后兼容，M1）
 	key := getEncKey(userID)
 	pass, err := decryptField(key, passEnc, aadWebDAVPassword)
 	if err != nil {
-		// 向后兼容：尝试旧密钥派生（deriveKey）方式
-		oldKey := deriveKey(jwtSecret)
-		pass, err = decryptField(oldKey, passEnc, aadWebDAVPassword)
-		if err != nil {
-			return nil, fmt.Errorf("decrypt webdav password: %w", err)
-		}
+		return nil, fmt.Errorf("decrypt webdav password: %w", err)
 	}
 	cfg.WebDAVPassword = pass
 	return &cfg, nil
@@ -136,16 +130,15 @@ func writeSyncLog(userID int64, direction, status, message string) {
 		"INSERT INTO sync_log (user_id, direction, status, message) VALUES (?, ?, ?, ?)",
 		userID, direction, status, message,
 	)
+	// 定期清理，只保留最近 1000 条日志
+	const maxSyncLogs = 1000
+	db.Exec("DELETE FROM sync_log WHERE id NOT IN (SELECT id FROM sync_log ORDER BY id DESC LIMIT ?)", maxSyncLogs)
 }
 
 // --- Handlers ---
 
 // handleSyncConfig GET /api/sync/config
 func handleSyncConfigGet(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	userID := getUserID(r)
 	cfg, err := getSyncConfig(userID)
 	if err != nil {
@@ -168,10 +161,6 @@ func handleSyncConfigGet(w http.ResponseWriter, r *http.Request) {
 
 // handleSyncConfigPost POST /api/sync/config
 func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	userID := getUserID(r)
 
 	var req struct {
@@ -186,6 +175,10 @@ func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.TrimSpace(req.WebDAVURL) == "" || strings.TrimSpace(req.WebDAVUsername) == "" || strings.TrimSpace(req.WebDAVPassword) == "" {
 		jsonError(w, "webdav_url, webdav_username and webdav_password are required", http.StatusBadRequest)
+		return
+	}
+	if req.RemotePath != "" && !strings.HasPrefix(req.RemotePath, "/") {
+		jsonError(w, "remote_path must start with /", http.StatusBadRequest)
 		return
 	}
 
@@ -223,10 +216,6 @@ func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
 
 // handleSyncConfigDelete DELETE /api/sync/config
 func handleSyncConfigDelete(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "DELETE" {
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	userID := getUserID(r)
 	if _, err := db.Exec("DELETE FROM sync_config WHERE user_id = ?", userID); err != nil {
 		jsonError(w, "Failed to delete sync config", http.StatusInternalServerError)
@@ -379,6 +368,8 @@ func handleSyncPush(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	syncMu.Lock()
+	defer syncMu.Unlock()
 	userID := getUserID(r)
 
 	var req struct {
@@ -508,6 +499,8 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	syncMu.Lock()
+	defer syncMu.Unlock()
 	userID := getUserID(r)
 	ctx := r.Context()
 
@@ -622,17 +615,11 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 解密快照（先尝试新密钥，失败则用旧密钥向后兼容，M1）
 	remoteData, err := decryptSnapshot(ctx, encrypted, encKey)
 	if err != nil {
-		// 向后兼容：尝试旧密钥派生方式解密
-		oldKey := deriveKey(jwtSecret)
-		remoteData, err = decryptSnapshot(ctx, encrypted, oldKey)
-		if err != nil {
-			writeSyncLog(userID, "pull", "error", "Failed to decrypt snapshot: "+err.Error())
-			jsonError(w, "Failed to decrypt snapshot: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+		writeSyncLog(userID, "pull", "error", "Failed to decrypt snapshot: "+err.Error())
+		jsonError(w, "Failed to decrypt snapshot: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	// 校验远端数据 hash

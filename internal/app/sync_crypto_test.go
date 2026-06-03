@@ -10,7 +10,7 @@ import (
 
 // TestAESGCMEncryptDecrypt 测试基本加密解密循环
 func TestAESGCMEncryptDecrypt(t *testing.T) {
-	key := deriveKey([]byte("test-secret"))
+	key := deriveKey([]byte("test-secret"), []byte("test-salt"))
 	plaintext := []byte("hello WebDAV sync")
 	aad := []byte("test-aad")
 
@@ -25,7 +25,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 
 // TestAESGCMRandomness 每次加密结果应不同（nonce 随机）
 func TestAESGCMRandomness(t *testing.T) {
-	key := deriveKey([]byte("test-secret"))
+	key := deriveKey([]byte("test-secret"), []byte("test-salt"))
 	plaintext := []byte("same plaintext")
 	aad := []byte("aad")
 
@@ -36,7 +36,7 @@ func TestAESGCMRandomness(t *testing.T) {
 
 // TestAESGCMWrongAAD 错误 AAD 必须解密失败
 func TestAESGCMWrongAAD(t *testing.T) {
-	key := deriveKey([]byte("test-secret"))
+	key := deriveKey([]byte("test-secret"), []byte("test-salt"))
 	plaintext := []byte("sensitive data")
 
 	ciphertext, err := aesGCMEncrypt(key, plaintext, []byte("correct-aad"))
@@ -48,8 +48,8 @@ func TestAESGCMWrongAAD(t *testing.T) {
 
 // TestAESGCMWrongKey 错误密鑰应解密失败
 func TestAESGCMWrongKey(t *testing.T) {
-	key1 := deriveKey([]byte("key1"))
-	key2 := deriveKey([]byte("key2"))
+	key1 := deriveKey([]byte("key1"), []byte("test-salt"))
+	key2 := deriveKey([]byte("key2"), []byte("test-salt"))
 	aad := []byte("aad")
 
 	ciphertext, err := aesGCMEncrypt(key1, []byte("data"), aad)
@@ -61,7 +61,7 @@ func TestAESGCMWrongKey(t *testing.T) {
 
 // TestAESGCMTamperedCiphertext 篁改密文应解密失败
 func TestAESGCMTamperedCiphertext(t *testing.T) {
-	key := deriveKey([]byte("test-secret"))
+	key := deriveKey([]byte("test-secret"), []byte("test-salt"))
 	aad := []byte("aad")
 
 	ciphertext, err := aesGCMEncrypt(key, []byte("original"), aad)
@@ -78,14 +78,14 @@ func TestAESGCMTamperedCiphertext(t *testing.T) {
 
 // TestAESGCMTooShortCiphertext 过短密文应返回错误
 func TestAESGCMTooShortCiphertext(t *testing.T) {
-	key := deriveKey([]byte("test-secret"))
+	key := deriveKey([]byte("test-secret"), []byte("test-salt"))
 	_, err := aesGCMDecrypt(key, []byte("tooshort"), []byte("aad"))
 	assert.Error(t, err)
 }
 
 // TestEncryptDecryptField 字符串字段加密解密
 func TestEncryptDecryptField(t *testing.T) {
-	key := deriveKey([]byte("secret"))
+	key := deriveKey([]byte("secret"), []byte("test-salt"))
 	original := "my-webdav-password"
 	aad := "webdav_password"
 
@@ -101,7 +101,7 @@ func TestEncryptDecryptField(t *testing.T) {
 
 // TestEncryptFieldEmpty 空字符串不加密
 func TestEncryptFieldEmpty(t *testing.T) {
-	key := deriveKey([]byte("secret"))
+	key := deriveKey([]byte("secret"), []byte("test-salt"))
 	enc, err := encryptField(key, "", "aad")
 	require.NoError(t, err)
 	assert.Equal(t, "", enc)
@@ -113,13 +113,13 @@ func TestEncryptFieldEmpty(t *testing.T) {
 
 // TestDeriveKeyLength 派生密鑰应为 32 字节
 func TestDeriveKeyLength(t *testing.T) {
-	key := deriveKey([]byte("any-input"))
+	key := deriveKey([]byte("any-input"), []byte("test-salt"))
 	assert.Len(t, key, 32)
 }
 
 // TestEncryptFieldWrongAAD AAD 不匹配时解密失败
 func TestEncryptFieldWrongAAD(t *testing.T) {
-	key := deriveKey([]byte("secret"))
+	key := deriveKey([]byte("secret"), []byte("test-salt"))
 	enc, err := encryptField(key, "password123", "webdav_password")
 	require.NoError(t, err)
 

@@ -332,10 +332,10 @@ export const sync = {
     }),
   deleteConfig: () =>
     request<MessageResponse>('/api/sync/config', { method: 'DELETE' }),
-  validate: (data: SyncConfigInput) =>
+  validate: (data?: SyncConfigInput) =>
     request<SyncValidateResponse>('/api/sync/validate', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data ? JSON.stringify(data) : '{}',
     }),
   getStatus: () =>
     request<SyncStatusResponse>('/api/sync/status'),
