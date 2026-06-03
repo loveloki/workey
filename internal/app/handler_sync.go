@@ -1,6 +1,7 @@
 package app
 
 import (
+"sync"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 )
+var syncMu sync.Mutex
 
 // WebDAV 手动同步 handler
 
@@ -247,6 +249,7 @@ func handleSyncValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	client := newWebDAVClient(cfg)
+	cfg.WebDAVPassword = "" // 使用后立即清零
 	if err := client.validateConnection(); err != nil {
 		jsonOK(w, SyncValidateResponse{Success: false, Message: err.Error()})
 		return
@@ -319,6 +322,7 @@ func handleSyncCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := newWebDAVClient(cfg)
+	cfg.WebDAVPassword = "" // 使用后立即清零
 	manifest, err := client.getManifest()
 	if err != nil {
 		writeSyncLog(userID, "check", "error", "Failed to get remote manifest: "+err.Error())
@@ -415,6 +419,7 @@ func handleSyncPush(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := newWebDAVClient(cfg)
+	cfg.WebDAVPassword = "" // 使用后立即清零
 	manifest, err := client.getManifest()
 	if err != nil {
 		writeSyncLog(userID, "push", "error", "Failed to get remote manifest: "+err.Error())
@@ -433,14 +438,12 @@ func handleSyncPush(w http.ResponseWriter, r *http.Request) {
 		result := detectConflict(localHash, remoteHash, state)
 		if result.HasConflict {
 			writeSyncLog(userID, "push", "conflict", "Both local and remote changed")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusConflict)
 			var lastLocal, lastRemote string
 			if state != nil {
 				lastLocal = state.LastLocalHash
 				lastRemote = state.LastRemoteHash
 			}
-			json.NewEncoder(w).Encode(SyncConflictResponse{
+			jsonStatus(w, http.StatusConflict, SyncConflictResponse{
 				Error:             "Conflict: both local and remote have changed. Use force=true to overwrite remote.",
 				CurrentLocalHash:  localHash,
 				CurrentRemoteHash: remoteHash,
@@ -476,7 +479,10 @@ func handleSyncPush(w http.ResponseWriter, r *http.Request) {
 		PushedAt:     time.Now().UTC().Format(time.RFC3339),
 	}
 	if err := client.putManifest(newManifest); err != nil {
-		// manifest 更新失败不更新 sync_state，避免指向旧快照
+		// manifest 更新失败，清理已上传的孤立快照文件
+		if delErr := client.deleteFile(fileName); delErr != nil {
+			log.Printf("WARNING: failed to cleanup orphan snapshot %s: %v", fileName, delErr)
+		}
 		writeSyncLog(userID, "push", "error", "Snapshot uploaded but manifest update failed: "+err.Error())
 		jsonError(w, "Snapshot uploaded but manifest update failed: "+err.Error(), http.StatusBadGateway)
 		return
@@ -521,6 +527,7 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 
 	encKey := getSnapshotKey()
 	client := newWebDAVClient(cfg)
+	cfg.WebDAVPassword = "" // 使用后立即清零
 
 	manifest, err := client.getManifest()
 	if err != nil {
@@ -563,14 +570,12 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		result := detectConflict(localHash, remoteHash, state)
 		if result.HasConflict {
 			writeSyncLog(userID, "pull", "conflict", "Both local and remote changed")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusConflict)
 			var lastLocal, lastRemote string
 			if state != nil {
 				lastLocal = state.LastLocalHash
 				lastRemote = state.LastRemoteHash
 			}
-			json.NewEncoder(w).Encode(SyncConflictResponse{
+			jsonStatus(w, http.StatusConflict, SyncConflictResponse{
 				Error:             "Conflict: both local and remote have changed. Use force=true to overwrite local data.",
 				CurrentLocalHash:  localHash,
 				CurrentRemoteHash: remoteHash,
@@ -706,6 +711,7 @@ func handleSyncLogs(w http.ResponseWriter, r *http.Request) {
 		userID,
 	)
 	if err != nil {
+		log.Printf("ERROR: failed to query sync logs: %v", err)
 		jsonError(w, "Failed to load logs", http.StatusInternalServerError)
 		return
 	}

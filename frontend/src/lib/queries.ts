@@ -384,6 +384,7 @@ export function useSyncConfig(enabled = true) {
     queryKey: queryKeys.sync.config,
     queryFn: () => sync.getConfig(),
     enabled,
+    staleTime: 60_000,
   })
 }
 
@@ -392,6 +393,7 @@ export function useSyncStatus(enabled = true) {
     queryKey: queryKeys.sync.status,
     queryFn: () => sync.getStatus(),
     enabled,
+    staleTime: 30_000,
   })
 }
 
@@ -400,6 +402,7 @@ export function useSyncLogs(enabled = true) {
     queryKey: queryKeys.sync.logs,
     queryFn: () => sync.getLogs(),
     enabled,
+    staleTime: 60_000,
   })
 }
 
@@ -453,10 +456,15 @@ export function useSyncPull() {
   return useMutation({
     mutationFn: (force: boolean) => sync.pull(force),
     onSuccess: () => {
+      // 拉取后本地数据可能发生变化，精确刷新所有相关缓存
       qc.invalidateQueries({ queryKey: queryKeys.sync.status })
       qc.invalidateQueries({ queryKey: queryKeys.sync.logs })
-      // 拉取后本地数据可能发生变化，平推刷新全部缓存
-      qc.invalidateQueries()
+      qc.invalidateQueries({ queryKey: ['attendance'] })
+      qc.invalidateQueries({ queryKey: ['workLogs'] })
+      qc.invalidateQueries({ queryKey: ['todos'] })
+      qc.invalidateQueries({ queryKey: queryKeys.checklists.list })
+      qc.invalidateQueries({ queryKey: ['settings'] })
+      qc.invalidateQueries({ queryKey: ['iterationOverrides'] })
     },
   })
 }

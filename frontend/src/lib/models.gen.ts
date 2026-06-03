@@ -183,3 +183,113 @@ export interface DataDeleteResponse {
   work_log_count: number /* int64 */;
   todo_count: number /* int64 */;
 }
+/**
+ * SyncConfigResponse WebDAV 配置信息（密码脚敏信息不返回）
+ */
+export interface SyncConfigResponse {
+  configured: boolean;
+  webdav_url: string;
+  webdav_username: string;
+  remote_path: string;
+  created_at: string;
+  updated_at: string;
+}
+/**
+ * SyncStatusResponse 当前同步状态
+ */
+export interface SyncStatusResponse {
+  configured: boolean;
+  last_sync_at?: string;
+  last_direction?: string;
+  last_local_hash?: string;
+  last_remote_hash?: string;
+}
+/**
+ * SyncCheckResponse 冲突检测结果
+ */
+export interface SyncCheckResponse {
+  status: string; // ok / conflict / remote_ahead / local_ahead / no_config / first_sync
+  current_local_hash: string;
+  current_remote_hash: string;
+  last_local_hash: string;
+  last_remote_hash: string;
+  message: string;
+}
+/**
+ * SyncOperationResponse push/pull 操作结果
+ */
+export interface SyncOperationResponse {
+  message: string;
+  local_hash: string;
+  remote_hash: string;
+}
+/**
+ * SyncConflictResponse 冲突响应（HTTP 409）
+ */
+export interface SyncConflictResponse {
+  error: string;
+  current_local_hash: string;
+  current_remote_hash: string;
+  last_local_hash: string;
+  last_remote_hash: string;
+}
+/**
+ * SyncLogListResponse 同步日志列表
+ */
+export interface SyncLogListResponse {
+  logs: SyncLog[];
+}
+/**
+ * SyncValidateResponse 验证 WebDAV 连接结果
+ */
+export interface SyncValidateResponse {
+  success: boolean;
+  message: string;
+}
+
+//////////
+// source: sync_types.go
+
+/**
+ * SyncConfig 存储 WebDAV 连接配置（敏感字段加密后入库）
+ */
+export interface SyncConfig {
+  id: number /* int64 */;
+  user_id: number /* int64 */;
+  webdav_url: string;
+  webdav_username: string;
+  remote_path: string;
+  created_at: string;
+  updated_at: string;
+}
+/**
+ * SyncState 记录每次成功同步后的状态快照
+ */
+export interface SyncState {
+  id: number /* int64 */;
+  user_id: number /* int64 */;
+  last_local_hash: string;
+  last_remote_hash: string;
+  last_sync_at: string;
+  direction: string; // push / pull
+}
+/**
+ * SyncLog 记录每次同步操作的详细日志
+ */
+export interface SyncLog {
+  id: number /* int64 */;
+  user_id: number /* int64 */;
+  direction: string; // push / pull / check
+  status: string; // success / conflict / error
+  message: string;
+  created_at: string;
+}
+/**
+ * WebDAV 远端 manifest 文件结构
+ */
+export interface SyncManifest {
+  version: number /* int */;
+  snapshot_file: string;
+  snapshot_hash: string;
+  pushed_at: string;
+}

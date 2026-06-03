@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const webdavClientTimeout = 30 * time.Second
+
 // WebDAV 客户端实现
 
 // webdavClient WebDAV 连接参数
@@ -27,7 +29,7 @@ func newWebDAVClient(cfg *SyncConfig) *webdavClient {
 		Username:   cfg.WebDAVUsername,
 		Password:   cfg.WebDAVPassword,
 		RemotePath: strings.Trim(cfg.RemotePath, "/"),
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		httpClient: &http.Client{Timeout: webdavClientTimeout},
 	}
 }
 

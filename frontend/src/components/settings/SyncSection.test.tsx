@@ -187,10 +187,14 @@ describe('SyncSection', () => {
 
   // ─── Push / Pull ────────────────────────────
 
-  it('点击推送按钮调用 push API（force=false）', async () => {
+  it('点击推送按钮调用 check + push API', async () => {
     vi.mocked(sync.getConfig).mockResolvedValue({
       configured: true, webdav_url: 'https://dav.example.com', webdav_username: 'user',
       remote_path: '/workey', created_at: '', updated_at: '',
+    } as any)
+    vi.mocked(sync.check).mockResolvedValue({
+      status: 'ok', current_local_hash: 'a', current_remote_hash: 'a',
+      last_local_hash: 'a', last_remote_hash: 'a', message: 'ok',
     } as any)
     vi.mocked(sync.push).mockResolvedValue({ message: '推送成功', local_hash: 'abc', remote_hash: 'abc' } as any)
 
@@ -204,14 +208,19 @@ describe('SyncSection', () => {
     })
 
     await waitFor(() => {
+      expect(sync.check).toHaveBeenCalled()
       expect(sync.push).toHaveBeenCalledWith(false)
     })
   })
 
-  it('点击拉取按钮调用 pull API（force=false）', async () => {
+  it('点击拉取按钮调用 check + pull API', async () => {
     vi.mocked(sync.getConfig).mockResolvedValue({
       configured: true, webdav_url: 'https://dav.example.com', webdav_username: 'user',
       remote_path: '/workey', created_at: '', updated_at: '',
+    } as any)
+    vi.mocked(sync.check).mockResolvedValue({
+      status: 'ok', current_local_hash: 'a', current_remote_hash: 'a',
+      last_local_hash: 'a', last_remote_hash: 'a', message: 'ok',
     } as any)
     vi.mocked(sync.pull).mockResolvedValue({ message: '拉取成功', local_hash: 'abc', remote_hash: 'abc' } as any)
 
@@ -225,19 +234,22 @@ describe('SyncSection', () => {
     })
 
     await waitFor(() => {
+      expect(sync.check).toHaveBeenCalled()
       expect(sync.pull).toHaveBeenCalledWith(false)
     })
   })
 
   // ─── 冲突弹窗 ─────────────────────────────
 
-  it('push 返回 409 时弹出冲突弹窗', async () => {
+  it('check 返回 conflict 时弹出冲突弹窗', async () => {
     vi.mocked(sync.getConfig).mockResolvedValue({
       configured: true, webdav_url: 'https://dav.example.com', webdav_username: 'user',
       remote_path: '/workey', created_at: '', updated_at: '',
     } as any)
-    const conflictErr = Object.assign(new Error('Conflict'), { status: 409 })
-    vi.mocked(sync.push).mockRejectedValue(conflictErr)
+    vi.mocked(sync.check).mockResolvedValue({
+      status: 'conflict', current_local_hash: 'a', current_remote_hash: 'b',
+      last_local_hash: 'a', last_remote_hash: 'a', message: 'conflict',
+    } as any)
 
     render(<Wrapper client={client} />)
     await waitFor(() => {
@@ -258,10 +270,11 @@ describe('SyncSection', () => {
       configured: true, webdav_url: 'https://dav.example.com', webdav_username: 'user',
       remote_path: '/workey', created_at: '', updated_at: '',
     } as any)
-    const conflictErr = Object.assign(new Error('Conflict'), { status: 409 })
-    vi.mocked(sync.push)
-      .mockRejectedValueOnce(conflictErr)
-      .mockResolvedValue({ message: 'force push ok', local_hash: 'x', remote_hash: 'x' } as any)
+    vi.mocked(sync.check).mockResolvedValue({
+      status: 'conflict', current_local_hash: 'a', current_remote_hash: 'b',
+      last_local_hash: 'a', last_remote_hash: 'a', message: 'conflict',
+    } as any)
+    vi.mocked(sync.push).mockResolvedValue({ message: 'force push ok', local_hash: 'x', remote_hash: 'x' } as any)
 
     render(<Wrapper client={client} />)
     await waitFor(() => {
@@ -291,8 +304,11 @@ describe('SyncSection', () => {
       configured: true, webdav_url: 'https://dav.example.com', webdav_username: 'user',
       remote_path: '/workey', created_at: '', updated_at: '',
     } as any)
-    const conflictErr = Object.assign(new Error('Conflict'), { status: 409 })
-    vi.mocked(sync.push).mockRejectedValue(conflictErr)
+    vi.mocked(sync.check).mockResolvedValue({
+      status: 'conflict', current_local_hash: 'a', current_remote_hash: 'b',
+      last_local_hash: 'a', last_remote_hash: 'a', message: 'conflict',
+    } as any)
+    vi.mocked(sync.push).mockResolvedValue({ message: 'force push ok', local_hash: 'x', remote_hash: 'x' } as any)
     vi.mocked(sync.pull).mockResolvedValue({ message: 'force pull ok', local_hash: 'x', remote_hash: 'x' } as any)
 
     render(<Wrapper client={client} />)
@@ -323,8 +339,10 @@ describe('SyncSection', () => {
       configured: true, webdav_url: 'https://dav.example.com', webdav_username: 'user',
       remote_path: '/workey', created_at: '', updated_at: '',
     } as any)
-    const conflictErr = Object.assign(new Error('Conflict'), { status: 409 })
-    vi.mocked(sync.push).mockRejectedValue(conflictErr)
+    vi.mocked(sync.check).mockResolvedValue({
+      status: 'conflict', current_local_hash: 'a', current_remote_hash: 'b',
+      last_local_hash: 'a', last_remote_hash: 'a', message: 'conflict',
+    } as any)
 
     render(<Wrapper client={client} />)
     await waitFor(() => {

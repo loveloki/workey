@@ -10,6 +10,8 @@ import type {
   SettingsResponse, VersionResponse, VersionRangeResponse,
   MessageResponse, AuthResponse, MeResponse,
   PasskeyListResponse, DataDeleteResponse,
+  SyncConfigResponse, SyncStatusResponse, SyncCheckResponse,
+  SyncOperationResponse, SyncValidateResponse, SyncLogListResponse,
 } from './models.gen'
 
 export type {
@@ -23,9 +25,12 @@ const API_BASE = ''
 
 export class ApiError extends Error {
   status: number
-  constructor(message: string, status: number) {
+  data?: Record<string, unknown>
+  constructor(message: string, status: number, data?: Record<string, unknown>) {
     super(message)
+    this.name = 'ApiError'
     this.status = status
+    this.data = data
   }
 }
 
@@ -80,7 +85,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   if (!res.ok) {
-    throw new ApiError((data.error as string) || 'Request failed', res.status)
+    throw new ApiError((data.error as string) || 'Request failed', res.status, data)
   }
   return data as T
 }
@@ -305,17 +310,8 @@ export const iterationOverrides = {
 }
 
 // ─── WebDAV 同步 ─────────────────────────────────────────────────
-// Sync 相关类型 — 与后端 responses.go 保持一致
 
-export interface SyncConfig {
-  configured: boolean
-  webdav_url: string
-  webdav_username: string
-  remote_path: string
-  created_at: string
-  updated_at: string
-}
-
+// SyncConfigInput 用于发送配置到服务端（包含密码，不在 models.gen 中）
 export interface SyncConfigInput {
   webdav_url: string
   webdav_username: string
@@ -323,58 +319,8 @@ export interface SyncConfigInput {
   remote_path: string
 }
 
-export interface SyncStatus {
-  configured: boolean
-  last_sync_at: string | null
-  last_direction: string | null
-  last_local_hash: string | null
-  last_remote_hash: string | null
-}
-
-export interface SyncCheckResult {
-  status: string
-  current_local_hash: string
-  current_remote_hash: string
-  last_local_hash: string
-  last_remote_hash: string
-  message: string
-}
-
-export interface SyncLog {
-  id: number
-  user_id: number
-  direction: 'push' | 'pull' | 'check'
-  status: 'success' | 'error' | 'conflict'
-  message: string
-  created_at: string
-}
-
-export interface SyncLogsResponse {
-  logs: SyncLog[]
-}
-
-// GET /api/sync/config 返回扁平结构（无 config 包装）
-// 未配置时返回 { configured: false }
-export type SyncConfigResponse = SyncConfig
-
-// GET /api/sync/status 返回扁平结构（无 status 包装）
-export type SyncStatusResponse = SyncStatus
-
-// POST /api/sync/check 返回扁平结构（无 result 包装）
-export type SyncCheckResponse = SyncCheckResult
-
-// POST /api/sync/push|pull 成功时返回
-export interface SyncOperationResponse {
-  message: string
-  local_hash: string
-  remote_hash: string
-}
-
-// POST /api/sync/validate 返回
-export interface SyncValidateResponse {
-  success: boolean
-  message: string
-}
+// Sync 需要的类型（SyncConfigResponse、SyncStatusResponse、SyncCheckResponse 等）
+// 全部由 tygo 从 Go struct 自动生成到 models.gen.ts
 
 export const sync = {
   getConfig: () =>
@@ -406,7 +352,7 @@ export const sync = {
       body: JSON.stringify({ force }),
     }),
   getLogs: () =>
-    request<SyncLogsResponse>('/api/sync/logs'),
+    request<SyncLogListResponse>('/api/sync/logs'),
 }
 
 // ─── System ─────────────────────────────────────────────────────

@@ -4,3 +4,4 @@ packages:
     include_files:
       - "models.go"
       - "responses.go"
+      - "sync_types.go"

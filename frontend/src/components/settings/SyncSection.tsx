@@ -9,6 +9,7 @@ import {
   useSaveSyncConfig,
   useDeleteSyncConfig,
   useValidateSyncConfig,
+  useSyncCheck,
   useSyncPush,
   useSyncPull,
 } from '../../lib/queries'
@@ -16,9 +17,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 // 判断是否为冲突错误（后端返回 HTTP 409）
 function isConflictError(e: unknown): boolean {
-  if (e instanceof ApiError) return e.status === 409
-  if (e instanceof Error && "status" in e) return (e as { status: number }).status === 409
-  return false
+  return e instanceof ApiError && e.status === 409
 }
 
 // 格式化日期时间为中文短格式（统一工具函数，避免重复定义）
@@ -172,6 +171,7 @@ export function SyncSection() {
   const saveConfig = useSaveSyncConfig()
   const deleteConfig = useDeleteSyncConfig()
   const validate = useValidateSyncConfig()
+  const check = useSyncCheck()
   const push = useSyncPush()
   const pull = useSyncPull()
 
@@ -244,9 +244,14 @@ export function SyncSection() {
     }
   }
 
-  // 触发同步（冲突由后端返回 HTTP 409）
+  // 预检冲突，再决定是否执行同步
   const handlePush = async () => {
     try {
+      const checkResult = await check.mutateAsync()
+      if (checkResult.status === 'conflict') {
+        setConflictModal('push')
+        return
+      }
       const result = await push.mutateAsync(false)
       toastSuccess('推送成功：' + result.message)
     } catch (e) {
@@ -260,6 +265,11 @@ export function SyncSection() {
 
   const handlePull = async () => {
     try {
+      const checkResult = await check.mutateAsync()
+      if (checkResult.status === 'conflict') {
+        setConflictModal('pull')
+        return
+      }
       const result = await pull.mutateAsync(false)
       toastSuccess('拉取成功：' + result.message)
     } catch (e) {
@@ -476,7 +486,7 @@ export function SyncSection() {
                   近期日志
                 </p>
                 <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1">
-                  {logs.slice(0, 10).map(log => (
+                  {logs.slice(0, 10).map((log: { id: number; direction: string; status: string; message: string; created_at: string }) => (
                     <SyncLogItem key={log.id} log={log} />
                   ))}
                 </div>
