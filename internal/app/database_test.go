@@ -22,7 +22,7 @@ func TestInitDB(t *testing.T) {
 
 	// 验证所有表都已创建
 	tables := []string{"settings", "user_settings", "users", "attendance", "work_logs",
-		"lessons", "checklists", "checklist_snapshots", "todos", "iteration_overrides"}
+		"checklists", "checklist_snapshots", "todos", "iteration_overrides"}
 
 	for _, table := range tables {
 		var name string

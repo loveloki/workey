@@ -1,6 +1,6 @@
 import type { Todo, Attendance } from './api'
 
-/** Format a single day's data as markdown (content only, no date/attendance/lesson). */
+/** Format a single day's data as markdown (content only, no date/attendance). */
 export function formatDayMarkdown(
   _date: string,
   _att: Attendance | null,

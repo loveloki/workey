@@ -23,7 +23,6 @@ func TestHandleDataExport(t *testing.T) {
 	// 创建全面的测试数据
 	db.Exec("INSERT INTO work_logs (user_id, date, content, created_at, updated_at) VALUES (?, '2024-06-01', '测试日志', datetime('now'), datetime('now'))", userID)
 	db.Exec("INSERT INTO attendance (user_id, date, clock_in, status, is_overtime, created_at, updated_at) VALUES (?, '2024-06-01', '09:00', 'normal', 0, datetime('now'), datetime('now'))", userID)
-	db.Exec("INSERT INTO lessons (user_id, date, content, created_at, updated_at) VALUES (?, '2024-06-01', '教训内容', datetime('now'), datetime('now'))", userID)
 	db.Exec("INSERT INTO todos (user_id, content, url, created_at, updated_at) VALUES (?, '待办', '', datetime('now'), datetime('now'))", userID)
 	db.Exec("INSERT INTO checklists (user_id, title, items, created_at, updated_at) VALUES (?, '清单', '[]', datetime('now'), datetime('now'))", userID)
 	db.Exec("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'theme', 'dark')", userID)
@@ -134,9 +133,6 @@ func TestHandleDataImport(t *testing.T) {
 			},
 			"work_logs": []map[string]interface{}{
 				{"date": "2024-07-01", "content": "导入的日志"},
-			},
-			"lessons": []map[string]interface{}{
-				{"date": "2024-07-01", "content": "导入的教训"},
 			},
 			"checklists": []map[string]interface{}{
 				{"id": 1, "title": "导入清单", "items": "[]"},
