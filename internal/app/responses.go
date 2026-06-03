@@ -1,5 +1,10 @@
 package app
 
+import (
+	"encoding/json"
+	"net/http"
+)
+
 // API 响应类型定义
 // 前端 TypeScript 类型由 tygo 从这些结构体自动生成
 
@@ -176,15 +181,8 @@ type SyncCheckResponse struct {
 	Message           string `json:"message"`
 }
 
-// SyncPushResponse push 操作结果
-type SyncPushResponse struct {
-	Message    string `json:"message"`
-	LocalHash  string `json:"local_hash"`
-	RemoteHash string `json:"remote_hash"`
-}
-
-// SyncPullResponse pull 操作结果
-type SyncPullResponse struct {
+// SyncOperationResponse push/pull 操作结果
+type SyncOperationResponse struct {
 	Message    string `json:"message"`
 	LocalHash  string `json:"local_hash"`
 	RemoteHash string `json:"remote_hash"`
@@ -208,4 +206,11 @@ type SyncLogListResponse struct {
 type SyncValidateResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
+}
+
+// jsonStatus 返回任意状态码的 JSON 响应，确保统一设置 Content-Type
+func jsonStatus(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
 }

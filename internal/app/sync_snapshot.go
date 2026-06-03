@@ -3,21 +3,23 @@ package app
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
-	"strings"
 	"time"
 )
 
 // 快照生成、hash 计算、替换式导入逻辑
 
-// buildExportData 从数据库构建导出数据，与 handler_data.go 共用逻辑
-func buildExportData(userID int64) (*ExportData, error) {
+// buildExportData 在事务内从数据库构建导出数据，确保 7 个 SELECT 查询的一致性
+// 接受事务和 context 参数（m1: 事务保护, m2: context 传播）
+func buildExportData(ctx context.Context, tx *sql.Tx, userID int64) (*ExportData, error) {
 	attendances := []Attendance{}
-	rows, err := db.Query(
+	rows, err := tx.QueryContext(ctx,
 		"SELECT id, user_id, date, clock_in, clock_out, status, is_overtime, created_at, updated_at FROM attendance WHERE user_id = ? ORDER BY date",
 		userID,
 	)
@@ -36,7 +38,7 @@ func buildExportData(userID int64) (*ExportData, error) {
 	}
 
 	workLogsList := []WorkLog{}
-	rows2, err := db.Query(
+	rows2, err := tx.QueryContext(ctx,
 		"SELECT id, user_id, date, content, created_at, updated_at FROM work_logs WHERE user_id = ? ORDER BY date",
 		userID,
 	)
@@ -53,7 +55,7 @@ func buildExportData(userID int64) (*ExportData, error) {
 	}
 
 	todosList := []Todo{}
-	rows3, err := db.Query(
+	rows3, err := tx.QueryContext(ctx,
 		"SELECT id, user_id, content, url, done, created_at, updated_at FROM todos WHERE user_id = ? ORDER BY id",
 		userID,
 	)
@@ -72,7 +74,7 @@ func buildExportData(userID int64) (*ExportData, error) {
 	}
 
 	checklistsList := []Checklist{}
-	rows4, err := db.Query(
+	rows4, err := tx.QueryContext(ctx,
 		"SELECT id, user_id, title, items, created_at, updated_at FROM checklists WHERE user_id = ? ORDER BY id",
 		userID,
 	)
@@ -89,7 +91,7 @@ func buildExportData(userID int64) (*ExportData, error) {
 	}
 
 	snapshotsList := []ChecklistSnapshot{}
-	rows5, err := db.Query(
+	rows5, err := tx.QueryContext(ctx,
 		"SELECT id, user_id, checklist_id, title, items_hash, data, created_at FROM checklist_snapshots WHERE user_id = ? ORDER BY id",
 		userID,
 	)
@@ -106,7 +108,7 @@ func buildExportData(userID int64) (*ExportData, error) {
 	}
 
 	userSettings := map[string]string{}
-	rows6, err := db.Query("SELECT key, value FROM user_settings WHERE user_id = ?", userID)
+	rows6, err := tx.QueryContext(ctx, "SELECT key, value FROM user_settings WHERE user_id = ?", userID)
 	if err != nil {
 		return nil, fmt.Errorf("query user_settings: %w", err)
 	}
@@ -120,7 +122,7 @@ func buildExportData(userID int64) (*ExportData, error) {
 	}
 
 	overridesList := []IterationOverride{}
-	rows7, err := db.Query(
+	rows7, err := tx.QueryContext(ctx,
 		"SELECT id, user_id, iteration_number, start_date, end_date, created_at, updated_at FROM iteration_overrides WHERE user_id = ? ORDER BY iteration_number",
 		userID,
 	)
@@ -189,8 +191,13 @@ func computeDataHash(data *ExportData) (string, error) {
 	return fmt.Sprintf("%x", h), nil
 }
 
-// buildEncryptedSnapshot 生成加密的 zip快照文件内容
-func buildEncryptedSnapshot(data *ExportData, encKey []byte) ([]byte, string, error) {
+// snapshotVersionPrefix 是加密快照的版本标识前缀，用于格式演进
+// WES1 = Workey Encrypted Snapshot v1（PBKDF2 派生密钥 + AES-GCM）
+const snapshotVersionPrefix = "WES1"
+
+// buildEncryptedSnapshot 生成加密的 zip 快照文件内容
+// 添加版本前缀以支持格式演进（S2）
+func buildEncryptedSnapshot(ctx context.Context, data *ExportData, encKey []byte) ([]byte, string, error) {
 	// 先计算 hash
 	hashStr, err := computeDataHash(data)
 	if err != nil {
@@ -224,14 +231,36 @@ func buildEncryptedSnapshot(data *ExportData, encKey []byte) ([]byte, string, er
 	if err != nil {
 		return nil, "", fmt.Errorf("encrypt snapshot: %w", err)
 	}
-	return encrypted, hashStr, nil
+	// 在加密输出前添加版本前缀
+	result := make([]byte, len(snapshotVersionPrefix)+len(encrypted))
+	copy(result, snapshotVersionPrefix)
+	copy(result[len(snapshotVersionPrefix):], encrypted)
+	return result, hashStr, nil
 }
 
+// maxSnapshotSize 是解压后的快照数据最大字节数，防止 zip bomb 攻击（m3）
+const maxSnapshotSize = 100 * 1024 * 1024 // 100MB
+
 // decryptSnapshot 解密快照并解析 ExportData
-func decryptSnapshot(encrypted, encKey []byte) (*ExportData, error) {
-	zipBytes, err := aesGCMDecrypt(encKey, encrypted, []byte("snapshot"))
+// 支持带版本前缀的格式（S2），同时兼容无前缀的旧格式
+func decryptSnapshot(ctx context.Context, encrypted, encKey []byte) (*ExportData, error) {
+	// 检查并剥离版本前缀
+	payload := encrypted
+	if len(encrypted) >= len(snapshotVersionPrefix) && string(encrypted[:len(snapshotVersionPrefix)]) == snapshotVersionPrefix {
+		payload = encrypted[len(snapshotVersionPrefix):]
+	} else {
+		// 无前缀：旧格式（WES0），直接使用
+		payload = encrypted
+	}
+
+	zipBytes, err := aesGCMDecrypt(encKey, payload, []byte("snapshot"))
 	if err != nil {
 		return nil, fmt.Errorf("decrypt snapshot: %w", err)
+	}
+
+	// 解压前检查大小，防止 zip bomb（m3）
+	if len(zipBytes) > maxSnapshotSize {
+		return nil, fmt.Errorf("snapshot too large: %d bytes (max %d)", len(zipBytes), maxSnapshotSize)
 	}
 
 	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
@@ -257,8 +286,8 @@ func decryptSnapshot(encrypted, encKey []byte) (*ExportData, error) {
 }
 
 // replaceImportData 在事务内删除当前用户所有数据并插入远端快照数据
-// 实现替换式导入，防止重复数据
-func replaceImportData(tx *sql.Tx, userID int64, data *ExportData) error {
+// 实现替换式导入，防止重复数据（m2: 添加 context 参数）
+func replaceImportData(ctx context.Context, tx *sql.Tx, userID int64, data *ExportData) error {
 	// 删除当前用户所有数据
 	tables := []string{
 		"checklist_snapshots",
@@ -349,7 +378,8 @@ func replaceImportData(tx *sql.Tx, userID int64, data *ExportData) error {
 	for _, s := range data.ChecklistSnapshots {
 		newChecklistID, ok := checklistIDMap[s.ChecklistID]
 		if !ok {
-			// 快照对应的 checklist 不在导入数据中，跳过
+			// M2: 记录跳过静默丢弃的 checklist_snapshot，便于调试数据不一致
+			log.Printf("WARNING: checklist_snapshot %d references missing checklist %d, skipping", s.ID, s.ChecklistID)
 			continue
 		}
 		data_ := s.Data
@@ -398,13 +428,13 @@ func snapshotFileName() string {
 	return fmt.Sprintf("snapshots/snapshot-%s.zip.enc", time.Now().UTC().Format("20060102-150405"))
 }
 
-// 建立导出快照并返回 hash，供 push 前备份使用
-func buildLocalBackupSnapshot(userID int64, encKey []byte) ([]byte, string, string, error) {
-	data, err := buildExportData(userID)
+// 建立导出快照并返回 hash，供 pull 前备份使用
+func buildLocalBackupSnapshot(ctx context.Context, tx *sql.Tx, userID int64, encKey []byte) ([]byte, string, string, error) {
+	data, err := buildExportData(ctx, tx, userID)
 	if err != nil {
 		return nil, "", "", err
 	}
-	encrypted, hash, err := buildEncryptedSnapshot(data, encKey)
+	encrypted, hash, err := buildEncryptedSnapshot(ctx, data, encKey)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -413,7 +443,4 @@ func buildLocalBackupSnapshot(userID int64, encKey []byte) ([]byte, string, stri
 	return encrypted, hash, fileName, nil
 }
 
-// 干净去除字符串首尾空白
-func trimStr(s string) string {
-	return strings.TrimSpace(s)
-}
+

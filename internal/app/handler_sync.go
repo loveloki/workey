@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -14,9 +15,17 @@ import (
 // 加密配置时使用的 AAD标识
 const aadWebDAVPassword = "webdav_password"
 
-// getEncKey 获取用于配置加密的 AES key（基于 jwtSecret 派生）
-func getEncKey() []byte {
-	return deriveKey(jwtSecret)
+// getEncKey 获取用于配置加密的 AES key（基于 jwtSecret 派生，使用 PBKDF2 增强）
+// 使用 userID 作为盐的一部分，确保不同用户的配置加密密钥不同（M1）
+func getEncKey(userID int64) []byte {
+	salt := []byte(fmt.Sprintf("workey-sync-config-%d", userID))
+	return deriveKeyV2(jwtSecret, salt)
+}
+
+// getSnapshotKey 获取用于快照加密的全局 AES key
+// 不使用 userID 做盐，因为快照需要跨会话可解密（同一应用实例的同一用户）
+func getSnapshotKey() []byte {
+	return deriveKeyV2(jwtSecret, []byte("workey-snapshot"))
 }
 
 // initSyncDB 创建同步相关数据表
@@ -72,10 +81,16 @@ func getSyncConfig(userID int64) (*SyncConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	key := getEncKey()
+	// 使用新密钥派生方式解密，失败则尝试旧方式（向后兼容，M1）
+	key := getEncKey(userID)
 	pass, err := decryptField(key, passEnc, aadWebDAVPassword)
 	if err != nil {
-		return nil, fmt.Errorf("decrypt webdav password: %w", err)
+		// 向后兼容：尝试旧密钥派生（deriveKey）方式
+		oldKey := deriveKey(jwtSecret)
+		pass, err = decryptField(oldKey, passEnc, aadWebDAVPassword)
+		if err != nil {
+			return nil, fmt.Errorf("decrypt webdav password: %w", err)
+		}
 	}
 	cfg.WebDAVPassword = pass
 	return &cfg, nil
@@ -167,12 +182,12 @@ func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	if trimStr(req.WebDAVURL) == "" || trimStr(req.WebDAVUsername) == "" || trimStr(req.WebDAVPassword) == "" {
+	if strings.TrimSpace(req.WebDAVURL) == "" || strings.TrimSpace(req.WebDAVUsername) == "" || strings.TrimSpace(req.WebDAVPassword) == "" {
 		jsonError(w, "webdav_url, webdav_username and webdav_password are required", http.StatusBadRequest)
 		return
 	}
 
-	key := getEncKey()
+	key := getEncKey(userID)
 	passEnc, err := encryptField(key, req.WebDAVPassword, aadWebDAVPassword)
 	if err != nil {
 		jsonError(w, "Failed to encrypt password", http.StatusInternalServerError)
@@ -284,11 +299,19 @@ func handleSyncCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := buildExportData(userID)
+	// 使用只读事务确保多个查询的一致性（m1）
+	tx, err := db.Begin()
 	if err != nil {
+		jsonError(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	data, err := buildExportData(r.Context(), tx, userID)
+	if err != nil {
+		tx.Rollback()
 		jsonError(w, "Failed to read local data", http.StatusInternalServerError)
 		return
 	}
+	tx.Rollback() // 只读事务，查询完即可回滚
 	localHash, err := computeDataHash(data)
 	if err != nil {
 		jsonError(w, "Failed to compute local hash", http.StatusInternalServerError)
@@ -368,13 +391,22 @@ func handleSyncPush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encKey := getEncKey()
-	data, err := buildExportData(userID)
+	encKey := getSnapshotKey()
+	// 使用事务确保快照数据一致性（m1）
+	tx, err := db.Begin()
 	if err != nil {
+		writeSyncLog(userID, "push", "error", "Failed to begin transaction")
+		jsonError(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	data, err := buildExportData(r.Context(), tx, userID)
+	if err != nil {
+		tx.Rollback()
 		writeSyncLog(userID, "push", "error", "Failed to read local data: "+err.Error())
 		jsonError(w, "Failed to read local data", http.StatusInternalServerError)
 		return
 	}
+	tx.Rollback() // 只读事务，数据已读取完毕
 	localHash, err := computeDataHash(data)
 	if err != nil {
 		writeSyncLog(userID, "push", "error", "Failed to compute local hash")
@@ -420,7 +452,7 @@ func handleSyncPush(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 构建加密快照
-	encrypted, hash, err := buildEncryptedSnapshot(data, encKey)
+	encrypted, hash, err := buildEncryptedSnapshot(r.Context(), data, encKey)
 	if err != nil {
 		writeSyncLog(userID, "push", "error", "Failed to build snapshot: "+err.Error())
 		jsonError(w, "Failed to build snapshot", http.StatusInternalServerError)
@@ -457,7 +489,7 @@ func handleSyncPush(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeSyncLog(userID, "push", "success", fmt.Sprintf("Pushed %s", fileName))
-	jsonOK(w, SyncPushResponse{
+	jsonOK(w, SyncOperationResponse{
 		Message:    "Push successful",
 		LocalHash:  hash,
 		RemoteHash: hash,
@@ -471,6 +503,7 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userID := getUserID(r)
+	ctx := r.Context()
 
 	var req struct {
 		Force bool `json:"force"`
@@ -486,7 +519,7 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encKey := getEncKey()
+	encKey := getSnapshotKey()
 	client := newWebDAVClient(cfg)
 
 	manifest, err := client.getManifest()
@@ -502,13 +535,21 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 
 	remoteHash := manifest.SnapshotHash
 
-	// 计算本地 hash用于冲突检测
-	localData, err := buildExportData(userID)
+	// 使用事务计算本地 hash，确保一致性（m1）
+	txLocal, err := db.Begin()
 	if err != nil {
+		writeSyncLog(userID, "pull", "error", "Failed to begin transaction")
+		jsonError(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	localData, err := buildExportData(ctx, txLocal, userID)
+	if err != nil {
+		txLocal.Rollback()
 		writeSyncLog(userID, "pull", "error", "Failed to read local data")
 		jsonError(w, "Failed to read local data", http.StatusInternalServerError)
 		return
 	}
+	txLocal.Rollback() // 只读事务
 	localHash, err := computeDataHash(localData)
 	if err != nil {
 		writeSyncLog(userID, "pull", "error", "Failed to compute local hash")
@@ -542,12 +583,20 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 
 	// force pull 前建立本地备份
 	if req.Force {
-		backupData, backupHash, backupFileName, err := buildLocalBackupSnapshot(userID, encKey)
+		backupTx, err := db.Begin()
 		if err != nil {
+			writeSyncLog(userID, "pull", "error", "Failed to begin backup transaction")
+			jsonError(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+		backupData, backupHash, backupFileName, err := buildLocalBackupSnapshot(ctx, backupTx, userID, encKey)
+		if err != nil {
+			backupTx.Rollback()
 			writeSyncLog(userID, "pull", "error", "Failed to build backup: "+err.Error())
 			jsonError(w, "Failed to build backup before pull: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		backupTx.Rollback() // 只读事务
 		if err := client.putFile(backupFileName, backupData); err != nil {
 			writeSyncLog(userID, "pull", "error", "Failed to upload backup: "+err.Error())
 			jsonError(w, "Failed to upload backup before pull: "+err.Error(), http.StatusBadGateway)
@@ -568,12 +617,17 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 解密快照
-	remoteData, err := decryptSnapshot(encrypted, encKey)
+	// 解密快照（先尝试新密钥，失败则用旧密钥向后兼容，M1）
+	remoteData, err := decryptSnapshot(ctx, encrypted, encKey)
 	if err != nil {
-		writeSyncLog(userID, "pull", "error", "Failed to decrypt snapshot: "+err.Error())
-		jsonError(w, "Failed to decrypt snapshot: "+err.Error(), http.StatusInternalServerError)
-		return
+		// 向后兼容：尝试旧密钥派生方式解密
+		oldKey := deriveKey(jwtSecret)
+		remoteData, err = decryptSnapshot(ctx, encrypted, oldKey)
+		if err != nil {
+			writeSyncLog(userID, "pull", "error", "Failed to decrypt snapshot: "+err.Error())
+			jsonError(w, "Failed to decrypt snapshot: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// 校验远端数据 hash
@@ -597,7 +651,7 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := replaceImportData(tx, userID, remoteData); err != nil {
+	if err := replaceImportData(ctx, tx, userID, remoteData); err != nil {
 		tx.Rollback()
 		writeSyncLog(userID, "pull", "error", "Import failed, rolled back: "+err.Error())
 		jsonError(w, "Import failed: "+err.Error(), http.StatusInternalServerError)
@@ -612,11 +666,17 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 导入成功后校验 hash 一致性
-	importedData, err := buildExportData(userID)
+	txVerify, err := db.Begin()
 	if err == nil {
-		importedHash, err2 := computeDataHash(importedData)
-		if err2 == nil && importedHash != remoteHash {
-			log.Printf("WARNING: post-import hash mismatch: local=%s remote=%s", importedHash, remoteHash)
+		importedData, err := buildExportData(ctx, txVerify, userID)
+		if err == nil {
+			txVerify.Rollback()
+			importedHash, err2 := computeDataHash(importedData)
+			if err2 == nil && importedHash != remoteHash {
+				log.Printf("WARNING: post-import hash mismatch: local=%s remote=%s", importedHash, remoteHash)
+			}
+		} else {
+			txVerify.Rollback()
 		}
 	}
 
@@ -626,7 +686,7 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeSyncLog(userID, "pull", "success", fmt.Sprintf("Pulled %s", manifest.SnapshotFile))
-	jsonOK(w, SyncPullResponse{
+	jsonOK(w, SyncOperationResponse{
 		Message:    "Pull successful",
 		LocalHash:  remoteHash,
 		RemoteHash: remoteHash,

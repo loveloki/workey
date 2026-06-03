@@ -5,17 +5,27 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
+
+	"golang.org/x/crypto/pbkdf2"
 )
 
 // AES-GCM 加密工具函数
 // AAD（Additional Authenticated Data）用于防篁改：加密配置时传入用途标识
 
 // deriveKey 从任意长度的秘钥派生 32 字节 AES-256 密鑰
+// 保留用于向后兼容（解密旧数据）
 func deriveKey(secret []byte) []byte {
 	h := sha256.Sum256(secret)
 	return h[:]
+}
+
+// deriveKeyV2 使用 PBKDF2 增强密钥派生（带盐和迭代）
+// 用于所有新加密操作，提供更强的密钥保护
+func deriveKeyV2(secret, salt []byte) []byte {
+	return pbkdf2.Key(secret, salt, 600000, 32, sha256.New)
 }
 
 // aesGCMEncrypt 使用 AES-GCM 加密明文，aad 为附加认证数据
@@ -69,15 +79,16 @@ func encryptField(key []byte, plaintext, aad string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return encodeHex(ciphertext), nil
+	return hex.EncodeToString(ciphertext), nil
 }
 
 // decryptField 解密 hex 编码的密文字符串
+// 使用标准库 encoding/hex 替代自定义实现（S1）
 func decryptField(key []byte, hexCiphertext, aad string) (string, error) {
 	if hexCiphertext == "" {
 		return "", nil
 	}
-	ciphertext, err := decodeHex(hexCiphertext)
+	ciphertext, err := hex.DecodeString(hexCiphertext)
 	if err != nil {
 		return "", err
 	}
@@ -86,44 +97,4 @@ func decryptField(key []byte, hexCiphertext, aad string) (string, error) {
 		return "", err
 	}
 	return string(plaintext), nil
-}
-
-// encodeHex 将字节切片编码为十六进制字符串
-func encodeHex(b []byte) string {
-	const hexChars = "0123456789abcdef"
-	out := make([]byte, len(b)*2)
-	for i, v := range b {
-		out[i*2] = hexChars[v>>4]
-		out[i*2+1] = hexChars[v&0xf]
-	}
-	return string(out)
-}
-
-// decodeHex 将十六进制字符串解码为字节切片
-func decodeHex(s string) ([]byte, error) {
-	if len(s)%2 != 0 {
-		return nil, errors.New("odd hex string length")
-	}
-	b := make([]byte, len(s)/2)
-	for i := 0; i < len(s); i += 2 {
-		hi := hexVal(s[i])
-		lo := hexVal(s[i+1])
-		if hi == 255 || lo == 255 {
-			return nil, errors.New("invalid hex character")
-		}
-		b[i/2] = hi<<4 | lo
-	}
-	return b, nil
-}
-
-func hexVal(c byte) byte {
-	switch {
-	case c >= '0' && c <= '9':
-		return c - '0'
-	case c >= 'a' && c <= 'f':
-		return c - 'a' + 10
-	case c >= 'A' && c <= 'F':
-		return c - 'A' + 10
-	}
-	return 255
 }

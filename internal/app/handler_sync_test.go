@@ -51,7 +51,7 @@ func fakeWebDAV(t *testing.T) (*httptest.Server, map[string][]byte) {
 // saveSyncConfig 直接写入加密配置到 DB（绕过 HTTP）
 func saveSyncConfigDirect(t *testing.T, userID int64, url, username, password string) {
 	t.Helper()
-	key := getEncKey()
+	key := getEncKey(userID)
 	passEnc, err := encryptField(key, password, aadWebDAVPassword)
 	require.NoError(t, err)
 	now := nowDatetime()
@@ -139,7 +139,7 @@ func TestHandleSyncConfigPost_OK(t *testing.T) {
 	assert.NotEmpty(t, passEnc)
 
 	// 能解密回来
-	key := getEncKey()
+	key := getEncKey(userID)
 	decrypted, err := decryptField(key, passEnc, aadWebDAVPassword)
 	require.NoError(t, err)
 	assert.Equal(t, "pw123", decrypted)
@@ -228,7 +228,7 @@ func TestHandleSyncPush_FirstSync(t *testing.T) {
 	handleSyncPush(w, req)
 
 	assert.Equal(t, 200, w.Code)
-	var resp SyncPushResponse
+	var resp SyncOperationResponse
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
 	assert.Equal(t, "Push successful", resp.Message)
 	assert.NotEmpty(t, resp.LocalHash)
@@ -313,7 +313,7 @@ func TestHandleSyncPush_ForcePush_OverwritesRemote(t *testing.T) {
 	w2 := httptest.NewRecorder()
 	handleSyncPush(w2, req2)
 	assert.Equal(t, 200, w2.Code)
-	var resp SyncPushResponse
+	var resp SyncOperationResponse
 	require.NoError(t, json.NewDecoder(w2.Body).Decode(&resp))
 	assert.Equal(t, "Push successful", resp.Message)
 }
@@ -349,7 +349,7 @@ func TestHandleSyncPull_Success(t *testing.T) {
 	handleSyncPush(wPush, reqPush)
 	require.Equal(t, 200, wPush.Code)
 
-	var pushResp SyncPushResponse
+	var pushResp SyncOperationResponse
 	json.NewDecoder(wPush.Body).Decode(&pushResp)
 
 	// userB 用同一台 WebDAV pull

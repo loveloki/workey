@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -64,13 +65,13 @@ func TestBuildAndDecryptSnapshot(t *testing.T) {
 	encKey := deriveKey([]byte("test-enc-key"))
 	data := makeTestExportData()
 
-	encrypted, hash, err := buildEncryptedSnapshot(data, encKey)
+	encrypted, hash, err := buildEncryptedSnapshot(context.Background(), data, encKey)
 	require.NoError(t, err)
 	assert.NotEmpty(t, hash)
 	assert.NotEmpty(t, encrypted)
 
 	// 解密并验证数据
-	decrypted, err := decryptSnapshot(encrypted, encKey)
+	decrypted, err := decryptSnapshot(context.Background(), encrypted, encKey)
 	require.NoError(t, err)
 	assert.Equal(t, len(data.Attendance), len(decrypted.Attendance))
 	assert.Equal(t, len(data.WorkLogs), len(decrypted.WorkLogs))
@@ -87,10 +88,10 @@ func TestDecryptSnapshotWrongKey(t *testing.T) {
 	wrongKey := deriveKey([]byte("wrong-key"))
 	data := makeTestExportData()
 
-	encrypted, _, err := buildEncryptedSnapshot(data, encKey)
+	encrypted, _, err := buildEncryptedSnapshot(context.Background(), data, encKey)
 	require.NoError(t, err)
 
-	_, err = decryptSnapshot(encrypted, wrongKey)
+	_, err = decryptSnapshot(context.Background(), encrypted, wrongKey)
 	assert.Error(t, err)
 }
 
@@ -105,7 +106,7 @@ func TestReplaceImportDataNoduplicates(t *testing.T) {
 	// 第一次导入
 	tx1, err := db.Begin()
 	require.NoError(t, err)
-	err = replaceImportData(tx1, userID, data)
+	err = replaceImportData(context.Background(), tx1, userID, data)
 	require.NoError(t, err)
 	require.NoError(t, tx1.Commit())
 
@@ -113,10 +114,10 @@ func TestReplaceImportDataNoduplicates(t *testing.T) {
 	db.QueryRow("SELECT COUNT(*) FROM attendance WHERE user_id = ?", userID).Scan(&count1)
 	assert.Equal(t, len(data.Attendance), count1)
 
-	// 第二次导入同一快片
+	// 第二次导入同一快照
 	tx2, err := db.Begin()
 	require.NoError(t, err)
-	err = replaceImportData(tx2, userID, data)
+	err = replaceImportData(context.Background(), tx2, userID, data)
 	require.NoError(t, err)
 	require.NoError(t, tx2.Commit())
 
@@ -130,7 +131,7 @@ func TestReplaceImportDataNoduplicates(t *testing.T) {
 	assert.Equal(t, len(data.Todos), todoCnt, "todos 不应重复")
 }
 
-// TestReplaceImportDataRollbackOnError 导入失败应 rollback
+// TestReplaceImportDataRollbackOnError 导入失败应 rollback（M3：修复逻辑缺陷）
 func TestReplaceImportDataRollbackOnError(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
@@ -144,11 +145,11 @@ func TestReplaceImportDataRollbackOnError(t *testing.T) {
 	db.QueryRow("SELECT COUNT(*) FROM attendance WHERE user_id = ?", userID).Scan(&beforeCount)
 	assert.Equal(t, 1, beforeCount)
 
-	// 构造一个会导致失败的数据（重复日期）
+	// 构造一个会导致失败的数据（重复日期会违反 UNIQUE 约束）
 	badData := &ExportData{
 		Attendance: []Attendance{
 			{Date: "2024-02-01", Status: "normal"},
-			{Date: "2024-02-01", Status: "normal"}, // 重复日期会违反 UNIQUE 约束
+			{Date: "2024-02-01", Status: "normal"},
 		},
 		WorkLogs:           []WorkLog{},
 		Todos:              []Todo{},
@@ -160,16 +161,15 @@ func TestReplaceImportDataRollbackOnError(t *testing.T) {
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = replaceImportData(tx, userID, badData)
-	// 导入应返回错误
-	if err != nil {
-		tx.Rollback()
-		// rollback 后旧数据仍应存在
-		var afterCount int
-		db.QueryRow("SELECT COUNT(*) FROM attendance WHERE user_id = ?", userID).Scan(&afterCount)
-		assert.Equal(t, 1, afterCount, "rollback 后旧数据应保留")
-	}
-	// 即使没有错误也没关系，名义上不出错误就重复日期就不导致重复数据
+	// M3: 必须断言返回错误，且显式回滚事务避免事务泄漏
+	err = replaceImportData(context.Background(), tx, userID, badData)
+	require.Error(t, err, "重复日期应导致 UNIQUE 约束冲突")
+	tx.Rollback()
+
+	// rollback 后旧数据仍应存在
+	var afterCount int
+	db.QueryRow("SELECT COUNT(*) FROM attendance WHERE user_id = ?", userID).Scan(&afterCount)
+	assert.Equal(t, 1, afterCount, "rollback 后旧数据应保留")
 }
 
 // makeTestExportData 构造测试用 ExportData
