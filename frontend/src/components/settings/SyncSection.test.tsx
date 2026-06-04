@@ -209,7 +209,7 @@ describe('SyncSection', () => {
 
     await waitFor(() => {
       expect(sync.check).toHaveBeenCalled()
-      expect(sync.push).toHaveBeenCalledWith(false)
+      expect(sync.push).toHaveBeenCalledWith(false, '')
     })
   })
 
@@ -235,7 +235,7 @@ describe('SyncSection', () => {
 
     await waitFor(() => {
       expect(sync.check).toHaveBeenCalled()
-      expect(sync.pull).toHaveBeenCalledWith(false)
+      expect(sync.pull).toHaveBeenCalledWith(false, '')
     })
   })
 
@@ -295,7 +295,7 @@ describe('SyncSection', () => {
     })
 
     await waitFor(() => {
-      expect(sync.push).toHaveBeenCalledWith(true)
+      expect(sync.push).toHaveBeenCalledWith(true, '')
     })
   })
 
@@ -330,7 +330,7 @@ describe('SyncSection', () => {
     })
 
     await waitFor(() => {
-      expect(sync.pull).toHaveBeenCalledWith(true)
+      expect(sync.pull).toHaveBeenCalledWith(true, '')
     })
   })
 
