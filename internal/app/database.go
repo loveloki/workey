@@ -169,6 +169,17 @@ func initPasskeyDB() {
 	if _, err := db.Exec(query); err != nil {
 		log.Printf("Warning: failed to create passkeys table: %v\n", err)
 	}
+
+	userKeysQuery := `CREATE TABLE IF NOT EXISTS user_keys (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+		master_key_enc TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`
+	if _, err := db.Exec(userKeysQuery); err != nil {
+		log.Printf("Warning: failed to create user_keys table: %v\n", err)
+	}
 }
 
 // getOrCreateJWTSecret 从数据库获取或创建 JWT 签名密钥

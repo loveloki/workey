@@ -3,6 +3,7 @@ package app
 import (
 	"sync"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -28,6 +29,46 @@ func getEncKey(userID int64) []byte {
 // 不使用 userID 做盐，因为快照需要跨会话可解密（同一应用实例的同一用户）
 func getSnapshotKey() []byte {
 	return deriveKey(jwtSecret, []byte("workey-snapshot"))
+}
+
+// storeMasterKeyLocally 用 jwtSecret 加密主密钥后存入本地数据库
+func storeMasterKeyLocally(userID int64, masterKey []byte) error {
+	nonceCiphertext, err := aesGCMEncrypt(jwtSecret, masterKey, []byte("workey-local-key"))
+	if err != nil {
+		return err
+	}
+	encoded := hex.EncodeToString(nonceCiphertext)
+	_, err = db.Exec(`INSERT INTO user_keys (user_id, master_key_enc) VALUES (?, ?)
+		ON CONFLICT(user_id) DO UPDATE SET master_key_enc = ?, updated_at = CURRENT_TIMESTAMP`,
+		userID, encoded, encoded)
+	return err
+}
+
+// loadMasterKeyLocally 从本地数据库加载并解密主密钥
+func loadMasterKeyLocally(userID int64) ([]byte, error) {
+	var encoded string
+	err := db.QueryRow(`SELECT master_key_enc FROM user_keys WHERE user_id = ?`, userID).Scan(&encoded)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	data, err := hex.DecodeString(encoded)
+	if err != nil {
+		return nil, err
+	}
+	return aesGCMDecrypt(jwtSecret, data, []byte("workey-local-key"))
+}
+
+// getEffectiveEncKey 获取用于快照加密的密钥
+// 优先使用用户的主密钥（可跨服务器迁移），否则回退到全局 jwtSecret 派生
+func getEffectiveEncKey(userID int64) ([]byte, error) {
+	masterKey, err := loadMasterKeyLocally(userID)
+	if err == nil && masterKey != nil {
+		return masterKey, nil
+	}
+	return getSnapshotKey(), nil
 }
 
 // initSyncDB 创建同步相关数据表
@@ -168,6 +209,7 @@ func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
 		WebDAVUsername string `json:"webdav_username"`
 		WebDAVPassword string `json:"webdav_password"`
 		RemotePath     string `json:"remote_path"`
+		LoginPassword  string `json:"login_password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "Invalid request body", http.StatusBadRequest)
@@ -206,6 +248,34 @@ func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+
+	// 如果有登录密码，生成主密钥并存储
+	if req.LoginPassword != "" {
+		var passwordHash string
+		phErr := db.QueryRow("SELECT password_hash FROM users WHERE id = ?", userID).Scan(&passwordHash)
+		if phErr == nil && checkPassword(req.LoginPassword, passwordHash) {
+			if mk, kgErr := generateMasterKey(); kgErr == nil {
+				// 本地存储
+				if storeErr := storeMasterKeyLocally(userID, mk); storeErr == nil {
+					// 上传加密主密钥到 WebDAV
+					salt, encrypted, wrapErr := wrapMasterKeyWithPassword(mk, req.LoginPassword)
+					if wrapErr == nil {
+						emk := &EncryptedMasterKey{
+							SaltHex:      hex.EncodeToString(salt),
+							EncryptedHex: hex.EncodeToString(encrypted),
+						}
+						tmpClient := newWebDAVClient(&SyncConfig{
+							WebDAVURL:      req.WebDAVURL,
+							WebDAVUsername: req.WebDAVUsername,
+							WebDAVPassword: req.WebDAVPassword,
+							RemotePath:     req.RemotePath,
+						})
+						tmpClient.putEncryptedMasterKey(emk)
+					}
+				}
+			}
+		}
+	}
 	jsonOK(w, SyncConfigResponse{
 		Configured:     true,
 		WebDAVURL:      req.WebDAVURL,
@@ -386,7 +456,7 @@ func handleSyncPush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encKey := getSnapshotKey()
+	encKey, _ := getEffectiveEncKey(userID)
 	// 使用事务确保快照数据一致性（m1）
 	tx, err := db.Begin()
 	if err != nil {
@@ -505,7 +575,8 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req struct {
-		Force bool `json:"force"`
+		Force         bool   `json:"force"`
+		LoginPassword string `json:"login_password"` // 用于迁移时恢复主密钥
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "Invalid request body", http.StatusBadRequest)
@@ -518,9 +589,25 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	encKey := getSnapshotKey()
+	encKey, _ := getEffectiveEncKey(userID)
+
 	client := newWebDAVClient(cfg)
 	cfg.WebDAVPassword = "" // 使用后立即清零
+
+	// ★ 如果没有本地主密钥，但提供了密码，尝试从 WebDAV 恢复
+	if req.LoginPassword != "" {
+		existingKey, _ := loadMasterKeyLocally(userID)
+		if existingKey == nil {
+			if emk, dlErr := client.getEncryptedMasterKey(); dlErr == nil {
+				salt, _ := hex.DecodeString(emk.SaltHex)
+				encrypted, _ := hex.DecodeString(emk.EncryptedHex)
+				if masterKey, unwrapErr := unwrapMasterKeyWithPassword(salt, encrypted, req.LoginPassword); unwrapErr == nil {
+					storeMasterKeyLocally(userID, masterKey)
+					encKey, _ = getEffectiveEncKey(userID)
+				}
+			}
+		}
+	}
 
 	manifest, err := client.getManifest()
 	if err != nil {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -171,6 +172,21 @@ func handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		jsonError(w, "Failed to update password", http.StatusInternalServerError)
 		return
+	}
+
+	// 如果用户有主密钥，用新密码重新加密后更新 WebDAV（尽力而为）
+	if masterKey, loadErr := loadMasterKeyLocally(userID); loadErr == nil && masterKey != nil {
+		if salt, encrypted, wrapErr := wrapMasterKeyWithPassword(masterKey, req.NewPassword); wrapErr == nil {
+			emk := &EncryptedMasterKey{
+				SaltHex:      hex.EncodeToString(salt),
+				EncryptedHex: hex.EncodeToString(encrypted),
+			}
+			// 尝试上传到 WebDAV（如果已配置）
+			if cfg, _ := getSyncConfig(userID); cfg != nil {
+				client := newWebDAVClient(cfg)
+				client.putEncryptedMasterKey(emk) // 忽略错误，尽力而为
+			}
+		}
 	}
 
 	jsonOK(w, MessageResponse{Message: "Password changed successfully"})

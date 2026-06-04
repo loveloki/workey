@@ -93,3 +93,34 @@ func decryptField(key []byte, hexCiphertext, aad string) (string, error) {
 	}
 	return string(plaintext), nil
 }
+
+// generateMasterKey 生成 32 字节随机主加密密钥
+func generateMasterKey() ([]byte, error) {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+// wrapMasterKeyWithPassword 用用户密码加密主密钥
+// password → PBKDF2(salt) → KEK → AES-GCM 加密 masterKey
+// 返回: salt, encrypted (nonce || ciphertext)
+func wrapMasterKeyWithPassword(masterKey []byte, password string) (salt, encrypted []byte, err error) {
+	salt = make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, nil, err
+	}
+	kek := deriveKey([]byte(password), salt)
+	encrypted, err = aesGCMEncrypt(kek, masterKey, []byte("workey-master-key"))
+	if err != nil {
+		return nil, nil, err
+	}
+	return salt, encrypted, nil
+}
+
+// unwrapMasterKeyWithPassword 用密码从加密数据中恢复主密钥
+func unwrapMasterKeyWithPassword(salt, encrypted []byte, password string) ([]byte, error) {
+	kek := deriveKey([]byte(password), salt)
+	return aesGCMDecrypt(kek, encrypted, []byte("workey-master-key"))
+}

@@ -341,15 +341,15 @@ export const sync = {
     request<SyncStatusResponse>('/api/sync/status'),
   check: () =>
     request<SyncCheckResponse>('/api/sync/check', { method: 'POST' }),
-  push: (force = false) =>
+  push: (force = false, loginPassword?: string) =>
     request<SyncOperationResponse>('/api/sync/push', {
       method: 'POST',
-      body: JSON.stringify({ force }),
+      body: JSON.stringify(loginPassword ? { force, login_password: loginPassword } : { force }),
     }),
-  pull: (force = false) =>
+  pull: (force = false, loginPassword?: string) =>
     request<SyncOperationResponse>('/api/sync/pull', {
       method: 'POST',
-      body: JSON.stringify({ force }),
+      body: JSON.stringify(loginPassword ? { force, login_password: loginPassword } : { force }),
     }),
   getLogs: () =>
     request<SyncLogListResponse>('/api/sync/logs'),

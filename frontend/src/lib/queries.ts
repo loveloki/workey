@@ -443,7 +443,7 @@ export function useSyncCheck() {
 export function useSyncPush() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (force: boolean) => sync.push(force),
+    mutationFn: ({ force, loginPassword }: { force: boolean; loginPassword?: string }) => sync.push(force, loginPassword),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.sync.status })
       qc.invalidateQueries({ queryKey: queryKeys.sync.logs })
@@ -454,7 +454,7 @@ export function useSyncPush() {
 export function useSyncPull() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (force: boolean) => sync.pull(force),
+    mutationFn: ({ force, loginPassword }: { force: boolean; loginPassword?: string }) => sync.pull(force, loginPassword),
     onSuccess: () => {
       // 拉取后本地数据可能发生变化，精确刷新所有相关缓存
       qc.invalidateQueries({ queryKey: queryKeys.sync.status })

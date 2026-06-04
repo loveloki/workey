@@ -42,3 +42,9 @@ type SyncManifest struct {
 	SnapshotHash string `json:"snapshot_hash"`
 	PushedAt     string `json:"pushed_at"`
 }
+
+// EncryptedMasterKey 存储在 WebDAV 上的加密主密钥
+type EncryptedMasterKey struct {
+	SaltHex       string `json:"salt"`
+	EncryptedHex  string `json:"encrypted"`
+}

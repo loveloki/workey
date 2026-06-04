@@ -142,6 +142,8 @@ export function SyncSection() {
   const passwordRef = useRef<HTMLInputElement>(null) // 使用 useRef 管理密码，避免在 React state 中暴露密码值
   const [remotePath, setRemotePath] = useState('/')
   const [showPassword, setShowPassword] = useState(false)
+  const loginPasswordRef = useRef<HTMLInputElement>(null) // 当前登录密码，用于同步操作鉴权
+  const [showLoginPassword, setShowLoginPassword] = useState(false)
 
   // 冲突弹窗
   const [conflictModal, setConflictModal] = useState<null | 'push' | 'pull'>(null)
@@ -244,7 +246,7 @@ export function SyncSection() {
         setConflictModal('push')
         return
       }
-      const result = await push.mutateAsync(false)
+      const result = await push.mutateAsync({ force: false, loginPassword: loginPasswordRef.current?.value })
       toastSuccess('推送成功：' + result.message)
     } catch (e) {
       if (isConflictError(e)) {
@@ -262,7 +264,7 @@ export function SyncSection() {
         setConflictModal('pull')
         return
       }
-      const result = await pull.mutateAsync(false)
+      const result = await pull.mutateAsync({ force: false, loginPassword: loginPasswordRef.current?.value })
       toastSuccess('拉取成功：' + result.message)
     } catch (e) {
       if (isConflictError(e)) {
@@ -277,7 +279,7 @@ export function SyncSection() {
   const handleConflictLocal = async () => {
     setConflictLoading(true)
     try {
-      const result = await push.mutateAsync(true)
+      const result = await push.mutateAsync({ force: true, loginPassword: loginPasswordRef.current?.value })
       toastSuccess('已以本地覆盖远端：' + result.message)
       setConflictModal(null)
     } catch (e) {
@@ -291,7 +293,7 @@ export function SyncSection() {
   const handleConflictRemote = async () => {
     setConflictLoading(true)
     try {
-      const result = await pull.mutateAsync(true)
+      const result = await pull.mutateAsync({ force: true, loginPassword: loginPasswordRef.current?.value })
       toastSuccess('已以远端覆盖本地：' + result.message)
       setConflictModal(null)
     } catch (e) {
@@ -362,6 +364,30 @@ export function SyncSection() {
                 className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors px-1"
               >
                 {showPassword ? '隐藏' : '显示'}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block font-mono text-xs mb-1 text-[var(--color-ink-muted)]">
+              当前登录密码
+            </label>
+            <div className="relative">
+              <input
+                ref={loginPasswordRef}
+                type={showLoginPassword ? 'text' : 'password'}
+                defaultValue=""
+                placeholder="同步操作时需要验证"
+                className="font-mono text-sm w-full px-3 py-2 pr-20 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none focus:border-[var(--color-border-focus)]"
+                data-testid="sync-login-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowLoginPassword(v => !v)}
+                aria-label="切换登录密码可见性"
+                aria-pressed={showLoginPassword}
+                className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors px-1"
+              >
+                {showLoginPassword ? '隐藏' : '显示'}
               </button>
             </div>
           </div>
