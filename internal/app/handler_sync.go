@@ -33,7 +33,8 @@ func getSnapshotKey() []byte {
 
 // storeMasterKeyLocally 用 jwtSecret 加密主密钥后存入本地数据库
 func storeMasterKeyLocally(userID int64, masterKey []byte) error {
-	nonceCiphertext, err := aesGCMEncrypt(jwtSecret, masterKey, []byte("workey-local-key"))
+	localKey := deriveKey(jwtSecret, []byte("workey-local-master-store"))
+	nonceCiphertext, err := aesGCMEncrypt(localKey, masterKey, []byte("workey-local-key"))
 	if err != nil {
 		return err
 	}
@@ -58,7 +59,8 @@ func loadMasterKeyLocally(userID int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return aesGCMDecrypt(jwtSecret, data, []byte("workey-local-key"))
+	localKey := deriveKey(jwtSecret, []byte("workey-local-master-store"))
+	return aesGCMDecrypt(localKey, data, []byte("workey-local-key"))
 }
 
 // getEffectiveEncKey 获取用于快照加密的密钥
@@ -599,11 +601,13 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		existingKey, _ := loadMasterKeyLocally(userID)
 		if existingKey == nil {
 			if emk, dlErr := client.getEncryptedMasterKey(); dlErr == nil {
-				salt, _ := hex.DecodeString(emk.SaltHex)
-				encrypted, _ := hex.DecodeString(emk.EncryptedHex)
-				if masterKey, unwrapErr := unwrapMasterKeyWithPassword(salt, encrypted, req.LoginPassword); unwrapErr == nil {
-					storeMasterKeyLocally(userID, masterKey)
-					encKey, _ = getEffectiveEncKey(userID)
+				salt, sErr := hex.DecodeString(emk.SaltHex)
+				encrypted, eErr := hex.DecodeString(emk.EncryptedHex)
+				if sErr == nil && eErr == nil {
+					if masterKey, unwrapErr := unwrapMasterKeyWithPassword(salt, encrypted, req.LoginPassword); unwrapErr == nil {
+						storeMasterKeyLocally(userID, masterKey)
+						encKey, _ = getEffectiveEncKey(userID)
+					}
 				}
 			}
 		}
