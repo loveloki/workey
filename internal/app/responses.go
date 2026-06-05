@@ -154,13 +154,14 @@ type DataDeleteResponse struct {
 
 // SyncConfigResponse WebDAV 配置信息（密码脚敏信息不返回）
 type SyncConfigResponse struct {
-	Configured     bool   `json:"configured"`
-	WebDAVURL      string `json:"webdav_url"`
-	WebDAVUsername string `json:"webdav_username"`
-	RemotePath     string `json:"remote_path"`
-	CreatedAt      string `json:"created_at"`
-	UpdatedAt      string `json:"updated_at"`
-	Warning        string `json:"warning,omitempty"`
+	Configured               bool   `json:"configured"`
+	WebDAVURL                string `json:"webdav_url"`
+	WebDAVUsername           string `json:"webdav_username"`
+	RemotePath               string `json:"remote_path"`
+	AutoSyncIntervalMinutes  int    `json:"auto_sync_interval_minutes"`
+	CreatedAt                string `json:"created_at"`
+	UpdatedAt                string `json:"updated_at"`
+	Warning                  string `json:"warning,omitempty"`
 }
 
 // SyncStatusResponse 当前同步状态

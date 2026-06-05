@@ -75,6 +75,9 @@ func getEffectiveEncKey(userID int64) ([]byte, error) {
 
 // initSyncDB 创建同步相关数据表
 func initSyncDB() {
+	// 迁移：尝试添加 auto_sync_interval_minutes 列（兼容已有数据库）
+	db.Exec("ALTER TABLE sync_config ADD COLUMN auto_sync_interval_minutes INTEGER NOT NULL DEFAULT 0")
+
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS sync_config (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,6 +86,7 @@ func initSyncDB() {
 			webdav_username TEXT NOT NULL,
 			webdav_password_enc TEXT NOT NULL,
 			remote_path TEXT NOT NULL DEFAULT '',
+			auto_sync_interval_minutes INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
@@ -117,9 +121,9 @@ func getSyncConfig(userID int64) (*SyncConfig, error) {
 	var cfg SyncConfig
 	var passEnc string
 	err := db.QueryRow(
-		"SELECT id, user_id, webdav_url, webdav_username, webdav_password_enc, remote_path, created_at, updated_at FROM sync_config WHERE user_id = ?",
+		"SELECT id, user_id, webdav_url, webdav_username, webdav_password_enc, remote_path, auto_sync_interval_minutes, created_at, updated_at FROM sync_config WHERE user_id = ?",
 		userID,
-	).Scan(&cfg.ID, &cfg.UserID, &cfg.WebDAVURL, &cfg.WebDAVUsername, &passEnc, &cfg.RemotePath, &cfg.CreatedAt, &cfg.UpdatedAt)
+	).Scan(&cfg.ID, &cfg.UserID, &cfg.WebDAVURL, &cfg.WebDAVUsername, &passEnc, &cfg.RemotePath, &cfg.AutoSyncIntervalMinutes, &cfg.CreatedAt, &cfg.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -178,6 +182,48 @@ func writeSyncLog(userID int64, direction, status, message string) {
 	db.Exec("DELETE FROM sync_log WHERE id NOT IN (SELECT id FROM sync_log ORDER BY id DESC LIMIT ?)", maxSyncLogs)
 }
 
+// getAutoSyncUsers 获取所有开启了自动同步的用户配置
+func getAutoSyncUsers() ([]struct {
+	UserID     int64
+	SyncConfig
+}, error) {
+	rows, err := db.Query(
+		"SELECT sc.user_id, sc.webdav_url, sc.webdav_username, sc.webdav_password_enc," +
+		"       sc.remote_path, sc.auto_sync_interval_minutes" +
+		" FROM sync_config sc" +
+		" WHERE sc.auto_sync_interval_minutes > 0",
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// 使用返回类型构造结果
+	var users []struct {
+		UserID int64
+		SyncConfig
+	}
+	for rows.Next() {
+		var u struct {
+			UserID int64
+			SyncConfig
+		}
+		var passEnc string
+		if err := rows.Scan(&u.UserID, &u.WebDAVURL, &u.WebDAVUsername, &passEnc, &u.RemotePath, &u.AutoSyncIntervalMinutes); err != nil {
+			continue
+		}
+		key := getEncKey(u.UserID)
+		pass, err := decryptField(key, passEnc, aadWebDAVPassword)
+		if err != nil {
+			continue
+		}
+		u.WebDAVPassword = pass
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
+
 // --- Handlers ---
 
 // handleSyncConfig GET /api/sync/config
@@ -193,12 +239,13 @@ func handleSyncConfigGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, SyncConfigResponse{
-		Configured:     true,
-		WebDAVURL:      cfg.WebDAVURL,
-		WebDAVUsername: cfg.WebDAVUsername,
-		RemotePath:     cfg.RemotePath,
-		CreatedAt:      cfg.CreatedAt,
-		UpdatedAt:      cfg.UpdatedAt,
+		Configured:               true,
+		WebDAVURL:                cfg.WebDAVURL,
+		WebDAVUsername:           cfg.WebDAVUsername,
+		RemotePath:               cfg.RemotePath,
+		AutoSyncIntervalMinutes:  cfg.AutoSyncIntervalMinutes,
+		CreatedAt:                cfg.CreatedAt,
+		UpdatedAt:                cfg.UpdatedAt,
 	})
 }
 
@@ -207,11 +254,12 @@ func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
 
 	var req struct {
-		WebDAVURL      string `json:"webdav_url"`
-		WebDAVUsername string `json:"webdav_username"`
-		WebDAVPassword string `json:"webdav_password"`
-		RemotePath     string `json:"remote_path"`
-		LoginPassword  string `json:"login_password"`
+		WebDAVURL                string `json:"webdav_url"`
+		WebDAVUsername           string `json:"webdav_username"`
+		WebDAVPassword           string `json:"webdav_password"`
+		RemotePath               string `json:"remote_path"`
+		AutoSyncIntervalMinutes  int    `json:"auto_sync_interval_minutes"`
+		LoginPassword            string `json:"login_password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "Invalid request body", http.StatusBadRequest)
@@ -235,15 +283,16 @@ func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
 
 	now := nowDatetime()
 	_, err = db.Exec(
-		`INSERT INTO sync_config (user_id, webdav_url, webdav_username, webdav_password_enc, remote_path, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO sync_config (user_id, webdav_url, webdav_username, webdav_password_enc, remote_path, auto_sync_interval_minutes, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(user_id) DO UPDATE SET
 			webdav_url = excluded.webdav_url,
 			webdav_username = excluded.webdav_username,
 			webdav_password_enc = excluded.webdav_password_enc,
 			remote_path = excluded.remote_path,
+			auto_sync_interval_minutes = excluded.auto_sync_interval_minutes,
 			updated_at = excluded.updated_at`,
-		userID, req.WebDAVURL, req.WebDAVUsername, passEnc, req.RemotePath, now, now,
+		userID, req.WebDAVURL, req.WebDAVUsername, passEnc, req.RemotePath, req.AutoSyncIntervalMinutes, now, now,
 	)
 	if err != nil {
 		jsonError(w, "Failed to save sync config", http.StatusInternalServerError)

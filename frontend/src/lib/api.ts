@@ -317,6 +317,7 @@ export interface SyncConfigInput {
   webdav_username: string
   webdav_password: string
   remote_path: string
+  auto_sync_interval_minutes: number
 }
 
 // Sync 需要的类型（SyncConfigResponse、SyncStatusResponse、SyncCheckResponse 等）

@@ -141,6 +141,7 @@ export function SyncSection() {
   const [username, setUsername] = useState('')
   const passwordRef = useRef<HTMLInputElement>(null) // 使用 useRef 管理密码，避免在 React state 中暴露密码值
   const [remotePath, setRemotePath] = useState('/')
+  const [autoSyncInterval, setAutoSyncInterval] = useState(0) // 0 = disabled
   const [showPassword, setShowPassword] = useState(false)
   const loginPasswordRef = useRef<HTMLInputElement>(null) // 当前登录密码，用于同步操作鉴权
   const [showLoginPassword, setShowLoginPassword] = useState(false)
@@ -165,6 +166,7 @@ export function SyncSection() {
       setUrl(config.webdav_url)
       setUsername(config.webdav_username)
       setRemotePath(config.remote_path)
+      setAutoSyncInterval(config.auto_sync_interval_minutes ?? 0)
       setFormInited(true)
     }
   }, [isConfigured, config, formInited])
@@ -182,6 +184,7 @@ export function SyncSection() {
     webdav_username: username.trim(),
     webdav_password: passwordRef.current?.value ?? '',
     remote_path: remotePath.trim(),
+    auto_sync_interval_minutes: autoSyncInterval,
   })
 
   // 删除确认状态（修复 M10）
@@ -235,6 +238,7 @@ export function SyncSection() {
       setUsername('')
       if (passwordRef.current) passwordRef.current.value = ''
       setRemotePath('/')
+      setAutoSyncInterval(0)
       setFormInited(false)
       setDeleteConfirm(false)
       toastSuccess('配置已删除')
@@ -408,6 +412,49 @@ export function SyncSection() {
               className="font-mono text-sm w-full px-3 py-2 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none focus:border-[var(--color-border-focus)]"
               data-testid="sync-remote-path"
             />
+          </div>
+
+          {/* 自动同步设置 */}
+          <div className="pt-2 border-t border-[var(--color-border-subtle)]">
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={autoSyncInterval > 0}
+                  onChange={e => setAutoSyncInterval(e.target.checked ? 60 : 0)}
+                  className="sr-only peer"
+                  data-testid="sync-auto-toggle"
+                />
+                <div className="w-9 h-5 rounded-full bg-[var(--color-surface-strong)] border border-[var(--color-border)] peer-checked:bg-[var(--color-solid)] peer-checked:border-[var(--color-solid)] transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4" />
+              </div>
+              <span className="font-mono text-sm text-[var(--color-ink)] select-none">
+                定时自动同步
+              </span>
+            </label>
+            {autoSyncInterval > 0 && (
+              <div className="mt-3 pl-11">
+                <label className="block font-mono text-xs mb-1 text-[var(--color-ink-muted)]">
+                  同步间隔
+                </label>
+                <select
+                  value={autoSyncInterval}
+                  onChange={e => setAutoSyncInterval(Number(e.target.value))}
+                  className="font-mono text-sm w-full px-3 py-2 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none focus:border-[var(--color-border-focus)]"
+                  data-testid="sync-auto-interval"
+                >
+                  <option value={30}>每 30 分钟</option>
+                  <option value={60}>每 1 小时</option>
+                  <option value={120}>每 2 小时</option>
+                  <option value={240}>每 4 小时</option>
+                  <option value={360}>每 6 小时</option>
+                  <option value={720}>每 12 小时</option>
+                  <option value={1440}>每 24 小时</option>
+                </select>
+                <p className="mt-1 font-mono text-[10px] text-[var(--color-ink-muted)]">
+                  后台自动将本地数据推送到 WebDAV。遇冲突时会跳过自动同步，需手动处理。
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

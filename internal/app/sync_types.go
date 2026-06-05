@@ -4,15 +4,16 @@ package app
 
 // SyncConfig 存储 WebDAV 连接配置（敏感字段加密后入库）
 type SyncConfig struct {
-	ID             int64  `json:"id"`
-	UserID         int64  `json:"user_id"`
-	WebDAVURL      string `json:"webdav_url"`
-	WebDAVUsername string `json:"webdav_username"`
+	ID                       int64  `json:"id"`
+	UserID                   int64  `json:"user_id"`
+	WebDAVURL                string `json:"webdav_url"`
+	WebDAVUsername           string `json:"webdav_username"`
 	// WebDAVPassword 加密存储，永不明文返回前端
-	WebDAVPassword string `json:"-"`
-	RemotePath     string `json:"remote_path"`
-	CreatedAt      string `json:"created_at"`
-	UpdatedAt      string `json:"updated_at"`
+	WebDAVPassword           string `json:"-"`
+	RemotePath               string `json:"remote_path"`
+	AutoSyncIntervalMinutes  int    `json:"auto_sync_interval_minutes"`
+	CreatedAt                string `json:"created_at"`
+	UpdatedAt                string `json:"updated_at"`
 }
 
 // SyncState 记录每次成功同步后的状态快照

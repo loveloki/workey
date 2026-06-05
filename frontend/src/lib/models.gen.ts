@@ -191,6 +191,7 @@ export interface SyncConfigResponse {
   webdav_url: string;
   webdav_username: string;
   remote_path: string;
+  auto_sync_interval_minutes: number;
   created_at: string;
   updated_at: string;
   warning?: string;

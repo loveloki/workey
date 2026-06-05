@@ -130,6 +130,7 @@ describe('SyncSection', () => {
         webdav_username: 'alice',
         webdav_password: 'secret',
         remote_path: '/workey',
+        auto_sync_interval_minutes: 0,
       })
     })
   })
@@ -163,6 +164,7 @@ describe('SyncSection', () => {
         webdav_username: 'alice',
         webdav_password: 'secret',
         remote_path: '/workey',
+        auto_sync_interval_minutes: 0,
       })
     })
   })
