@@ -101,8 +101,8 @@ func (sm *SyncManager) checkAndSync() {
 
 // autoPush 执行自动推送（遇到冲突时跳过，不强推）
 func (sm *SyncManager) autoPush(userID int64, cfg *SyncConfig) {
-	syncMu.Lock()
-	defer syncMu.Unlock()
+	unlock := lockUserSync(userID)
+	defer unlock()
 
 	// 使用只读事务读取本地数据
 	tx, err := db.Begin()

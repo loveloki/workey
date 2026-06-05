@@ -1,7 +1,6 @@
 package app
 
 import (
-	"sync"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -9,9 +8,19 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
-var syncMu sync.Mutex
+
+// perUserSyncMu 保护单个用户的同步操作，不同用户可以并行
+var perUserSyncMu sync.Map // map[int64]*sync.Mutex
+
+func lockUserSync(userID int64) func() {
+	val, _ := perUserSyncMu.LoadOrStore(userID, &sync.Mutex{})
+	mu := val.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
 
 // WebDAV 手动同步 handler
 
@@ -213,10 +222,11 @@ func getAutoSyncUsers() ([]struct {
 			continue
 		}
 		key := getEncKey(u.UserID)
-		pass, err := decryptField(key, passEnc, aadWebDAVPassword)
-		if err != nil {
-			continue
-		}
+	pass, err := decryptField(key, passEnc, aadWebDAVPassword)
+	if err != nil {
+		log.Printf("[sync] user %d: failed to decrypt webdav password, skipping auto-sync: %v", u.UserID, err)
+		continue
+	}
 		u.WebDAVPassword = pass
 		users = append(users, u)
 	}
@@ -331,11 +341,14 @@ func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	jsonOK(w, SyncConfigResponse{
-		Configured:     true,
-		WebDAVURL:      req.WebDAVURL,
-		WebDAVUsername: req.WebDAVUsername,
-		RemotePath:     req.RemotePath,
-		Warning:        warning,
+		Configured:              true,
+		WebDAVURL:               req.WebDAVURL,
+		WebDAVUsername:           req.WebDAVUsername,
+		RemotePath:              req.RemotePath,
+		AutoSyncIntervalMinutes: req.AutoSyncIntervalMinutes,
+		CreatedAt:               now,
+		UpdatedAt:               now,
+		Warning:                 warning,
 	})
 }
 
@@ -518,9 +531,9 @@ func handleSyncPush(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	syncMu.Lock()
-	defer syncMu.Unlock()
 	userID := getUserID(r)
+	unlock := lockUserSync(userID)
+	defer unlock()
 
 	var req struct {
 		Force bool `json:"force"`
@@ -673,9 +686,9 @@ func handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	syncMu.Lock()
-	defer syncMu.Unlock()
 	userID := getUserID(r)
+	unlock := lockUserSync(userID)
+	defer unlock()
 	ctx := r.Context()
 
 	var req struct {

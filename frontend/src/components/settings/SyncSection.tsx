@@ -320,7 +320,7 @@ export function SyncSection() {
     <>
       <Card title="WebDAV 同步">
         <p className="text-sm mb-5 font-serif text-[var(--color-ink-muted)]">
-          将数据手动同步到 WebDAV 服务器。不支持自动同步；冲突时需手动选择保留哪一方。
+          将数据同步到 WebDAV 服务器。可开启定时自动推送；冲突时需手动选择保留哪一方。
         </p>
 
         {/* WebDAV 配置表单 */}

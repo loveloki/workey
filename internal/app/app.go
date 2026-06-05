@@ -49,12 +49,12 @@ func Run() {
 	initPasskeyDB()
 	initSyncDB()
 
-	// 启动后台自动同步管理器
+	jwtSecret = getOrCreateJWTSecret()
+
+	// 启动后台自动同步管理器（依赖 jwtSecret，必须在其后启动）
 	syncManager := NewSyncManager()
 	syncManager.Start()
 	defer syncManager.Stop()
-
-	jwtSecret = getOrCreateJWTSecret()
 
 	mux := http.NewServeMux()
 	registerRoutes(mux)

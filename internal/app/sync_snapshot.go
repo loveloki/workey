@@ -150,8 +150,58 @@ func buildExportData(ctx context.Context, tx *sql.Tx, userID int64) (*ExportData
 	}, nil
 }
 
+// 用于 hash 计算的精简类型，排除 id/user_id 等会因导入环境变化的字段
+// 替换式导入后 SQLite 重新分配 autoincrement ID，同一批数据的 hash 必须一致
+type hashAttendance struct {
+	Date       string  `json:"date"`
+	ClockIn    *string `json:"clock_in"`
+	ClockOut   *string `json:"clock_out"`
+	Status     string  `json:"status"`
+	IsOvertime bool    `json:"is_overtime"`
+	CreatedAt  string  `json:"created_at"`
+	UpdatedAt  string  `json:"updated_at"`
+}
+
+type hashWorkLog struct {
+	Date      string `json:"date"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type hashTodo struct {
+	Content   string `json:"content"`
+	URL       string `json:"url"`
+	Done      bool   `json:"done"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type hashChecklist struct {
+	Title     string `json:"title"`
+	Items     string `json:"items"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type hashChecklistSnapshot struct {
+	ChecklistID int64  `json:"checklist_id"` // 保留：用于建立快照与清单的映射关系
+	Title       string `json:"title"`
+	ItemsHash   string `json:"items_hash"`
+	Data        string `json:"data"`
+	CreatedAt   string `json:"created_at"`
+}
+
+type hashIterationOverride struct {
+	IterationNumber int64  `json:"iteration_number"`
+	StartDate       string `json:"start_date"`
+	EndDate         string `json:"end_date"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
+}
+
 // computeDataHash 计算导出数据的确定性 hash
-// 注意：不使用 zip 字节（zip 有时间戳骏机性），而是对规范化 JSON 计算 hash
+// 只使用业务数据字段（排除 id/user_id），确保同一数据在不同环境中 hash 一致
 func computeDataHash(data *ExportData) (string, error) {
 	// 对 user_settings 的 key 排序，保证确定性
 	keys := make([]string, 0, len(data.UserSettings))
@@ -164,23 +214,47 @@ func computeDataHash(data *ExportData) (string, error) {
 		orderedSettings = append(orderedSettings, [2]string{k, data.UserSettings[k]})
 	}
 
-	// 对于 hash，建一个去除 ExportedAt 的稳定视图
+	hAttendances := make([]hashAttendance, len(data.Attendance))
+	for i, a := range data.Attendance {
+		hAttendances[i] = hashAttendance{Date: a.Date, ClockIn: a.ClockIn, ClockOut: a.ClockOut, Status: a.Status, IsOvertime: a.IsOvertime, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
+	}
+	hWorkLogs := make([]hashWorkLog, len(data.WorkLogs))
+	for i, wl := range data.WorkLogs {
+		hWorkLogs[i] = hashWorkLog{Date: wl.Date, Content: wl.Content, CreatedAt: wl.CreatedAt, UpdatedAt: wl.UpdatedAt}
+	}
+	hTodos := make([]hashTodo, len(data.Todos))
+	for i, t := range data.Todos {
+		hTodos[i] = hashTodo{Content: t.Content, URL: t.URL, Done: t.Done, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt}
+	}
+	hChecklists := make([]hashChecklist, len(data.Checklists))
+	for i, c := range data.Checklists {
+		hChecklists[i] = hashChecklist{Title: c.Title, Items: c.Items, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
+	}
+	hSnapshots := make([]hashChecklistSnapshot, len(data.ChecklistSnapshots))
+	for i, s := range data.ChecklistSnapshots {
+		hSnapshots[i] = hashChecklistSnapshot{ChecklistID: s.ChecklistID, Title: s.Title, ItemsHash: s.ItemsHash, Data: s.Data, CreatedAt: s.CreatedAt}
+	}
+	hOverrides := make([]hashIterationOverride, len(data.IterationOverrides))
+	for i, o := range data.IterationOverrides {
+		hOverrides[i] = hashIterationOverride{IterationNumber: o.IterationNumber, StartDate: o.StartDate, EndDate: o.EndDate, CreatedAt: o.CreatedAt, UpdatedAt: o.UpdatedAt}
+	}
+
 	stable := struct {
-		Attendance         []Attendance        `json:"attendance"`
-		WorkLogs           []WorkLog           `json:"work_logs"`
-		Todos              []Todo              `json:"todos"`
-		Checklists         []Checklist         `json:"checklists"`
-		ChecklistSnapshots []ChecklistSnapshot `json:"checklist_snapshots"`
-		UserSettings       [][2]string         `json:"user_settings"`
-		IterationOverrides []IterationOverride `json:"iteration_overrides"`
+		Attendance         []hashAttendance        `json:"attendance"`
+		WorkLogs           []hashWorkLog           `json:"work_logs"`
+		Todos              []hashTodo              `json:"todos"`
+		Checklists         []hashChecklist         `json:"checklists"`
+		ChecklistSnapshots []hashChecklistSnapshot  `json:"checklist_snapshots"`
+		UserSettings       [][2]string             `json:"user_settings"`
+		IterationOverrides []hashIterationOverride `json:"iteration_overrides"`
 	}{
-		Attendance:         data.Attendance,
-		WorkLogs:           data.WorkLogs,
-		Todos:              data.Todos,
-		Checklists:         data.Checklists,
-		ChecklistSnapshots: data.ChecklistSnapshots,
+		Attendance:         hAttendances,
+		WorkLogs:           hWorkLogs,
+		Todos:              hTodos,
+		Checklists:         hChecklists,
+		ChecklistSnapshots: hSnapshots,
 		UserSettings:       orderedSettings,
-		IterationOverrides: data.IterationOverrides,
+		IterationOverrides: hOverrides,
 	}
 
 	jsonBytes, err := json.Marshal(stable)
