@@ -226,12 +226,12 @@ func (c *webdavClient) putEncryptedMasterKey(emk *EncryptedMasterKey) error {
 	if err != nil {
 		return err
 	}
-	return c.putFile(c.remotePath("encrypted-master-key.json"), data)
+	return c.putFile("encrypted-master-key.json", data)
 }
 
 // getEncryptedMasterKey 从 WebDAV 远端下载加密的主密钥
 func (c *webdavClient) getEncryptedMasterKey() (*EncryptedMasterKey, error) {
-	data, err := c.getFile(c.remotePath("encrypted-master-key.json"))
+	data, err := c.getFile("encrypted-master-key.json")
 	if err != nil {
 		return nil, err
 	}

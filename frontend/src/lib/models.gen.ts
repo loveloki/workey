@@ -193,6 +193,7 @@ export interface SyncConfigResponse {
   remote_path: string;
   created_at: string;
   updated_at: string;
+  warning?: string;
 }
 /**
  * SyncStatusResponse 当前同步状态
@@ -292,4 +293,11 @@ export interface SyncManifest {
   snapshot_file: string;
   snapshot_hash: string;
   pushed_at: string;
+}
+/**
+ * EncryptedMasterKey 存储在 WebDAV 上的加密主密钥
+ */
+export interface EncryptedMasterKey {
+  salt: string;
+  encrypted: string;
 }

@@ -199,8 +199,13 @@ export function SyncSection() {
       return
     }
     try {
-      await saveConfig.mutateAsync(data)
-      toastSuccess('配置已保存')
+      const result = await saveConfig.mutateAsync(data)
+      // 检查返回的 warning 字段（主密钥设置失败等）
+      if (result.warning) {
+        toastError(result.warning)
+      } else {
+        toastSuccess('配置已保存')
+      }
       // 保存成功后清空密码字段（修复 M8）
       if (passwordRef.current) passwordRef.current.value = ''
     } catch (e) {

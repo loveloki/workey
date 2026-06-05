@@ -252,6 +252,7 @@ func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
 
 
 	// 如果有登录密码，生成主密钥并存储
+	var warning string
 	if req.LoginPassword != "" {
 		var passwordHash string
 		phErr := db.QueryRow("SELECT password_hash FROM users WHERE id = ?", userID).Scan(&passwordHash)
@@ -276,6 +277,8 @@ func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
+		} else {
+			warning = "登录密码验证失败，无法设置主密钥加密。如需跨设备同步，请使用正确的密码重新保存配置。"
 		}
 	}
 	jsonOK(w, SyncConfigResponse{
@@ -283,6 +286,7 @@ func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
 		WebDAVURL:      req.WebDAVURL,
 		WebDAVUsername: req.WebDAVUsername,
 		RemotePath:     req.RemotePath,
+		Warning:        warning,
 	})
 }
 
@@ -294,6 +298,7 @@ func handleSyncConfigDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.Exec("DELETE FROM sync_state WHERE user_id = ?", userID)
+	db.Exec("DELETE FROM sync_log WHERE user_id = ?", userID)
 	jsonOK(w, MessageResponse{Message: "Sync config deleted"})
 }
 
@@ -304,6 +309,30 @@ func handleSyncValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userID := getUserID(r)
+
+	// 优先使用请求体中的配置（允许不保存测试连接）
+	var inlineCfg struct {
+		WebDAVURL      string `json:"webdav_url"`
+		WebDAVUsername string `json:"webdav_username"`
+		WebDAVPassword string `json:"webdav_password"`
+		RemotePath     string `json:"remote_path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&inlineCfg); err == nil && inlineCfg.WebDAVURL != "" {
+		cfg := &SyncConfig{
+			WebDAVURL:      inlineCfg.WebDAVURL,
+			WebDAVUsername: inlineCfg.WebDAVUsername,
+			WebDAVPassword: inlineCfg.WebDAVPassword,
+			RemotePath:     inlineCfg.RemotePath,
+		}
+		client := newWebDAVClient(cfg)
+		if err := client.validateConnection(); err != nil {
+			jsonOK(w, SyncValidateResponse{Success: false, Message: err.Error()})
+			return
+		}
+		jsonOK(w, SyncValidateResponse{Success: true, Message: "Connection successful"})
+		return
+	}
+
 	cfg, err := getSyncConfig(userID)
 	if err != nil || cfg == nil {
 		jsonError(w, "Sync config not found", http.StatusBadRequest)
@@ -515,6 +544,30 @@ func handleSyncPush(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+	}
+
+	// force push 前创建本地备份（与 force pull 对称）
+	if req.Force {
+		backupTx, err := db.Begin()
+		if err != nil {
+			writeSyncLog(userID, "push", "error", "Failed to begin backup transaction")
+			jsonError(w, "Database error", http.StatusInternalServerError)
+			return
+		}
+		backupData, backupHash, backupFileName, err := buildLocalBackupSnapshot(r.Context(), backupTx, userID, encKey)
+		if err != nil {
+			backupTx.Rollback()
+			writeSyncLog(userID, "push", "error", "Failed to build backup: "+err.Error())
+			jsonError(w, "Failed to build backup before push: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		backupTx.Rollback() // 只读事务
+		if err := client.putFile(backupFileName, backupData); err != nil {
+			writeSyncLog(userID, "push", "error", "Failed to upload backup: "+err.Error())
+			jsonError(w, "Failed to upload backup before push: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		log.Printf("force push: backup uploaded as %s (hash=%s)", backupFileName, backupHash)
 	}
 
 	// 构建加密快照

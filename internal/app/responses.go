@@ -160,6 +160,7 @@ type SyncConfigResponse struct {
 	RemotePath     string `json:"remote_path"`
 	CreatedAt      string `json:"created_at"`
 	UpdatedAt      string `json:"updated_at"`
+	Warning        string `json:"warning,omitempty"`
 }
 
 // SyncStatusResponse 当前同步状态
