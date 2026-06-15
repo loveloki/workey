@@ -369,11 +369,38 @@ export const history = {
     request<VersionRangeResponse>('/api/history/date-range'),
 }
 
+// ─── Push Notifications ─────────────────────────────────────────
+
+export interface VapidKeyResponse {
+  public_key: string
+}
+
+export interface PushSubscribeRequest {
+  endpoint: string
+  p256dh: string
+  auth: string
+}
+
+export const push = {
+  getVapidKey: () =>
+    request<VapidKeyResponse>('/api/push/vapid-key'),
+  subscribe: (data: PushSubscribeRequest) =>
+    request<{ message: string }>('/api/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  unsubscribe: (endpoint?: string) =>
+    request<{ message: string }>('/api/push/subscribe', {
+      method: 'DELETE',
+      body: JSON.stringify({ endpoint }),
+    }),
+}
+
 // ─── Settings ───────────────────────────────────────────────────
 
 export const settings = {
   get: () => request<SettingsResponse>('/api/settings'),
-  save: (data: { timezone?: string; kanban_url?: string; theme?: string; iteration_start_date?: string; iteration_duration_days?: string }) =>
+  save: (data: { timezone?: string; kanban_url?: string; theme?: string; iteration_start_date?: string; iteration_duration_days?: string; reminder_delay?: string }) =>
     request<SettingsResponse>('/api/settings', {
       method: 'POST',
       body: JSON.stringify(data),

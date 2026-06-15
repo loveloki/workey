@@ -68,6 +68,24 @@ export interface Passkey {
   created_at: string;
   last_used_at?: string;
 }
+export interface PendingReminder {
+  id: number /* int64 */;
+  user_id: number /* int64 */;
+  send_at: string;
+  attempts: number /* int */;
+  created_at: string;
+}
+/**
+ * PushSubscription 浏览器推送订阅信息
+ */
+export interface PushSubscription {
+  id: number /* int64 */;
+  user_id: number /* int64 */;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  created_at: string;
+}
 /**
  * 数据导出结构
  */
@@ -142,6 +160,7 @@ export interface SettingsResponse {
   theme: string;
   iteration_start_date: string;
   iteration_duration_days: string;
+  reminder_delay: string;
 }
 export interface VersionResponse {
   commit: string;
@@ -183,6 +202,14 @@ export interface DataDeleteResponse {
   work_log_count: number /* int64 */;
   todo_count: number /* int64 */;
 }
+export interface VapidKeyResponse {
+  public_key: string;
+}
+export interface PushSubscribeRequest {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
 /**
  * SyncConfigResponse WebDAV 配置信息（密码脚敏信息不返回）
  */
@@ -191,7 +218,7 @@ export interface SyncConfigResponse {
   webdav_url: string;
   webdav_username: string;
   remote_path: string;
-  auto_sync_interval_minutes: number;
+  auto_sync_interval_minutes: number /* int */;
   created_at: string;
   updated_at: string;
   warning?: string;
@@ -261,6 +288,7 @@ export interface SyncConfig {
   webdav_url: string;
   webdav_username: string;
   remote_path: string;
+  auto_sync_interval_minutes: number /* int */;
   created_at: string;
   updated_at: string;
 }

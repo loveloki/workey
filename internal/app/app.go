@@ -56,6 +56,11 @@ func Run() {
 	syncManager.Start()
 	defer syncManager.Stop()
 
+	// 启动下班提醒通知器
+	notifier := NewNotifier()
+	notifier.Start()
+	defer notifier.Stop()
+
 	mux := http.NewServeMux()
 	registerRoutes(mux)
 
@@ -116,6 +121,10 @@ func registerRoutes(mux *http.ServeMux) {
 
 	// WebDAV 同步
 	syncRoutes(mux)
+
+	// 推送通知
+	mux.HandleFunc("/api/push/vapid-key", corsMiddleware(handleVapidKey))
+	mux.HandleFunc("/api/push/subscribe", corsMiddleware(authMiddleware(handlePushSubscribe)))
 
 	// 上传文件
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(filepath.Join(dataDir, "uploads")))))

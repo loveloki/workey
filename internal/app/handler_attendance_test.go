@@ -417,3 +417,112 @@ func TestHandleAttendanceStatsWithData(t *testing.T) {
 	assert.Equal(t, int64(1), resp.GlobalLeaveDays)
 	assert.Equal(t, int64(1), resp.GlobalRemaining)
 }
+
+func TestGetUserReminderDelay(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	userID := createTestUser(t, "reminderuser", "password123")
+
+	t.Run("默认延迟为 9 小时", func(t *testing.T) {
+		d := getUserReminderDelay(userID)
+		assert.Equal(t, 9, d)
+	})
+
+	t.Run("设置自定义延迟后返回正确值", func(t *testing.T) {
+		db.Exec("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'reminder_delay', '7')", userID)
+		d := getUserReminderDelay(userID)
+		assert.Equal(t, 7, d)
+	})
+
+	t.Run("无效的延迟值回退到默认", func(t *testing.T) {
+		db.Exec("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'reminder_delay', '0') ON CONFLICT(user_id, key) DO UPDATE SET value = '0'", userID)
+		d := getUserReminderDelay(userID)
+		assert.Equal(t, 9, d)
+	})
+}
+
+func TestScheduleReminderOnClockIn(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	userID := createTestUser(t, "clockreminder", "password123")
+
+	t.Run("打卡后创建 pending_reminder", func(t *testing.T) {
+		req := createAuthenticatedRequest(t, "POST", "/api/attendance/clock-in", `{}`, userID)
+		rr := httptest.NewRecorder()
+		handleClockIn(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var count int
+		err := db.QueryRow("SELECT COUNT(*) FROM pending_reminders WHERE user_id = ?", userID).Scan(&count)
+		require.NoError(t, err)
+		assert.Equal(t, 1, count)
+	})
+}
+
+func TestDeleteReminderOnClockOut(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	userID := createTestUser(t, "outreminder", "password123")
+
+	t.Run("签退后删除 pending_reminder", func(t *testing.T) {
+		db.Exec("INSERT INTO pending_reminders (user_id, send_at) VALUES (?, datetime('now', '+1 hour'))", userID)
+
+		reqIn := createAuthenticatedRequest(t, "POST", "/api/attendance/clock-in", `{}`, userID)
+		rrIn := httptest.NewRecorder()
+		handleClockIn(rrIn, reqIn)
+		require.Equal(t, http.StatusOK, rrIn.Code)
+
+		reqOut := createAuthenticatedRequest(t, "POST", "/api/attendance/clock-out", "", userID)
+		rrOut := httptest.NewRecorder()
+		handleClockOut(rrOut, reqOut)
+		assert.Equal(t, http.StatusOK, rrOut.Code)
+
+		var count int
+		db.QueryRow("SELECT COUNT(*) FROM pending_reminders WHERE user_id = ?", userID).Scan(&count)
+		assert.Equal(t, 0, count)
+	})
+}
+
+func TestDeleteReminderOnLeave(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	userID := createTestUser(t, "leavereminder", "password123")
+
+	t.Run("请假后删除 pending_reminder", func(t *testing.T) {
+		db.Exec("INSERT INTO pending_reminders (user_id, send_at) VALUES (?, datetime('now', '+1 hour'))", userID)
+
+		req := createAuthenticatedRequest(t, "POST", "/api/attendance/leave", "", userID)
+		rr := httptest.NewRecorder()
+		handleLeave(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var count int
+		db.QueryRow("SELECT COUNT(*) FROM pending_reminders WHERE user_id = ?", userID).Scan(&count)
+		assert.Equal(t, 0, count)
+	})
+}
+
+func TestScheduleReminderWithCustomDelay(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	userID := createTestUser(t, "customdelay", "password123")
+
+	t.Run("自定义延迟 7 小时", func(t *testing.T) {
+		db.Exec("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'reminder_delay', '7')", userID)
+
+		req := createAuthenticatedRequest(t, "POST", "/api/attendance/clock-in", `{}`, userID)
+		rr := httptest.NewRecorder()
+		handleClockIn(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var sendAt string
+		err := db.QueryRow("SELECT send_at FROM pending_reminders WHERE user_id = ?", userID).Scan(&sendAt)
+		require.NoError(t, err)
+		assert.NotEmpty(t, sendAt)
+	})
+}

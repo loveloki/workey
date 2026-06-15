@@ -3,7 +3,9 @@ package app
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
+	"time"
 )
 
 // 考勤打卡相关 handler
@@ -60,8 +62,54 @@ func handleClockIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	scheduleReminder(userID, now)
+
 	attendance := getAttendance(userID, date)
 	jsonOK(w, AttendanceResponse{Attendance: attendance})
+}
+
+func scheduleReminder(userID int64, clockInTime string) {
+	delay := getUserReminderDelay(userID)
+
+	t, err := time.Parse("2006-01-02 15:04:05", clockInTime)
+	if err != nil {
+		log.Printf("Failed to parse clock_in time %q: %v", clockInTime, err)
+		return
+	}
+	sendAt := t.Add(time.Duration(delay) * time.Hour).Format("2006-01-02 15:04:05")
+
+	_, err = db.Exec(
+		"INSERT INTO pending_reminders (user_id, send_at) VALUES (?, ?)",
+		userID, sendAt,
+	)
+	if err != nil {
+		log.Printf("Failed to insert pending reminder: %v", err)
+	}
+}
+
+func getUserReminderDelay(userID int64) int {
+	var val string
+	err := db.QueryRow("SELECT value FROM user_settings WHERE user_id = ? AND key = 'reminder_delay'", userID).Scan(&val)
+	if err != nil {
+		return 9
+	}
+	d := 9
+	if val != "" {
+		if v, err := time.ParseDuration(val + "h"); err == nil {
+			d = int(v.Hours())
+		}
+	}
+	if d <= 0 {
+		d = 9
+	}
+	return d
+}
+
+func deletePendingReminders(userID int64) {
+	_, err := db.Exec("DELETE FROM pending_reminders WHERE user_id = ?", userID)
+	if err != nil {
+		log.Printf("Failed to delete pending reminders for user %d: %v", userID, err)
+	}
 }
 
 func handleAttendanceOvertime(w http.ResponseWriter, r *http.Request) {
@@ -140,6 +188,8 @@ func handleLeave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	deletePendingReminders(userID)
+
 	attendance := getAttendance(userID, date)
 	jsonOK(w, AttendanceResponse{Attendance: attendance})
 }
@@ -169,6 +219,8 @@ func handleClockOut(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "Failed to clock out", http.StatusInternalServerError)
 		return
 	}
+
+	deletePendingReminders(userID)
 
 	attendance := getAttendance(userID, date)
 	jsonOK(w, AttendanceResponse{Attendance: attendance})

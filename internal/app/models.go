@@ -75,6 +75,24 @@ type Passkey struct {
 	LastUsedAt *string `json:"last_used_at"`
 }
 
+type PendingReminder struct {
+	ID        int64  `json:"id"`
+	UserID    int64  `json:"user_id"`
+	SendAt    string `json:"send_at"`
+	Attempts  int    `json:"attempts"`
+	CreatedAt string `json:"created_at"`
+}
+
+// PushSubscription 浏览器推送订阅信息
+type PushSubscription struct {
+	ID        int64  `json:"id"`
+	UserID    int64  `json:"user_id"`
+	Endpoint  string `json:"endpoint"`
+	P256dh    string `json:"p256dh"`
+	Auth      string `json:"auth"`
+	CreatedAt string `json:"created_at"`
+}
+
 // 数据导出结构
 type ExportData struct {
 	Attendance         []Attendance        `json:"attendance"`

@@ -97,6 +97,7 @@ type SettingsResponse struct {
 	Theme                 string `json:"theme"`
 	IterationStartDate    string `json:"iteration_start_date"`
 	IterationDurationDays string `json:"iteration_duration_days"`
+	ReminderDelay         string `json:"reminder_delay"`
 }
 
 // ─── System ─────────────────────────────────────────────────
@@ -148,6 +149,18 @@ type DataDeleteResponse struct {
 	AttendanceCount int64  `json:"attendance_count"`
 	WorkLogCount    int64  `json:"work_log_count"`
 	TodoCount       int64  `json:"todo_count"`
+}
+
+// ─── Push Notifications ──────────────────────────────────────────────────────────
+
+type VapidKeyResponse struct {
+	PublicKey string `json:"public_key"`
+}
+
+type PushSubscribeRequest struct {
+	Endpoint string `json:"endpoint"`
+	P256dh   string `json:"p256dh"`
+	Auth     string `json:"auth"`
 }
 
 // ─── Sync ────────────────────────────────────────────────────────────────────────

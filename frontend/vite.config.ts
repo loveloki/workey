@@ -11,6 +11,9 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'prompt',
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       includeAssets: ['favicon.svg', 'favicon.ico', 'logo192.png', 'logo512.png'],
       manifest: {
         name: 'Workey - 工作记录',
@@ -40,8 +43,11 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+      },
+      workbox: {
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
         runtimeCaching: [

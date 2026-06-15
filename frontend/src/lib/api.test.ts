@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { setToken, clearToken, isLoggedIn, base64urlToBuffer } from './api'
+import { setToken, clearToken, isLoggedIn, base64urlToBuffer, push } from './api'
 
 // ─── Token 管理 ─────────────────────────────────────────────────
 // 测试 Feature：用户认证凭证的本地持久化
@@ -131,6 +131,94 @@ describe('request behavior', () => {
 
     const { auth } = await import('./api')
     await expect(auth.me()).rejects.toThrow('Invalid response format')
+  })
+})
+
+// ─── Push Notifications API ─────────────────────────────────────
+describe('push API', () => {
+  let originalFetch: typeof globalThis.fetch
+
+  beforeEach(() => {
+    localStorage.clear()
+    originalFetch = globalThis.fetch
+  })
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  function mockFetch(status: number, body: any) {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      status,
+      ok: status >= 200 && status < 300,
+      headers: new Headers(),
+      text: () => Promise.resolve(JSON.stringify(body)),
+    })
+  }
+
+  it('getVapidKey 调用 GET /api/push/vapid-key', async () => {
+    mockFetch(200, { public_key: 'test-public-key' })
+    setToken('token')
+
+    const result = await push.getVapidKey()
+
+    expect(result.public_key).toBe('test-public-key')
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/push/vapid-key',
+      expect.any(Object),
+    )
+  })
+
+  it('subscribe 调用 POST /api/push/subscribe', async () => {
+    mockFetch(200, { message: 'ok' })
+    setToken('token')
+
+    const result = await push.subscribe({
+      endpoint: 'https://push.example.com',
+      p256dh: 'abc',
+      auth: 'def',
+    })
+
+    expect(result.message).toBe('ok')
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/push/subscribe',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ endpoint: 'https://push.example.com', p256dh: 'abc', auth: 'def' }),
+      }),
+    )
+  })
+
+  it('unsubscribe 调用 DELETE /api/push/subscribe', async () => {
+    mockFetch(200, { message: 'ok' })
+    setToken('token')
+
+    const result = await push.unsubscribe('https://push.example.com')
+
+    expect(result.message).toBe('ok')
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/push/subscribe',
+      expect.objectContaining({
+        method: 'DELETE',
+        body: JSON.stringify({ endpoint: 'https://push.example.com' }),
+      }),
+    )
+  })
+
+  it('unsubscribe 不带 endpoint 时删除所有订阅', async () => {
+    mockFetch(200, { message: 'ok' })
+    setToken('token')
+
+    const result = await push.unsubscribe()
+
+    expect(result.message).toBe('ok')
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/push/subscribe',
+      expect.objectContaining({
+        method: 'DELETE',
+        body: '{}',
+      }),
+    )
   })
 })
 

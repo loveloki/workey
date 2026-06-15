@@ -28,6 +28,7 @@ func handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		"theme":                   "light",
 		"iteration_start_date":    "2019-09-02",
 		"iteration_duration_days": "14",
+		"reminder_delay":          "9",
 	}
 
 	// 一次查询获取所有设置
@@ -51,6 +52,7 @@ func handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		Theme:                 values["theme"],
 		IterationStartDate:    values["iteration_start_date"],
 		IterationDurationDays: values["iteration_duration_days"],
+		ReminderDelay:         values["reminder_delay"],
 	})
 }
 
@@ -63,6 +65,7 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		Theme                 string `json:"theme"`
 		IterationStartDate    string `json:"iteration_start_date"`
 		IterationDurationDays string `json:"iteration_duration_days"`
+		ReminderDelay         string `json:"reminder_delay"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "Invalid request body", http.StatusBadRequest)
@@ -75,6 +78,7 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		"theme":                   req.Theme,
 		"iteration_start_date":    req.IterationStartDate,
 		"iteration_duration_days": req.IterationDurationDays,
+		"reminder_delay":          req.ReminderDelay,
 	}
 
 	for key, value := range settingsToSave {
@@ -98,6 +102,7 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		"theme":                   "light",
 		"iteration_start_date":    "2019-09-02",
 		"iteration_duration_days": "14",
+		"reminder_delay":          "9",
 	}
 	var resp SettingsResponse
 	for key, defaultVal := range defaults {
@@ -117,6 +122,8 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 			resp.IterationStartDate = val
 		case "iteration_duration_days":
 			resp.IterationDurationDays = val
+		case "reminder_delay":
+			resp.ReminderDelay = val
 		}
 	}
 

@@ -295,7 +295,7 @@ export function useSaveSettings() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (data: { timezone?: string; kanban_url?: string; theme?: string;
-      iteration_start_date?: string; iteration_duration_days?: string }) =>
+      iteration_start_date?: string; iteration_duration_days?: string; reminder_delay?: string }) =>
       settings.save(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.settings })

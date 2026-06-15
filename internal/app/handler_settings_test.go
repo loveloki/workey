@@ -76,6 +76,31 @@ func TestHandleSettings(t *testing.T) {
 		assert.Equal(t, "7", resp.IterationDurationDays)
 	})
 
+	t.Run("提醒延迟默认值为 9", func(t *testing.T) {
+		req := createAuthenticatedRequest(t, "GET", "/api/settings", "", userID)
+		rr := httptest.NewRecorder()
+
+		handleSettings(rr, req)
+
+		var resp SettingsResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		assert.Equal(t, "9", resp.ReminderDelay)
+	})
+
+	t.Run("更新提醒延迟", func(t *testing.T) {
+		body := `{"reminder_delay":"7"}`
+		req := createAuthenticatedRequest(t, "POST", "/api/settings", body, userID)
+		rr := httptest.NewRecorder()
+
+		handleSettings(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var resp SettingsResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		assert.Equal(t, "7", resp.ReminderDelay)
+	})
+
 	t.Run("PUT 方法不允许", func(t *testing.T) {
 		req := createAuthenticatedRequest(t, "PUT", "/api/settings", "", userID)
 		rr := httptest.NewRecorder()
