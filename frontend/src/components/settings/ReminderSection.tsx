@@ -42,7 +42,7 @@ export function ReminderSection() {
             >
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(h => (
                 <option key={h} value={String(h)}>
-                  {h} 小时（{String(9 + h).padStart(2, '0')}:00 → {String(9 + h).padStart(2, '0')}:00）
+                  {h} 小时（09:00 → {String(9 + h).padStart(2, '0')}:00）
                 </option>
               ))}
             </select>

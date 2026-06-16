@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 import { type Attendance } from '../lib/api'
 import { formatTime } from '../lib/date-utils'
 import { LoadingScreen } from '../components/LoadingScreen'
-import { useAttendanceToday, useClockIn, useClockOut, useLeave, useSetOvertime } from '../lib/queries'
+import { useAttendanceToday, useClockIn, useClockOut, useLeave, useSetOvertime, useSettings } from '../lib/queries'
 
 export const Route = createFileRoute('/clock')({ component: ClockPage })
 
@@ -42,6 +42,7 @@ function ClockWidget() {
   const clockOutMut = useClockOut()
   const leaveMut = useLeave()
   const setOvertimeMut = useSetOvertime()
+  const { data: settingsData } = useSettings()
 
   const acting = clockInMut.isPending || clockOutMut.isPending || leaveMut.isPending || setOvertimeMut.isPending
 
@@ -60,6 +61,21 @@ function ClockWidget() {
   const clockedIn = !!data?.clock_in
   const clockedOut = !!data?.clock_out
   const isLeave = data?.status === 'leave'
+
+  // 计算预计下班时间：上班打卡时间 + 提醒延迟小时数
+  let expectedClockOut: string | null = null
+  if (clockedIn && !clockedOut && !isLeave && data?.clock_in && settingsData) {
+    const delay = parseInt(settingsData.reminder_delay || '9', 10)
+    const clockInDate = new Date(data.clock_in)
+    if (!isNaN(clockInDate.getTime())) {
+      const expected = new Date(clockInDate.getTime() + delay * 60 * 60 * 1000)
+      expectedClockOut = expected.toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+    }
+  }
 
   const clockIn = async (overtime?: boolean) => {
     try {
@@ -195,6 +211,15 @@ function ClockWidget() {
           <p className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">下班</p>
           <p className="font-mono text-xl font-bold text-[var(--color-ink)]">{isLeave ? '--:--' : formatTime(data?.clock_out)}</p>
         </div>
+        {!isLeave && clockedIn && expectedClockOut && (
+          <>
+            <div className="h-10 w-px bg-[var(--color-border)]" />
+            <div className="text-center">
+              <p className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">预计下班</p>
+              <p className="font-mono text-xl font-bold text-[var(--color-ink)]">{expectedClockOut}</p>
+            </div>
+          </>
+        )}
         {!isLeave && clockedIn && data?.clock_in && data?.clock_out && (
           <>
             <div className="h-10 w-px bg-[var(--color-border)]" />
