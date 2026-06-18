@@ -3,8 +3,10 @@ package app
 import (
 	"database/sql"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -17,14 +19,14 @@ func handleClockIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := getUserID(r)
-	date := today()
-	now := nowDatetime()
+	date, nowStr, now := nowAll()
 
 	var req struct {
 		IsOvertime *bool `json:"is_overtime"`
 	}
-	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		jsonError(w, "Invalid request body", http.StatusBadRequest)
+		return
 	}
 	overtime := 0
 	if req.IsOvertime != nil && *req.IsOvertime {
@@ -42,7 +44,7 @@ func handleClockIn(w http.ResponseWriter, r *http.Request) {
 		}
 		_, err = db.Exec(
 			"UPDATE attendance SET clock_in = ?, status = 'normal', is_overtime = ?, updated_at = ? WHERE id = ?",
-			now, overtime, now, existingID,
+			nowStr, overtime, nowStr, existingID,
 		)
 		if err != nil {
 			jsonError(w, "Failed to clock in", http.StatusInternalServerError)
@@ -51,7 +53,7 @@ func handleClockIn(w http.ResponseWriter, r *http.Request) {
 	} else if err == sql.ErrNoRows {
 		_, err = db.Exec(
 			"INSERT INTO attendance (user_id, date, clock_in, status, is_overtime, created_at, updated_at) VALUES (?, ?, ?, 'normal', ?, ?, ?)",
-			userID, date, now, overtime, now, now,
+			userID, date, nowStr, overtime, nowStr, nowStr,
 		)
 		if err != nil {
 			jsonError(w, "Failed to clock in", http.StatusInternalServerError)
@@ -64,21 +66,19 @@ func handleClockIn(w http.ResponseWriter, r *http.Request) {
 
 	scheduleReminder(userID, now)
 
-	attendance := getAttendance(userID, date)
+	attendance, err := getAttendance(userID, date)
+	if err != nil {
+		jsonError(w, "Failed to retrieve attendance", http.StatusInternalServerError)
+		return
+	}
 	jsonOK(w, AttendanceResponse{Attendance: attendance})
 }
 
-func scheduleReminder(userID int64, clockInTime string) {
+func scheduleReminder(userID int64, clockInTime time.Time) {
 	delay := getUserReminderDelay(userID)
+	sendAt := clockInTime.Add(time.Duration(delay) * time.Hour).Format(time.RFC3339)
 
-	t, err := time.Parse("2006-01-02 15:04:05", clockInTime)
-	if err != nil {
-		log.Printf("Failed to parse clock_in time %q: %v", clockInTime, err)
-		return
-	}
-	sendAt := t.Add(time.Duration(delay) * time.Hour).Format("2006-01-02 15:04:05")
-
-	_, err = db.Exec(
+	_, err := db.Exec(
 		"INSERT INTO pending_reminders (user_id, send_at) VALUES (?, ?)",
 		userID, sendAt,
 	)
@@ -93,16 +93,10 @@ func getUserReminderDelay(userID int64) int {
 	if err != nil {
 		return 9
 	}
-	d := 9
-	if val != "" {
-		if v, err := time.ParseDuration(val + "h"); err == nil {
-			d = int(v.Hours())
-		}
+	if v, err := strconv.Atoi(val); err == nil && v > 0 {
+		return v
 	}
-	if d <= 0 {
-		d = 9
-	}
-	return d
+	return 9
 }
 
 func deletePendingReminders(userID int64) {
@@ -136,7 +130,7 @@ func handleAttendanceOvertime(w http.ResponseWriter, r *http.Request) {
 	if req.IsOvertime {
 		overtime = 1
 	}
-	now := nowDatetime()
+	_, now, _ := nowAll()
 
 	res, err := db.Exec(
 		"UPDATE attendance SET is_overtime = ?, updated_at = ? WHERE user_id = ? AND date = ?",
@@ -152,7 +146,12 @@ func handleAttendanceOvertime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonOK(w, AttendanceResponse{Attendance: getAttendance(userID, req.Date)})
+	attendance, err := getAttendance(userID, req.Date)
+	if err != nil {
+		jsonError(w, "Failed to retrieve attendance", http.StatusInternalServerError)
+		return
+	}
+	jsonOK(w, AttendanceResponse{Attendance: attendance})
 }
 
 func handleLeave(w http.ResponseWriter, r *http.Request) {
@@ -162,8 +161,7 @@ func handleLeave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := getUserID(r)
-	date := today()
-	now := nowDatetime()
+	date, nowStr, _ := nowAll()
 
 	var existingID int64
 	err := db.QueryRow("SELECT id FROM attendance WHERE user_id = ? AND date = ?", userID, date).Scan(&existingID)
@@ -171,12 +169,12 @@ func handleLeave(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		_, err = db.Exec(
 			"UPDATE attendance SET clock_in = NULL, clock_out = NULL, status = 'leave', updated_at = ? WHERE id = ?",
-			now, existingID,
+			nowStr, existingID,
 		)
 	} else if err == sql.ErrNoRows {
 		_, err = db.Exec(
 			"INSERT INTO attendance (user_id, date, clock_in, clock_out, status, created_at, updated_at) VALUES (?, ?, NULL, NULL, 'leave', ?, ?)",
-			userID, date, now, now,
+			userID, date, nowStr, nowStr,
 		)
 	} else {
 		jsonError(w, "Database error", http.StatusInternalServerError)
@@ -190,7 +188,11 @@ func handleLeave(w http.ResponseWriter, r *http.Request) {
 
 	deletePendingReminders(userID)
 
-	attendance := getAttendance(userID, date)
+	attendance, err := getAttendance(userID, date)
+	if err != nil {
+		jsonError(w, "Failed to retrieve attendance", http.StatusInternalServerError)
+		return
+	}
 	jsonOK(w, AttendanceResponse{Attendance: attendance})
 }
 
@@ -201,8 +203,7 @@ func handleClockOut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := getUserID(r)
-	date := today()
-	now := nowDatetime()
+	date, nowStr, _ := nowAll()
 
 	var existingID int64
 	err := db.QueryRow("SELECT id FROM attendance WHERE user_id = ? AND date = ?", userID, date).Scan(&existingID)
@@ -213,7 +214,7 @@ func handleClockOut(w http.ResponseWriter, r *http.Request) {
 
 	_, err = db.Exec(
 		"UPDATE attendance SET clock_out = ?, status = 'normal', updated_at = ? WHERE user_id = ? AND date = ?",
-		now, now, userID, date,
+		nowStr, nowStr, userID, date,
 	)
 	if err != nil {
 		jsonError(w, "Failed to clock out", http.StatusInternalServerError)
@@ -222,7 +223,11 @@ func handleClockOut(w http.ResponseWriter, r *http.Request) {
 
 	deletePendingReminders(userID)
 
-	attendance := getAttendance(userID, date)
+	attendance, err := getAttendance(userID, date)
+	if err != nil {
+		jsonError(w, "Failed to retrieve attendance", http.StatusInternalServerError)
+		return
+	}
 	jsonOK(w, AttendanceResponse{Attendance: attendance})
 }
 
@@ -233,8 +238,12 @@ func handleAttendanceToday(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := getUserID(r)
-	attendance := getAttendance(userID, today())
-	if attendance == nil {
+	attendance, err := getAttendance(userID, today())
+	if err != nil {
+		if err != sql.ErrNoRows {
+			jsonError(w, "Database error", http.StatusInternalServerError)
+			return
+		}
 		jsonOK(w, AttendanceResponse{})
 		return
 	}
@@ -271,6 +280,17 @@ func handleAttendanceStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func scanAttendance(s scanner) (Attendance, error) {
+	var a Attendance
+	var ov int
+	err := s.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &ov, &a.CreatedAt, &a.UpdatedAt)
+	if err != nil {
+		return a, err
+	}
+	a.IsOvertime = ov == 1
+	return a, nil
+}
+
 func handleAttendanceRange(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -297,26 +317,27 @@ func handleAttendanceRange(w http.ResponseWriter, r *http.Request) {
 
 	attendances := []Attendance{}
 	for rows.Next() {
-		var a Attendance
-		var ov int
-		rows.Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &ov, &a.CreatedAt, &a.UpdatedAt)
-		a.IsOvertime = ov == 1
+		a, err := scanAttendance(rows)
+		if err != nil {
+			jsonError(w, "Failed to scan row", http.StatusInternalServerError)
+			return
+		}
 		attendances = append(attendances, a)
+	}
+	if err := rows.Err(); err != nil {
+		jsonError(w, "Database error", http.StatusInternalServerError)
+		return
 	}
 	jsonOK(w, AttendanceListResponse{Attendances: attendances})
 }
 
-// getAttendance 查询指定用户指定日期的考勤记录
-func getAttendance(userID int64, date string) *Attendance {
-	var a Attendance
-	var ov int
-	err := db.QueryRow(
+func getAttendance(userID int64, date string) (*Attendance, error) {
+	a, err := scanAttendance(db.QueryRow(
 		"SELECT id, user_id, date, clock_in, clock_out, status, is_overtime, created_at, updated_at FROM attendance WHERE user_id = ? AND date = ?",
 		userID, date,
-	).Scan(&a.ID, &a.UserID, &a.Date, &a.ClockIn, &a.ClockOut, &a.Status, &ov, &a.CreatedAt, &a.UpdatedAt)
+	))
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	a.IsOvertime = ov == 1
-	return &a
+	return &a, nil
 }

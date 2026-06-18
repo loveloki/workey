@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -376,9 +377,10 @@ func TestHandleAttendanceRangeWithData(t *testing.T) {
 	defer cleanup()
 
 	userID := createTestUser(t, "rangedata", "password123")
+	_, now, _ := nowAll()
 
-	db.Exec("INSERT INTO attendance (user_id, date, clock_in, clock_out, status, is_overtime, created_at, updated_at) VALUES (?, '2024-06-01', '09:00', '18:00', 'normal', 1, datetime('now'), datetime('now'))", userID)
-	db.Exec("INSERT INTO attendance (user_id, date, status, is_overtime, created_at, updated_at) VALUES (?, '2024-06-02', 'leave', 0, datetime('now'), datetime('now'))", userID)
+	db.Exec("INSERT INTO attendance (user_id, date, clock_in, clock_out, status, is_overtime, created_at, updated_at) VALUES (?, '2024-06-01', '09:00', '18:00', 'normal', 1, ?, ?)", userID, now, now)
+	db.Exec("INSERT INTO attendance (user_id, date, status, is_overtime, created_at, updated_at) VALUES (?, '2024-06-02', 'leave', 0, ?, ?)", userID, now, now)
 
 	req := createAuthenticatedRequest(t, "GET", "/api/attendance/range?start=2024-06-01&end=2024-06-30", "", userID)
 	rr := httptest.NewRecorder()
@@ -398,11 +400,12 @@ func TestHandleAttendanceStatsWithData(t *testing.T) {
 	defer cleanup()
 
 	userID := createTestUser(t, "statsdata", "password123")
+	_, now, _ := nowAll()
 
 	// 插入 overtime 和 leave 数据
-	db.Exec("INSERT INTO attendance (user_id, date, clock_in, status, is_overtime, created_at, updated_at) VALUES (?, '2024-01-01', '09:00', 'normal', 1, datetime('now'), datetime('now'))", userID)
-	db.Exec("INSERT INTO attendance (user_id, date, clock_in, status, is_overtime, created_at, updated_at) VALUES (?, '2024-01-02', '09:00', 'normal', 1, datetime('now'), datetime('now'))", userID)
-	db.Exec("INSERT INTO attendance (user_id, date, status, is_overtime, created_at, updated_at) VALUES (?, '2024-01-03', 'leave', 0, datetime('now'), datetime('now'))", userID)
+	db.Exec("INSERT INTO attendance (user_id, date, clock_in, status, is_overtime, created_at, updated_at) VALUES (?, '2024-01-01', '09:00', 'normal', 1, ?, ?)", userID, now, now)
+	db.Exec("INSERT INTO attendance (user_id, date, clock_in, status, is_overtime, created_at, updated_at) VALUES (?, '2024-01-02', '09:00', 'normal', 1, ?, ?)", userID, now, now)
+	db.Exec("INSERT INTO attendance (user_id, date, status, is_overtime, created_at, updated_at) VALUES (?, '2024-01-03', 'leave', 0, ?, ?)", userID, now, now)
 
 	req := createAuthenticatedRequest(t, "GET", "/api/attendance/stats", "", userID)
 	rr := httptest.NewRecorder()
@@ -468,7 +471,7 @@ func TestDeleteReminderOnClockOut(t *testing.T) {
 	userID := createTestUser(t, "outreminder", "password123")
 
 	t.Run("签退后删除 pending_reminder", func(t *testing.T) {
-		db.Exec("INSERT INTO pending_reminders (user_id, send_at) VALUES (?, datetime('now', '+1 hour'))", userID)
+		db.Exec("INSERT INTO pending_reminders (user_id, send_at) VALUES (?, ?)", userID, time.Now().UTC().Add(time.Hour).Format(time.RFC3339))
 
 		reqIn := createAuthenticatedRequest(t, "POST", "/api/attendance/clock-in", `{}`, userID)
 		rrIn := httptest.NewRecorder()
@@ -493,7 +496,7 @@ func TestDeleteReminderOnLeave(t *testing.T) {
 	userID := createTestUser(t, "leavereminder", "password123")
 
 	t.Run("请假后删除 pending_reminder", func(t *testing.T) {
-		db.Exec("INSERT INTO pending_reminders (user_id, send_at) VALUES (?, datetime('now', '+1 hour'))", userID)
+		db.Exec("INSERT INTO pending_reminders (user_id, send_at) VALUES (?, ?)", userID, time.Now().UTC().Add(time.Hour).Format(time.RFC3339))
 
 		req := createAuthenticatedRequest(t, "POST", "/api/attendance/leave", "", userID)
 		rr := httptest.NewRecorder()
@@ -503,6 +506,134 @@ func TestDeleteReminderOnLeave(t *testing.T) {
 		var count int
 		db.QueryRow("SELECT COUNT(*) FROM pending_reminders WHERE user_id = ?", userID).Scan(&count)
 		assert.Equal(t, 0, count)
+	})
+}
+
+func TestFullReminderFlow(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	userID := createTestUser(t, "fullflow", "password123")
+
+	t.Run("打卡后创建 pending_reminder，send_at 格式和值正确", func(t *testing.T) {
+		req := createAuthenticatedRequest(t, "POST", "/api/attendance/clock-in", `{}`, userID)
+		rr := httptest.NewRecorder()
+		handleClockIn(rr, req)
+		require.Equal(t, http.StatusOK, rr.Code)
+
+		var count int
+		err := db.QueryRow("SELECT COUNT(*) FROM pending_reminders WHERE user_id = ?", userID).Scan(&count)
+		require.NoError(t, err)
+		require.Equal(t, 1, count, "打卡后应创建一条待发送提醒")
+
+		var sendAt string
+		err = db.QueryRow("SELECT send_at FROM pending_reminders WHERE user_id = ?", userID).Scan(&sendAt)
+		require.NoError(t, err)
+
+		_, now, _ := nowAll()
+		t.Logf("now: %q", now)
+		t.Logf("send_at(raw):  %q", sendAt)
+
+		// time.RFC3339 格式化，send_at 应在未来（默认延迟 9 小时）
+		assert.Contains(t, sendAt, "T", "RFC3339 格式包含 T")
+		assert.Greater(t, sendAt, now, "send_at 应在当前时间之后")
+	})
+
+	t.Run("modernc.org/sqlite 存储 send_at 时自动转为 RFC3339", func(t *testing.T) {
+		// 用空格格式插入
+		spaceFmt := time.Now().UTC().Format("2006-01-02 15:04:05") // 故意用空格格式测试 SQLite 自动转换
+		_, err := db.Exec(
+			"INSERT INTO pending_reminders (user_id, send_at, attempts) VALUES (?, ?, 0)",
+			userID, spaceFmt,
+		)
+		require.NoError(t, err)
+
+		var stored string
+		err = db.QueryRow("SELECT send_at FROM pending_reminders WHERE user_id = ? AND attempts = 0 ORDER BY id DESC LIMIT 1", userID).Scan(&stored)
+		require.NoError(t, err)
+
+		t.Logf("插入值(空格): %q", spaceFmt)
+		t.Logf("读出值:       %q", stored)
+
+		// modernc.org/sqlite 自动转为 RFC3339
+		assert.Contains(t, stored, "T", "读出值被转为 RFC3339")
+	})
+
+	t.Run("processPending 处理到期提醒（无订阅时静默跳过）", func(t *testing.T) {
+		notifier := NewNotifier()
+
+		// 先查一下当前有多少 pending_reminders
+		var before int
+		require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM pending_reminders WHERE user_id = ?", userID).Scan(&before))
+
+		notifier.processPending()
+
+		var after int
+		require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM pending_reminders WHERE user_id = ?", userID).Scan(&after))
+
+		t.Logf("processPending 前: %d 条, 后: %d 条", before, after)
+		// 无订阅时静默跳过，条数不变
+		assert.Equal(t, before, after, "无推送订阅时 processPending 不应删除提醒")
+	})
+
+	t.Run("有推送订阅时 processPending 尝试发送（会失败）", func(t *testing.T) {
+		notifier := NewNotifier()
+
+		// 插入一条假的推送订阅
+		_, err := db.Exec(
+			"INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, 'https://example.com/push', 'fake-p256dh', 'fake-auth')",
+			userID,
+		)
+		require.NoError(t, err)
+
+		// 确保有一条到期的提醒
+		var reminderID int64
+		_, nowStr, _ := nowAll()
+		err = db.QueryRow(
+			"SELECT id FROM pending_reminders WHERE user_id = ? AND send_at <= ? LIMIT 1",
+			userID, nowStr,
+		).Scan(&reminderID)
+
+		if err != nil {
+			_, err = db.Exec(
+				"INSERT INTO pending_reminders (user_id, send_at, attempts) VALUES (?, ?, 0)",
+				userID, time.Now().UTC().Add(-time.Minute).Format(time.RFC3339),
+			)
+			require.NoError(t, err)
+			require.NoError(t, db.QueryRow("SELECT id FROM pending_reminders WHERE user_id = ? ORDER BY id DESC LIMIT 1", userID).Scan(&reminderID))
+		}
+
+		var attemptsBefore int
+		require.NoError(t, db.QueryRow("SELECT attempts FROM pending_reminders WHERE id = ?", reminderID).Scan(&attemptsBefore))
+
+		notifier.processPending()
+
+		var attemptsAfter int
+		err = db.QueryRow("SELECT attempts FROM pending_reminders WHERE id = ?", reminderID).Scan(&attemptsAfter)
+		require.NoError(t, err)
+
+		t.Logf("提醒 %d: attempts %d → %d", reminderID, attemptsBefore, attemptsAfter)
+		// 发送到假端点会失败，attempts 应增加
+		assert.Greater(t, attemptsAfter, attemptsBefore, "推送到无效端点应增加 attempts")
+	})
+
+	t.Run("下班打卡后删除 pending_reminder", func(t *testing.T) {
+		db.Exec("DELETE FROM attendance WHERE user_id = ?", userID)
+		db.Exec("DELETE FROM pending_reminders WHERE user_id = ?", userID)
+
+		reqIn := createAuthenticatedRequest(t, "POST", "/api/attendance/clock-in", `{}`, userID)
+		rrIn := httptest.NewRecorder()
+		handleClockIn(rrIn, reqIn)
+		require.Equal(t, http.StatusOK, rrIn.Code)
+
+		reqOut := createAuthenticatedRequest(t, "POST", "/api/attendance/clock-out", "", userID)
+		rrOut := httptest.NewRecorder()
+		handleClockOut(rrOut, reqOut)
+		assert.Equal(t, http.StatusOK, rrOut.Code)
+
+		var count int
+		require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM pending_reminders WHERE user_id = ?", userID).Scan(&count))
+		assert.Equal(t, 0, count, "下班后应删除所有待发送提醒")
 	})
 }
 

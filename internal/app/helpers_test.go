@@ -10,13 +10,13 @@ import (
 
 func TestToday(t *testing.T) {
 	result := today()
-	expected := time.Now().Format("2006-01-02")
+	expected := time.Now().UTC().Format("2006-01-02")
 	assert.Equal(t, expected, result)
 }
 
 func TestNowDatetime(t *testing.T) {
 	result := nowDatetime()
-	assert.Regexp(t, `^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$`, result)
+	assert.Regexp(t, `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`, result)
 }
 
 func TestBase64URLEncode(t *testing.T) {
