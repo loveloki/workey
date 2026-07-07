@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { PageHeader } from '../components/PageHeader'
 import { useAuthGuard } from '../lib/useAuthGuard'
 import { useToast } from '../lib/toast-context'
 import { useState, useEffect } from 'react'
@@ -17,14 +18,11 @@ function ClockPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
-      <div className="mb-8 text-center">
-        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">打卡签到</p>
-        <h1
-          className="font-serif text-3xl font-normal tracking-tight text-[var(--color-ink)] sm:text-4xl"
-        >
-          {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
-        </h1>
-      </div>
+      <PageHeader
+        eyebrow="打卡签到"
+        title={new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
+        centered
+      />
       <ClockWidget />
     </main>
   )

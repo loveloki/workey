@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { PageHeader } from '../components/PageHeader'
 import { useAuthGuard } from '../lib/useAuthGuard'
 import { useToast } from '../lib/toast-context'
 import { useState, useEffect, useMemo } from 'react'
@@ -215,7 +216,7 @@ function HistoryPage() {
   }
 
   const presets: { key: RangePreset | 'custom' | 'iteration'; label: string }[] = [
-    { key: 'iteration', label: '本 iteration' },
+    { key: 'iteration', label: '本迭代' },
     { key: 'month', label: '本月' },
     { key: 'quarter', label: '季度' },
     { key: 'year', label: '年度' },
@@ -258,13 +259,14 @@ function HistoryPage() {
       entry.attendance ?? null,
       entry.log?.content || '',
       entry.todos,
+      { includeMeta: true },
     )
   }
 
   /** Build markdown for all days and trigger download */
   const downloadAll = () => {
     const parts = sortedDates.map(d => getDayMarkdown(d))
-    const content = '# 工作记录\n\n' + parts.join('\n---\n\n')
+    const content = '# 工作记录\n\n' + parts.join('\n\n')
     const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -280,17 +282,13 @@ function HistoryPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
-      <div className="mb-6 flex items-start justify-between gap-3">
-        <div>
-          <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">历史记录</p>
-          <h1 className="font-serif text-3xl font-normal tracking-tight text-[var(--color-ink)]">
-            工作回顾
-          </h1>
-        </div>
-        {sortedDates.length > 0 && (
+      <PageHeader
+        eyebrow="回顾"
+        title="工作回顾"
+        actions={sortedDates.length > 0 && (
           <button
             onClick={downloadAll}
-            className="mt-2 flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-[var(--color-border)] px-3 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-hover)]"
+            className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-[var(--color-border)] px-3 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-hover)]"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -300,7 +298,7 @@ function HistoryPage() {
             <span className="hidden sm:inline">下载</span> .md
           </button>
         )}
-      </div>
+      />
 
       {/* Preset buttons */}
       <div className="mb-4 flex flex-wrap gap-2">

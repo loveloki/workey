@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { PageHeader } from '../components/PageHeader'
 import { useAuthGuard } from '../lib/useAuthGuard'
 import { useToast } from '../lib/toast-context'
 import { useState, useRef } from 'react'
@@ -16,17 +17,7 @@ function TodosPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">§ 待办</p>
-          <h1
-            className="font-serif text-3xl font-normal tracking-tight text-[var(--color-ink)] sm:text-4xl"
-          >
-            TODO 清单
-          </h1>
-        </div>
-        <KanbanLink />
-      </div>
+      <PageHeader eyebrow="待办" title="待办事项" actions={<KanbanLink />} />
 
       <TodoList />
     </main>

@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { PageHeader } from '../components/PageHeader'
 import { useAuthGuard } from '../lib/useAuthGuard'
 import { useState } from 'react'
 import { type Checklist } from '../lib/api'
@@ -18,16 +19,7 @@ function ChecklistsPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
-      <div className="mb-6">
-        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">
-          § 检查清单
-        </p>
-        <h1
-          className="text-3xl font-normal tracking-tight text-[var(--color-ink)] sm:text-4xl font-serif"
-        >
-          Checklists
-        </h1>
-      </div>
+      <PageHeader eyebrow="清单" title="检查清单" />
       <ChecklistManager />
     </main>
   )

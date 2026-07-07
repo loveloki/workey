@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { PageHeader } from '../components/PageHeader'
 import { useAuthGuard } from '../lib/useAuthGuard'
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { type Attendance } from '../lib/api'
@@ -61,12 +62,7 @@ function TrendsPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
-      <div className="mb-6">
-        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">数据趋势</p>
-        <h1 className="text-3xl font-normal tracking-tight font-serif text-[var(--color-ink)]">
-          上下班时间
-        </h1>
-      </div>
+      <PageHeader eyebrow="趋势" title="上下班时间" />
 
       <div className="mb-4 flex flex-wrap gap-2">
         {presets.map(p => (

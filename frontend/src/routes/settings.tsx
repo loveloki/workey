@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { PageHeader } from '../components/PageHeader'
 import { useAuthGuard } from '../lib/useAuthGuard'
 import { LoadingScreen } from '../components/LoadingScreen'
 import { ThemeSection } from '../components/settings/ThemeSection'
@@ -23,14 +24,7 @@ function SettingsPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
-      <div className="mb-6">
-        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">§ 设置</p>
-        <h1
-          className="text-3xl font-normal tracking-tight text-[var(--color-ink)] sm:text-4xl font-serif"
-        >
-          偏好设置
-        </h1>
-      </div>
+      <PageHeader eyebrow="设置" title="偏好设置" />
 
       <div className="grid gap-6">
         <ThemeSection />

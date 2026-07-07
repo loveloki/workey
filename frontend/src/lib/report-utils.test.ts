@@ -41,4 +41,29 @@ describe('formatDayMarkdown', () => {
   it('日志前后空白被 trim', () => {
     check('  \n 内容 \n  ', [], '内容')
   })
+
+  describe('includeMeta 选项（历史导出）', () => {
+    const att = {
+      id: 1, user_id: 1, date: '2026-05-15',
+      clock_in: '2026-05-15T09:05:00+08:00',
+      clock_out: '2026-05-15T18:30:00+08:00',
+      status: 'normal', is_overtime: false, created_at: '', updated_at: '',
+    } as never
+
+    it('包含日期标题与上下班时间', () => {
+      const result = formatDayMarkdown('2026-05-15', att, '内容', [], { includeMeta: true })
+      expect(result).toMatch(/^## 2026-05-15\n> 上班 \d{2}:\d{2} · 下班 \d{2}:\d{2}\n\n内容$/)
+    })
+
+    it('无考勤时仅包含日期标题', () => {
+      const result = formatDayMarkdown('2026-05-15', null, '内容', [], { includeMeta: true })
+      expect(result).toBe('## 2026-05-15\n\n内容')
+    })
+
+    it('请假显示请假标记', () => {
+      const leave = { ...(att as object), status: 'leave' } as never
+      const result = formatDayMarkdown('2026-05-15', leave, '', [], { includeMeta: true })
+      expect(result).toBe('## 2026-05-15\n> 请假\n\n（未记录工作内容）')
+    })
+  })
 })

@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { PageHeader } from '../components/PageHeader'
 import { useAuthGuard } from '../lib/useAuthGuard'
 import { useEffect, useCallback } from 'react'
 import { attendance, workLogs, todos as todosApi } from '../lib/api'
@@ -53,14 +54,10 @@ function Dashboard() {
 
   return (
     <main className="max-w-7xl mx-auto px-4 pb-8 pt-8">
-      <div className="mb-6">
-        <p className="mb-1 font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">今日工作</p>
-        <h1
-          className="text-3xl font-normal tracking-tight text-[var(--color-ink)] sm:text-4xl font-serif"
-        >
-          {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
-        </h1>
-      </div>
+      <PageHeader
+        eyebrow="今日工作"
+        title={new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
+      />
 
       {/* Desktop: two-column layout */}
       <div className="hidden md:flex gap-6 items-start">

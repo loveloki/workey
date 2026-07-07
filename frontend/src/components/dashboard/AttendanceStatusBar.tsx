@@ -31,10 +31,10 @@ export function AttendanceStatusBar({ data }: AttendanceStatusBarProps) {
   }
 
   return (
-    <div className="flex items-center gap-6 px-6 py-4">
+    <div className="flex items-center gap-3 sm:gap-6 px-4 sm:px-6 py-4">
       <div className="flex items-center gap-2">
         {data.is_overtime && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">加班</span>}
-        {data.status === 'leave' ? (
+        {isLeave ? (
           <span className="font-mono text-sm font-bold text-[var(--color-danger-text,#dc2626)]">已请假</span>
         ) : (
           <>
@@ -43,21 +43,17 @@ export function AttendanceStatusBar({ data }: AttendanceStatusBarProps) {
           </>
         )}
       </div>
-      {data.status !== 'leave' && (
+      {/* 已下班显示实际下班时间，未下班则显示预计下班时间，两者不同时出现 */}
+      {!isLeave && (
         <>
           <div className="h-4 w-px bg-[var(--color-border)]" />
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">下班</span>
-            <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(data.clock_out)}</span>
-          </div>
-        </>
-      )}
-      {expectedClockOut && (
-        <>
-          <div className="h-4 w-px bg-[var(--color-border)]" />
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">预计</span>
-            <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{expectedClockOut}</span>
+            <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">
+              {clockedOut ? '下班' : '预计'}
+            </span>
+            <span className="font-mono text-sm font-bold text-[var(--color-ink)]">
+              {clockedOut ? formatTime(data.clock_out) : (expectedClockOut ?? '--:--')}
+            </span>
           </div>
         </>
       )}
