@@ -56,8 +56,10 @@ func handleHistoryDateRange(w http.ResponseWriter, r *http.Request) {
 			SELECT date AS d FROM work_logs WHERE user_id = ?
 			UNION ALL
 			SELECT date(updated_at) AS d FROM todos WHERE user_id = ? AND done = 1
+			UNION ALL
+			SELECT occurred_on AS d FROM ticket_issues WHERE user_id = ?
 		)
-	`, userID, userID, userID).Scan(&earliest, &latest)
+	`, userID, userID, userID, userID).Scan(&earliest, &latest)
 	if err != nil {
 		jsonError(w, "Internal error", http.StatusInternalServerError)
 		return

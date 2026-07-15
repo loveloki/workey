@@ -1,0 +1,418 @@
+import { createFileRoute } from '@tanstack/react-router'
+import { useMemo, useState } from 'react'
+import { LoadingScreen } from '../components/LoadingScreen'
+import { PageHeader } from '../components/PageHeader'
+import {
+  type TicketIssue,
+  type TicketIssueFilters,
+  type TicketIssueInput,
+  type TicketCauseType,
+} from '../lib/api'
+import { formatDateDisplay, getDateRange, getToday } from '../lib/date-utils'
+import {
+  useCreateTicketIssue,
+  useDeleteTicketIssue,
+  useTicketIssueList,
+  useTicketIssueStats,
+  useUpdateTicketIssue,
+} from '../lib/queries'
+import { useAuthGuard } from '../lib/useAuthGuard'
+import { useToast } from '../lib/toast-context'
+
+export const Route = createFileRoute('/ticket-issues')({ component: TicketIssuesPage })
+
+type DatePreset = 'all' | 'month' | 'quarter' | 'year' | 'custom'
+
+const issueInputClass = 'w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-mono text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-border-focus)]'
+
+const emptyIssue = (): TicketIssueInput => ({
+  ticket_no: '',
+  ticket_title: '',
+  ticket_url: '',
+  occurred_on: getToday(),
+  cause_type: 'code',
+  problem_description: '',
+  cause_detail: '',
+  resolution: '',
+})
+
+function TicketIssuesPage() {
+  const { user, loading } = useAuthGuard()
+  const [preset, setPreset] = useState<DatePreset>('all')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
+  const [activeCustom, setActiveCustom] = useState<{ start: string; end: string } | null>(null)
+  const [causeType, setCauseType] = useState<TicketCauseType | ''>('')
+  const [searchText, setSearchText] = useState('')
+  const [keyword, setKeyword] = useState('')
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<TicketIssue | null>(null)
+
+  const dateRange = useMemo(() => {
+    if (preset === 'all') return { start: '', end: '' }
+    if (preset === 'custom') return activeCustom ?? { start: '', end: '' }
+    return getDateRange(preset)
+  }, [preset, activeCustom])
+
+  const listFilters = useMemo<TicketIssueFilters>(() => ({
+    ...dateRange,
+    cause_type: causeType,
+    q: keyword,
+  }), [dateRange, causeType, keyword])
+  const statsFilters = useMemo<TicketIssueFilters>(() => ({
+    ...dateRange,
+    q: keyword,
+  }), [dateRange, keyword])
+
+  const { data: listData, isFetching } = useTicketIssueList(listFilters, !!user)
+  const { data: statsData } = useTicketIssueStats(statsFilters, !!user)
+  const issues = listData?.ticket_issues ?? []
+
+  if (loading) return <LoadingScreen />
+  if (!user) return null
+
+  const startCreate = () => {
+    setEditing(null)
+    setFormOpen(true)
+  }
+
+  const startEdit = (issue: TicketIssue) => {
+    setEditing(issue)
+    setFormOpen(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  return (
+    <main className="mx-auto max-w-5xl px-4 pb-8 pt-8">
+      <PageHeader
+        eyebrow="复查"
+        title="工单问题记录"
+        actions={(
+          <button
+            onClick={startCreate}
+            className="rounded-md bg-[var(--color-solid)] px-4 py-2 font-mono text-sm text-[var(--color-solid-text)] hover:bg-[var(--color-solid-hover)]"
+          >
+            + 记录问题
+          </button>
+        )}
+      />
+
+      {formOpen && (
+        <TicketIssueForm
+          key={editing?.id ?? 'new'}
+          issue={editing}
+          onClose={() => { setFormOpen(false); setEditing(null) }}
+        />
+      )}
+
+      <StatsPanel stats={statsData ?? { total_count: 0, code_count: 0, operation_count: 0 }} />
+
+      <section className="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-4">
+        <div className="flex flex-wrap gap-2">
+          {([
+            ['all', '全部'],
+            ['month', '本月'],
+            ['quarter', '本季度'],
+            ['year', '本年'],
+            ['custom', '自定义'],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setPreset(key)}
+              className={`rounded-md border px-3 py-1.5 font-mono text-xs ${
+                preset === key
+                  ? 'border-[var(--color-border-strong)] bg-[var(--color-surface-hover)] text-[var(--color-ink)]'
+                  : 'border-[var(--color-border)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {preset === 'custom' && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={customStart}
+              onChange={event => setCustomStart(event.target.value)}
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-mono text-sm text-[var(--color-ink)] outline-none"
+            />
+            <span className="font-serif text-sm text-[var(--color-ink-muted)]">至</span>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={event => setCustomEnd(event.target.value)}
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-mono text-sm text-[var(--color-ink)] outline-none"
+            />
+            <button
+              onClick={() => customStart && customEnd && setActiveCustom({ start: customStart, end: customEnd })}
+              disabled={!customStart || !customEnd || customStart > customEnd}
+              className="rounded-md bg-[var(--color-solid)] px-4 py-2 font-mono text-xs text-[var(--color-solid-text)] disabled:opacity-50"
+            >
+              应用日期
+            </button>
+          </div>
+        )}
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-[160px_1fr_auto]">
+          <select
+            value={causeType}
+            onChange={event => setCauseType(event.target.value as TicketCauseType | '')}
+            className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-mono text-sm text-[var(--color-ink)] outline-none"
+          >
+            <option value="">全部原因</option>
+            <option value="code">代码问题</option>
+            <option value="operation">操作问题</option>
+          </select>
+          <input
+            type="search"
+            value={searchText}
+            onChange={event => setSearchText(event.target.value)}
+            onKeyDown={event => event.key === 'Enter' && setKeyword(searchText.trim())}
+            placeholder="搜索工单号、标题、现象、根因或复盘..."
+            className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-mono text-sm text-[var(--color-ink)] outline-none"
+          />
+          <button
+            onClick={() => setKeyword(searchText.trim())}
+            className="rounded-md border border-[var(--color-border)] px-4 py-2 font-mono text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]"
+          >
+            搜索
+          </button>
+        </div>
+        <p className="mt-3 font-mono text-xs text-[var(--color-ink-faint)]">
+          原因统计跟随日期与关键词；原因分类仅筛选下方记录。
+        </p>
+      </section>
+
+      {isFetching && issues.length === 0 ? (
+        <p className="py-8 text-center font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
+      ) : issues.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-[var(--color-border)] py-12 text-center">
+          <p className="font-mono text-sm text-[var(--color-ink-faint)]">暂无符合条件的工单问题记录</p>
+        </div>
+      ) : (
+        <div className={`space-y-3 transition-opacity ${isFetching ? 'opacity-60' : 'opacity-100'}`}>
+          {issues.map(issue => (
+            <TicketIssueCard key={issue.id} issue={issue} onEdit={() => startEdit(issue)} />
+          ))}
+        </div>
+      )}
+    </main>
+  )
+}
+
+function StatsPanel({ stats }: { stats: { total_count: number; code_count: number; operation_count: number } }) {
+  const codePercent = stats.total_count ? Math.round(stats.code_count / stats.total_count * 100) : 0
+  const operationPercent = stats.total_count ? Math.round(stats.operation_count / stats.total_count * 100) : 0
+
+  return (
+    <section className="mb-4 grid gap-3 sm:grid-cols-3">
+      <StatCard label="问题工单" value={`${stats.total_count}`} note="当前统计范围" />
+      <StatCard label="代码问题" value={`${stats.code_count}`} note={`${codePercent}%`} percent={codePercent} />
+      <StatCard label="操作问题" value={`${stats.operation_count}`} note={`${operationPercent}%`} percent={operationPercent} />
+    </section>
+  )
+}
+
+function StatCard({ label, value, note, percent }: { label: string; value: string; note: string; percent?: number }) {
+  return (
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-4">
+      <p className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-muted)]">{label}</p>
+      <div className="mt-2 flex items-end justify-between gap-2">
+        <p className="font-mono text-3xl font-bold text-[var(--color-ink)]">{value}</p>
+        <p className="font-mono text-xs text-[var(--color-ink-faint)]">{note}</p>
+      </div>
+      {percent !== undefined && (
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--color-surface-hover)]">
+          <div className="h-full rounded-full bg-[var(--color-solid)]" style={{ width: `${percent}%` }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TicketIssueForm({ issue, onClose }: { issue: TicketIssue | null; onClose: () => void }) {
+  const [form, setForm] = useState<TicketIssueInput>(() => issue ? issueToInput(issue) : emptyIssue())
+  const createMut = useCreateTicketIssue()
+  const updateMut = useUpdateTicketIssue()
+  const { toastError, toastSuccess } = useToast()
+  const pending = createMut.isPending || updateMut.isPending
+
+  const update = <K extends keyof TicketIssueInput>(key: K, value: TicketIssueInput[K]) => {
+    setForm(current => ({ ...current, [key]: value }))
+  }
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!form.ticket_no.trim() || !form.problem_description.trim() || !form.cause_detail.trim()) {
+      toastError('请填写工单编号、问题现象和根因说明')
+      return
+    }
+    try {
+      const data = {
+        ...form,
+        ticket_no: form.ticket_no.trim(),
+        ticket_title: form.ticket_title.trim(),
+        ticket_url: form.ticket_url.trim(),
+        problem_description: form.problem_description.trim(),
+        cause_detail: form.cause_detail.trim(),
+        resolution: form.resolution.trim(),
+      }
+      if (issue) {
+        await updateMut.mutateAsync({ id: issue.id, data })
+        toastSuccess('工单问题记录已更新')
+      } else {
+        await createMut.mutateAsync(data)
+        toastSuccess('工单问题记录已保存')
+      }
+      onClose()
+    } catch (error: unknown) {
+      toastError(error instanceof Error ? error.message : '保存失败')
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mb-4 rounded-lg border-2 border-[var(--color-border-strong)] bg-[var(--color-surface-strong)] p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="font-serif text-xl text-[var(--color-ink)]">{issue ? `编辑 ${issue.ticket_no}` : '记录工单问题'}</h2>
+        <button type="button" onClick={onClose} className="font-mono text-sm text-[var(--color-ink-muted)]">关闭 ✕</button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="工单编号 *">
+          <input value={form.ticket_no} onChange={event => update('ticket_no', event.target.value)} required className={issueInputClass} placeholder="例如 WO-12345" />
+        </Field>
+        <Field label="发生日期 *">
+          <input type="date" value={form.occurred_on} onChange={event => update('occurred_on', event.target.value)} required className={issueInputClass} />
+        </Field>
+        <Field label="工单标题">
+          <input value={form.ticket_title} onChange={event => update('ticket_title', event.target.value)} className={issueInputClass} placeholder="简要标题" />
+        </Field>
+        <Field label="工单链接">
+          <input type="url" value={form.ticket_url} onChange={event => update('ticket_url', event.target.value)} className={issueInputClass} placeholder="https://..." />
+        </Field>
+      </div>
+
+      <fieldset className="mt-4">
+        <legend className="mb-2 font-mono text-xs text-[var(--color-ink-muted)]">问题归因 *</legend>
+        <div className="flex gap-2">
+          {([
+            ['code', '代码问题'],
+            ['operation', '操作问题'],
+          ] as const).map(([value, label]) => (
+            <label key={value} className={`cursor-pointer rounded-md border px-4 py-2 font-mono text-sm ${form.cause_type === value ? 'border-[var(--color-border-strong)] bg-[var(--color-surface-hover)] text-[var(--color-ink)]' : 'border-[var(--color-border)] text-[var(--color-ink-muted)]'}`}>
+              <input type="radio" name="cause" value={value} checked={form.cause_type === value} onChange={() => update('cause_type', value)} className="sr-only" />
+              {label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div className="mt-4 grid gap-3">
+        <Field label="问题现象 *">
+          <textarea value={form.problem_description} onChange={event => update('problem_description', event.target.value)} required rows={3} className={`${issueInputClass} resize-y`} placeholder="工单反馈了什么问题，影响是什么..." />
+        </Field>
+        <Field label="根因说明 *">
+          <textarea value={form.cause_detail} onChange={event => update('cause_detail', event.target.value)} required rows={3} className={`${issueInputClass} resize-y`} placeholder="为什么会发生，判断为代码或操作问题的依据..." />
+        </Field>
+        <Field label="处理与复盘">
+          <textarea value={form.resolution} onChange={event => update('resolution', event.target.value)} rows={3} className={`${issueInputClass} resize-y`} placeholder="如何修复、后续如何避免、需要补充哪些测试或流程..." />
+        </Field>
+      </div>
+
+      <div className="mt-4 flex gap-2">
+        <button type="submit" disabled={pending} className="rounded-md bg-[var(--color-solid)] px-5 py-2.5 font-mono text-sm text-[var(--color-solid-text)] disabled:opacity-50">
+          {pending ? '保存中...' : issue ? '保存修改' : '保存记录'}
+        </button>
+        <button type="button" onClick={onClose} className="rounded-md border border-[var(--color-border)] px-5 py-2.5 font-mono text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]">取消</button>
+      </div>
+    </form>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block font-mono text-xs text-[var(--color-ink-muted)]">{label}</span>
+      {children}
+    </label>
+  )
+}
+
+function TicketIssueCard({ issue, onEdit }: { issue: TicketIssue; onEdit: () => void }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const deleteMut = useDeleteTicketIssue()
+  const { toastError, toastSuccess } = useToast()
+  const causeLabel = issue.cause_type === 'code' ? '代码问题' : '操作问题'
+
+  const remove = async () => {
+    try {
+      await deleteMut.mutateAsync(issue.id)
+      toastSuccess('工单问题记录已删除')
+    } catch (error: unknown) {
+      toastError(error instanceof Error ? error.message : '删除失败')
+    }
+  }
+
+  return (
+    <article className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-base font-bold text-[var(--color-ink)]">{issue.ticket_no}</span>
+            <span className={`rounded-full px-2.5 py-1 font-mono text-xs ${issue.cause_type === 'code' ? 'bg-[var(--color-danger-bg)] text-[var(--color-danger-text)]' : 'bg-[var(--color-surface-hover)] text-[var(--color-ink-secondary)]'}`}>
+              {causeLabel}
+            </span>
+            <span className="font-mono text-xs text-[var(--color-ink-faint)]">{formatDateDisplay(issue.occurred_on)}</span>
+          </div>
+          {issue.ticket_title && <h2 className="mt-2 font-serif text-xl text-[var(--color-ink)]">{issue.ticket_title}</h2>}
+          {issue.ticket_url && (
+            <a href={issue.ticket_url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block max-w-full truncate font-mono text-xs text-[var(--color-ink-muted)] underline underline-offset-2">
+              打开工单 ↗
+            </a>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={onEdit} className="rounded px-2.5 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]">编辑</button>
+          {confirmingDelete ? (
+            <>
+              <button onClick={remove} disabled={deleteMut.isPending} className="rounded bg-[var(--color-danger-bg)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-danger-text)] disabled:opacity-50">确认删除</button>
+              <button onClick={() => setConfirmingDelete(false)} className="rounded px-2 py-1.5 font-mono text-xs text-[var(--color-ink-muted)]">取消</button>
+            </>
+          ) : (
+            <button onClick={() => setConfirmingDelete(true)} className="rounded px-2.5 py-1.5 font-mono text-xs text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)]">删除</button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 border-t border-[var(--color-border)] pt-4 md:grid-cols-3">
+        <ReviewBlock label="问题现象" content={issue.problem_description} />
+        <ReviewBlock label="根因说明" content={issue.cause_detail} />
+        <ReviewBlock label="处理与复盘" content={issue.resolution || '尚未填写'} muted={!issue.resolution} />
+      </div>
+    </article>
+  )
+}
+
+function ReviewBlock({ label, content, muted = false }: { label: string; content: string; muted?: boolean }) {
+  return (
+    <div>
+      <p className="mb-1.5 font-mono text-xs uppercase tracking-[0.15em] text-[var(--color-ink-faint)]">{label}</p>
+      <p className={`whitespace-pre-wrap font-serif text-sm leading-6 ${muted ? 'text-[var(--color-ink-faint)]' : 'text-[var(--color-ink-secondary)]'}`}>{content}</p>
+    </div>
+  )
+}
+
+function issueToInput(issue: TicketIssue): TicketIssueInput {
+  return {
+    ticket_no: issue.ticket_no,
+    ticket_title: issue.ticket_title,
+    ticket_url: issue.ticket_url,
+    occurred_on: issue.occurred_on,
+    cause_type: issue.cause_type as TicketCauseType,
+    problem_description: issue.problem_description,
+    cause_detail: issue.cause_detail,
+    resolution: issue.resolution,
+  }
+}

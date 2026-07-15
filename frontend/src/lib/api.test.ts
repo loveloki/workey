@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { setToken, clearToken, isLoggedIn, base64urlToBuffer, push } from './api'
+import { setToken, clearToken, isLoggedIn, base64urlToBuffer, push, ticketIssues } from './api'
 
 // ─── Token 管理 ─────────────────────────────────────────────────
 // 测试 Feature：用户认证凭证的本地持久化
@@ -249,5 +249,61 @@ describe('base64url encoding', () => {
   it('处理无 padding 的情况', () => {
     // 'YQ' should decode to 'a' (0x61)
     check('YQ', [0x61])
+  })
+})
+
+
+// ─── Ticket Issues API ──────────────────────────────────────────
+describe('ticket issues API', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      headers: new Headers(),
+      text: () => Promise.resolve(JSON.stringify({ ticket_issues: [] })),
+    })
+  })
+
+  it('列表查询正确编码筛选条件', async () => {
+    await ticketIssues.list({
+      start: '2025-01-01',
+      end: '2025-01-31',
+      cause_type: 'code',
+      q: '登录 失败',
+    })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/ticket-issues?start=2025-01-01&end=2025-01-31&cause_type=code&q=%E7%99%BB%E5%BD%95+%E5%A4%B1%E8%B4%A5',
+      expect.any(Object),
+    )
+  })
+
+  it('统计查询不携带原因分类', async () => {
+    await ticketIssues.stats({ cause_type: 'operation', q: '配置' })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/ticket-issues/stats?q=%E9%85%8D%E7%BD%AE',
+      expect.any(Object),
+    )
+  })
+
+  it('创建记录发送完整请求体', async () => {
+    const input = {
+      ticket_no: 'WO-1',
+      ticket_title: '标题',
+      ticket_url: '',
+      occurred_on: '2025-01-01',
+      cause_type: 'code' as const,
+      problem_description: '问题',
+      cause_detail: '根因',
+      resolution: '复盘',
+    }
+    await ticketIssues.create(input)
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/ticket-issues',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify(input) }),
+    )
   })
 })

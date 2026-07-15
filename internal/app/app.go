@@ -97,6 +97,10 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/todos/completed-range", corsMiddleware(authMiddleware(handleCompletedRangeTodos)))
 	mux.HandleFunc("/api/todos", corsMiddleware(authMiddleware(handleTodos)))
 
+	// 工单问题复查
+	mux.HandleFunc("/api/ticket-issues", corsMiddleware(authMiddleware(handleTicketIssues)))
+	mux.HandleFunc("/api/ticket-issues/stats", corsMiddleware(authMiddleware(handleTicketIssueStats)))
+
 	// 检查清单
 	mux.HandleFunc("/api/checklists", corsMiddleware(authMiddleware(handleChecklists)))
 	mux.HandleFunc("/api/checklist-snapshots", corsMiddleware(authMiddleware(handleChecklistSnapshots)))

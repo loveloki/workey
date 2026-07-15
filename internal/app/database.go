@@ -71,6 +71,22 @@ func initDB() {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS ticket_issues (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL REFERENCES users(id),
+			ticket_no TEXT NOT NULL,
+			ticket_title TEXT NOT NULL DEFAULT '',
+			ticket_url TEXT NOT NULL DEFAULT '',
+			occurred_on TEXT NOT NULL,
+			cause_type TEXT NOT NULL CHECK(cause_type IN ('code', 'operation')),
+			problem_description TEXT NOT NULL,
+			cause_detail TEXT NOT NULL,
+			resolution TEXT NOT NULL DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ticket_issues_user_date ON ticket_issues(user_id, occurred_on DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_ticket_issues_user_cause ON ticket_issues(user_id, cause_type)`,
 		`CREATE TABLE IF NOT EXISTS iteration_overrides (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER NOT NULL REFERENCES users(id),

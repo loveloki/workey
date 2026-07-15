@@ -75,6 +75,7 @@ func TestBuildAndDecryptSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, len(data.Attendance), len(decrypted.Attendance))
 	assert.Equal(t, len(data.WorkLogs), len(decrypted.WorkLogs))
+	assert.Equal(t, len(data.TicketIssues), len(decrypted.TicketIssues))
 
 	// 验证 hash 一致
 	decryptedHash, err := computeDataHash(decrypted)
@@ -129,6 +130,10 @@ func TestReplaceImportDataNoduplicates(t *testing.T) {
 	var todoCnt int
 	db.QueryRow("SELECT COUNT(*) FROM todos WHERE user_id = ?", userID).Scan(&todoCnt)
 	assert.Equal(t, len(data.Todos), todoCnt, "todos 不应重复")
+
+	var ticketIssueCnt int
+	db.QueryRow("SELECT COUNT(*) FROM ticket_issues WHERE user_id = ?", userID).Scan(&ticketIssueCnt)
+	assert.Equal(t, len(data.TicketIssues), ticketIssueCnt, "ticket_issues 不应重复")
 }
 
 // TestReplaceImportDataRollbackOnError 导入失败应 rollback（M3：修复逻辑缺陷）
@@ -184,6 +189,9 @@ func makeTestExportData() *ExportData {
 		},
 		Todos: []Todo{
 			{ID: 1, UserID: 1, Content: "buy milk", URL: "", Done: false, CreatedAt: "2024-01-01 10:00:00", UpdatedAt: "2024-01-01 10:00:00"},
+		},
+		TicketIssues: []TicketIssue{
+			{ID: 1, UserID: 1, TicketNo: "WO-1", TicketTitle: "Login failed", OccurredOn: "2024-01-01", CauseType: "code", ProblemDescription: "Users cannot login", CauseDetail: "Nil pointer", Resolution: "Add validation", CreatedAt: "2024-01-01 11:00:00", UpdatedAt: "2024-01-01 12:00:00"},
 		},
 		Checklists: []Checklist{
 			{ID: 1, UserID: 1, Title: "Daily", Items: `["task1"]`, CreatedAt: "2024-01-01 08:00:00", UpdatedAt: "2024-01-01 08:00:00"},

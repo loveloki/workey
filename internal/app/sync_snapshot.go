@@ -15,7 +15,7 @@ import (
 
 // 快照生成、hash 计算、替换式导入逻辑
 
-// buildExportData 在事务内从数据库构建导出数据，确保 7 个 SELECT 查询的一致性
+// buildExportData 在事务内从数据库构建导出数据，确保各个 SELECT 查询的一致性
 // 接受事务和 context 参数（m1: 事务保护, m2: context 传播）
 func buildExportData(ctx context.Context, tx *sql.Tx, userID int64) (*ExportData, error) {
 	attendances := []Attendance{}
@@ -71,6 +71,23 @@ func buildExportData(ctx context.Context, tx *sql.Tx, userID int64) (*ExportData
 		}
 		t.Done = done != 0
 		todosList = append(todosList, t)
+	}
+
+	ticketIssuesList := []TicketIssue{}
+	ticketRows, err := tx.QueryContext(ctx, `
+		SELECT id, user_id, ticket_no, ticket_title, ticket_url, occurred_on, cause_type,
+			problem_description, cause_detail, resolution, created_at, updated_at
+		FROM ticket_issues WHERE user_id = ? ORDER BY occurred_on, id`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("query ticket_issues: %w", err)
+	}
+	defer ticketRows.Close()
+	for ticketRows.Next() {
+		issue, scanErr := scanTicketIssue(ticketRows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan ticket_issues: %w", scanErr)
+		}
+		ticketIssuesList = append(ticketIssuesList, issue)
 	}
 
 	checklistsList := []Checklist{}
@@ -142,6 +159,7 @@ func buildExportData(ctx context.Context, tx *sql.Tx, userID int64) (*ExportData
 		Attendance:         attendances,
 		WorkLogs:           workLogsList,
 		Todos:              todosList,
+		TicketIssues:       ticketIssuesList,
 		Checklists:         checklistsList,
 		ChecklistSnapshots: snapshotsList,
 		UserSettings:       userSettings,
@@ -175,6 +193,19 @@ type hashTodo struct {
 	Done      bool   `json:"done"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
+}
+
+type hashTicketIssue struct {
+	TicketNo           string `json:"ticket_no"`
+	TicketTitle        string `json:"ticket_title"`
+	TicketURL          string `json:"ticket_url"`
+	OccurredOn         string `json:"occurred_on"`
+	CauseType          string `json:"cause_type"`
+	ProblemDescription string `json:"problem_description"`
+	CauseDetail        string `json:"cause_detail"`
+	Resolution         string `json:"resolution"`
+	CreatedAt          string `json:"created_at"`
+	UpdatedAt          string `json:"updated_at"`
 }
 
 type hashChecklist struct {
@@ -226,6 +257,15 @@ func computeDataHash(data *ExportData) (string, error) {
 	for i, t := range data.Todos {
 		hTodos[i] = hashTodo{Content: t.Content, URL: t.URL, Done: t.Done, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt}
 	}
+	hTicketIssues := make([]hashTicketIssue, len(data.TicketIssues))
+	for i, issue := range data.TicketIssues {
+		hTicketIssues[i] = hashTicketIssue{
+			TicketNo: issue.TicketNo, TicketTitle: issue.TicketTitle, TicketURL: issue.TicketURL,
+			OccurredOn: issue.OccurredOn, CauseType: issue.CauseType,
+			ProblemDescription: issue.ProblemDescription, CauseDetail: issue.CauseDetail,
+			Resolution: issue.Resolution, CreatedAt: issue.CreatedAt, UpdatedAt: issue.UpdatedAt,
+		}
+	}
 	hChecklists := make([]hashChecklist, len(data.Checklists))
 	for i, c := range data.Checklists {
 		hChecklists[i] = hashChecklist{Title: c.Title, Items: c.Items, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
@@ -243,14 +283,16 @@ func computeDataHash(data *ExportData) (string, error) {
 		Attendance         []hashAttendance        `json:"attendance"`
 		WorkLogs           []hashWorkLog           `json:"work_logs"`
 		Todos              []hashTodo              `json:"todos"`
+		TicketIssues       []hashTicketIssue       `json:"ticket_issues,omitempty"`
 		Checklists         []hashChecklist         `json:"checklists"`
-		ChecklistSnapshots []hashChecklistSnapshot  `json:"checklist_snapshots"`
+		ChecklistSnapshots []hashChecklistSnapshot `json:"checklist_snapshots"`
 		UserSettings       [][2]string             `json:"user_settings"`
 		IterationOverrides []hashIterationOverride `json:"iteration_overrides"`
 	}{
 		Attendance:         hAttendances,
 		WorkLogs:           hWorkLogs,
 		Todos:              hTodos,
+		TicketIssues:       hTicketIssues,
 		Checklists:         hChecklists,
 		ChecklistSnapshots: hSnapshots,
 		UserSettings:       orderedSettings,
@@ -363,6 +405,7 @@ func replaceImportData(ctx context.Context, tx *sql.Tx, userID int64, data *Expo
 		"checklist_snapshots",
 		"checklists",
 		"iteration_overrides",
+		"ticket_issues",
 		"todos",
 		"work_logs",
 		"attendance",
@@ -423,6 +466,31 @@ func replaceImportData(ctx context.Context, tx *sql.Tx, userID int64, data *Expo
 		)
 		if err != nil {
 			return fmt.Errorf("insert todo: %w", err)
+		}
+	}
+
+	// 插入工单问题记录。
+	for _, issue := range data.TicketIssues {
+		req := ticketIssueRequest{
+			TicketNo: issue.TicketNo, TicketTitle: issue.TicketTitle, TicketURL: issue.TicketURL,
+			OccurredOn: issue.OccurredOn, CauseType: issue.CauseType,
+			ProblemDescription: issue.ProblemDescription, CauseDetail: issue.CauseDetail,
+			Resolution: issue.Resolution,
+		}
+		if message := validateTicketIssueRequest(&req); message != "" {
+			return fmt.Errorf("invalid ticket_issue %s: %s", issue.TicketNo, message)
+		}
+		_, err := tx.Exec(`
+			INSERT INTO ticket_issues (
+				user_id, ticket_no, ticket_title, ticket_url, occurred_on, cause_type,
+				problem_description, cause_detail, resolution, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			userID, req.TicketNo, req.TicketTitle, req.TicketURL, req.OccurredOn,
+			req.CauseType, req.ProblemDescription, req.CauseDetail, req.Resolution,
+			issue.CreatedAt, issue.UpdatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("insert ticket_issue %s: %w", issue.TicketNo, err)
 		}
 	}
 
@@ -513,5 +581,3 @@ func buildLocalBackupSnapshot(ctx context.Context, tx *sql.Tx, userID int64, enc
 	fileName := fmt.Sprintf("snapshots/backup-before-pull-%d.zip.enc", timestamp)
 	return encrypted, hash, fileName, nil
 }
-
-

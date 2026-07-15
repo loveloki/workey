@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  attendance, workLogs, todos, checklists, checklistSnapshots,
+  attendance, workLogs, todos, ticketIssues, checklists, checklistSnapshots,
   settings, iterationOverrides, passkeys, system, history, sync,
   type Attendance, type WorkLog, type Todo, type Checklist,
   type ChecklistItem, type SnapshotData, type AttendanceStats,
-  type SyncConfigInput,
+  type TicketIssueInput, type TicketIssueFilters, type SyncConfigInput,
 } from './api'
 
 // ─── Query Keys ──────────────────────────────────────────────────
@@ -25,6 +25,10 @@ export const queryKeys = {
     completedToday: ['todos', 'completedToday'] as const,
     createdToday: ['todos', 'createdToday'] as const,
     completedRange: (start: string, end: string) => ['todos', 'completedRange', start, end] as const,
+  },
+  ticketIssues: {
+    list: (filters: TicketIssueFilters) => ['ticketIssues', 'list', filters] as const,
+    stats: (filters: TicketIssueFilters) => ['ticketIssues', 'stats', filters] as const,
   },
   checklists: {
     list: ['checklists'] as const,
@@ -203,6 +207,48 @@ export function useDeleteTodo() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['todos'] })
     },
+  })
+}
+
+// ─── Ticket Issue Queries ───────────────────────────────────────
+
+export function useTicketIssueList(filters: TicketIssueFilters, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.ticketIssues.list(filters),
+    queryFn: () => ticketIssues.list(filters),
+    enabled,
+  })
+}
+
+export function useTicketIssueStats(filters: TicketIssueFilters, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.ticketIssues.stats(filters),
+    queryFn: () => ticketIssues.stats(filters),
+    enabled,
+  })
+}
+
+export function useCreateTicketIssue() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: TicketIssueInput) => ticketIssues.create(data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['ticketIssues'] }) },
+  })
+}
+
+export function useUpdateTicketIssue() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: TicketIssueInput }) => ticketIssues.update(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['ticketIssues'] }) },
+  })
+}
+
+export function useDeleteTicketIssue() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => ticketIssues.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['ticketIssues'] }) },
   })
 }
 
@@ -462,6 +508,7 @@ export function useSyncPull() {
       qc.invalidateQueries({ queryKey: ['attendance'] })
       qc.invalidateQueries({ queryKey: ['workLogs'] })
       qc.invalidateQueries({ queryKey: ['todos'] })
+      qc.invalidateQueries({ queryKey: ['ticketIssues'] })
       qc.invalidateQueries({ queryKey: queryKeys.checklists.list })
       qc.invalidateQueries({ queryKey: ['settings'] })
       qc.invalidateQueries({ queryKey: ['iterationOverrides'] })

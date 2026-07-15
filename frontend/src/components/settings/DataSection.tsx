@@ -99,6 +99,7 @@ export function DataSection() {
       const parts = []
       if (result.attendance_count) parts.push(`${result.attendance_count} 条考勤`)
       if (result.work_log_count) parts.push(`${result.work_log_count} 条工作日志`)
+      if (result.ticket_issue_count) parts.push(`${result.ticket_issue_count} 条工单问题`)
       const summary = parts.join('，') || '无新数据'
       setMsg(`导入成功：${summary}`)
       setIsError(false)

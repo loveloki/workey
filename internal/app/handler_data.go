@@ -73,6 +73,25 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		todosList = append(todosList, t)
 	}
 
+	ticketIssuesList := []TicketIssue{}
+	rows, err = db.Query(`
+		SELECT id, user_id, ticket_no, ticket_title, ticket_url, occurred_on, cause_type,
+			problem_description, cause_detail, resolution, created_at, updated_at
+		FROM ticket_issues WHERE user_id = ? ORDER BY occurred_on, id`, userID)
+	if err != nil {
+		jsonError(w, "Failed to export ticket issues", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		issue, scanErr := scanTicketIssue(rows)
+		if scanErr != nil {
+			jsonError(w, "Failed to export ticket issues", http.StatusInternalServerError)
+			return
+		}
+		ticketIssuesList = append(ticketIssuesList, issue)
+	}
+
 	checklistsList := []Checklist{}
 	rows, err = db.Query(
 		"SELECT id, user_id, title, items, created_at, updated_at FROM checklists WHERE user_id = ? ORDER BY id",
@@ -138,6 +157,7 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		Attendance:         attendances,
 		WorkLogs:           workLogsList,
 		Todos:              todosList,
+		TicketIssues:       ticketIssuesList,
 		Checklists:         checklistsList,
 		ChecklistSnapshots: snapshotsList,
 		UserSettings:       userSettings,
@@ -195,6 +215,7 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		Attendance         []Attendance        `json:"attendance"`
 		WorkLogs           []WorkLog           `json:"work_logs"`
 		Todos              []Todo              `json:"todos"`
+		TicketIssues       []TicketIssue       `json:"ticket_issues"`
 		Checklists         []Checklist         `json:"checklists"`
 		ChecklistSnapshots []ChecklistSnapshot `json:"checklist_snapshots"`
 		UserSettings       map[string]string   `json:"user_settings"`
@@ -362,6 +383,39 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 导入工单问题记录。
+	ticketIssueCount := 0
+	for _, issue := range importData.TicketIssues {
+		req := ticketIssueRequest{
+			TicketNo: issue.TicketNo, TicketTitle: issue.TicketTitle, TicketURL: issue.TicketURL,
+			OccurredOn: issue.OccurredOn, CauseType: issue.CauseType,
+			ProblemDescription: issue.ProblemDescription, CauseDetail: issue.CauseDetail,
+			Resolution: issue.Resolution,
+		}
+		if validateTicketIssueRequest(&req) != "" {
+			continue
+		}
+		createdAt := issue.CreatedAt
+		if createdAt == "" {
+			createdAt = nowDatetime()
+		}
+		updatedAt := issue.UpdatedAt
+		if updatedAt == "" {
+			updatedAt = createdAt
+		}
+		_, err := db.Exec(`
+			INSERT INTO ticket_issues (
+				user_id, ticket_no, ticket_title, ticket_url, occurred_on, cause_type,
+				problem_description, cause_detail, resolution, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			userID, req.TicketNo, req.TicketTitle, req.TicketURL, req.OccurredOn,
+			req.CauseType, req.ProblemDescription, req.CauseDetail, req.Resolution, createdAt, updatedAt,
+		)
+		if err == nil {
+			ticketIssueCount++
+		}
+	}
+
 	// 导入用户设置
 	for key, value := range importData.UserSettings {
 		if value == "" {
@@ -401,13 +455,14 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonOK(w, DataImportResponse{
-		Message:         "Data imported successfully",
-		AttendanceCount: attendanceCount,
-		WorkLogCount:    workLogCount,
-		TodoCount:       todoCount,
-		ChecklistCount:  checklistCount,
-		SnapshotCount:   snapshotCount,
-		OverrideCount:   overrideCount,
+		Message:          "Data imported successfully",
+		AttendanceCount:  attendanceCount,
+		WorkLogCount:     workLogCount,
+		TodoCount:        todoCount,
+		TicketIssueCount: ticketIssueCount,
+		ChecklistCount:   checklistCount,
+		SnapshotCount:    snapshotCount,
+		OverrideCount:    overrideCount,
 	})
 }
 
@@ -439,7 +494,7 @@ func handleDataDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tables := []string{"attendance", "work_logs", "todos", "checklist_snapshots", "checklists", "iteration_overrides"}
+	tables := []string{"attendance", "work_logs", "todos", "ticket_issues", "checklist_snapshots", "checklists", "iteration_overrides"}
 	counts := map[string]int64{}
 	for _, table := range tables {
 		result, err := db.Exec("DELETE FROM "+table+" WHERE user_id = ?", userID)
@@ -452,9 +507,10 @@ func handleDataDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonOK(w, DataDeleteResponse{
-		Message:         "All data deleted successfully",
-		AttendanceCount: counts["attendance"],
-		WorkLogCount:    counts["work_logs"],
-		TodoCount:       counts["todos"],
+		Message:          "All data deleted successfully",
+		AttendanceCount:  counts["attendance"],
+		WorkLogCount:     counts["work_logs"],
+		TodoCount:        counts["todos"],
+		TicketIssueCount: counts["ticket_issues"],
 	})
 }

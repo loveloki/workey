@@ -61,6 +61,22 @@ type TodoListResponse struct {
 	Todos []Todo `json:"todos"`
 }
 
+// ─── Ticket Issues ──────────────────────────────────────────
+
+type TicketIssueResponse struct {
+	TicketIssue TicketIssue `json:"ticket_issue"`
+}
+
+type TicketIssueListResponse struct {
+	TicketIssues []TicketIssue `json:"ticket_issues"`
+}
+
+type TicketIssueStatsResponse struct {
+	TotalCount     int64 `json:"total_count"`
+	CodeCount      int64 `json:"code_count"`
+	OperationCount int64 `json:"operation_count"`
+}
+
 // ─── Checklists ─────────────────────────────────────────────
 
 type ChecklistResponse struct {
@@ -135,20 +151,22 @@ type PasskeyAuthBeginResponse struct {
 // ─── Data ───────────────────────────────────────────────────
 
 type DataImportResponse struct {
-	Message         string `json:"message"`
-	AttendanceCount int    `json:"attendance_count"`
-	WorkLogCount    int    `json:"work_log_count"`
-	TodoCount       int    `json:"todo_count"`
-	ChecklistCount  int    `json:"checklist_count"`
-	SnapshotCount   int    `json:"snapshot_count"`
-	OverrideCount   int    `json:"override_count"`
+	Message          string `json:"message"`
+	AttendanceCount  int    `json:"attendance_count"`
+	WorkLogCount     int    `json:"work_log_count"`
+	TodoCount        int    `json:"todo_count"`
+	TicketIssueCount int    `json:"ticket_issue_count"`
+	ChecklistCount   int    `json:"checklist_count"`
+	SnapshotCount    int    `json:"snapshot_count"`
+	OverrideCount    int    `json:"override_count"`
 }
 
 type DataDeleteResponse struct {
-	Message         string `json:"message"`
-	AttendanceCount int64  `json:"attendance_count"`
-	WorkLogCount    int64  `json:"work_log_count"`
-	TodoCount       int64  `json:"todo_count"`
+	Message          string `json:"message"`
+	AttendanceCount  int64  `json:"attendance_count"`
+	WorkLogCount     int64  `json:"work_log_count"`
+	TodoCount        int64  `json:"todo_count"`
+	TicketIssueCount int64  `json:"ticket_issue_count"`
 }
 
 // ─── Push Notifications ──────────────────────────────────────────────────────────
@@ -167,23 +185,23 @@ type PushSubscribeRequest struct {
 
 // SyncConfigResponse WebDAV 配置信息（密码脚敏信息不返回）
 type SyncConfigResponse struct {
-	Configured               bool   `json:"configured"`
-	WebDAVURL                string `json:"webdav_url"`
-	WebDAVUsername           string `json:"webdav_username"`
-	RemotePath               string `json:"remote_path"`
-	AutoSyncIntervalMinutes  int    `json:"auto_sync_interval_minutes"`
-	CreatedAt                string `json:"created_at"`
-	UpdatedAt                string `json:"updated_at"`
-	Warning                  string `json:"warning,omitempty"`
+	Configured              bool   `json:"configured"`
+	WebDAVURL               string `json:"webdav_url"`
+	WebDAVUsername          string `json:"webdav_username"`
+	RemotePath              string `json:"remote_path"`
+	AutoSyncIntervalMinutes int    `json:"auto_sync_interval_minutes"`
+	CreatedAt               string `json:"created_at"`
+	UpdatedAt               string `json:"updated_at"`
+	Warning                 string `json:"warning,omitempty"`
 }
 
 // SyncStatusResponse 当前同步状态
 type SyncStatusResponse struct {
-	Configured        bool    `json:"configured"`
-	LastSyncAt        *string `json:"last_sync_at"`
-	LastDirection     *string `json:"last_direction"`
-	LastLocalHash     *string `json:"last_local_hash"`
-	LastRemoteHash    *string `json:"last_remote_hash"`
+	Configured     bool    `json:"configured"`
+	LastSyncAt     *string `json:"last_sync_at"`
+	LastDirection  *string `json:"last_direction"`
+	LastLocalHash  *string `json:"last_local_hash"`
+	LastRemoteHash *string `json:"last_remote_hash"`
 }
 
 // SyncCheckResponse 冲突检测结果

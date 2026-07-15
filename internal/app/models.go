@@ -39,6 +39,22 @@ type Todo struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+// TicketIssue 记录工单问题、根因分类和复盘结论。
+type TicketIssue struct {
+	ID                 int64  `json:"id"`
+	UserID             int64  `json:"user_id"`
+	TicketNo           string `json:"ticket_no"`
+	TicketTitle        string `json:"ticket_title"`
+	TicketURL          string `json:"ticket_url"`
+	OccurredOn         string `json:"occurred_on"`
+	CauseType          string `json:"cause_type"`
+	ProblemDescription string `json:"problem_description"`
+	CauseDetail        string `json:"cause_detail"`
+	Resolution         string `json:"resolution"`
+	CreatedAt          string `json:"created_at"`
+	UpdatedAt          string `json:"updated_at"`
+}
+
 type Checklist struct {
 	ID        int64  `json:"id"`
 	UserID    int64  `json:"user_id"`
@@ -98,6 +114,7 @@ type ExportData struct {
 	Attendance         []Attendance        `json:"attendance"`
 	WorkLogs           []WorkLog           `json:"work_logs"`
 	Todos              []Todo              `json:"todos"`
+	TicketIssues       []TicketIssue       `json:"ticket_issues"`
 	Checklists         []Checklist         `json:"checklists"`
 	ChecklistSnapshots []ChecklistSnapshot `json:"checklist_snapshots"`
 	UserSettings       map[string]string   `json:"user_settings"`

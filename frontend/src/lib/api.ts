@@ -1,22 +1,24 @@
 import type {
-  Attendance, WorkLog, Todo, Checklist, ChecklistSnapshot,
+  Attendance, WorkLog, Todo, TicketIssue, Checklist, ChecklistSnapshot,
   IterationOverride, Passkey,
   AttendanceResponse, AttendanceListResponse, AttendanceStatsResponse,
   WorkLogResponse, WorkLogListResponse,
   TodoResponse, TodoListResponse,
+  TicketIssueResponse, TicketIssueListResponse, TicketIssueStatsResponse,
   ChecklistResponse, ChecklistListResponse,
   SnapshotResponse, SnapshotListResponse,
   IterationOverrideResponse, IterationOverrideListResponse,
   SettingsResponse, VersionResponse, VersionRangeResponse,
   MessageResponse, AuthResponse, MeResponse,
-  PasskeyListResponse, DataDeleteResponse,
+  PasskeyListResponse, DataImportResponse, DataDeleteResponse,
   SyncConfigResponse, SyncStatusResponse, SyncCheckResponse,
   SyncOperationResponse, SyncValidateResponse, SyncLogListResponse,
 } from './models.gen'
 
 export type {
-  Attendance, WorkLog, Todo, Checklist, ChecklistSnapshot,
+  Attendance, WorkLog, Todo, TicketIssue, Checklist, ChecklistSnapshot,
   IterationOverride, Passkey, AttendanceStatsResponse as AttendanceStats,
+  TicketIssueStatsResponse as TicketIssueStats,
 } from './models.gen'
 
 const API_BASE = ''
@@ -161,6 +163,57 @@ export const todos = {
     }),
   delete: (id: number) =>
     request<MessageResponse>(`/api/todos?id=${id}`, { method: 'DELETE' }),
+}
+
+// ─── Ticket Issues ──────────────────────────────────────────────
+
+export type TicketCauseType = 'code' | 'operation'
+
+export interface TicketIssueInput {
+  ticket_no: string
+  ticket_title: string
+  ticket_url: string
+  occurred_on: string
+  cause_type: TicketCauseType
+  problem_description: string
+  cause_detail: string
+  resolution: string
+}
+
+export interface TicketIssueFilters {
+  start?: string
+  end?: string
+  cause_type?: TicketCauseType | ''
+  q?: string
+}
+
+function ticketIssueQuery(filters: TicketIssueFilters, includeCause = true): string {
+  const params = new URLSearchParams()
+  if (filters.start) params.set('start', filters.start)
+  if (filters.end) params.set('end', filters.end)
+  if (includeCause && filters.cause_type) params.set('cause_type', filters.cause_type)
+  if (filters.q) params.set('q', filters.q)
+  const query = params.toString()
+  return query ? `?${query}` : ''
+}
+
+export const ticketIssues = {
+  list: (filters: TicketIssueFilters = {}) =>
+    request<TicketIssueListResponse>(`/api/ticket-issues${ticketIssueQuery(filters)}`),
+  stats: (filters: TicketIssueFilters = {}) =>
+    request<TicketIssueStatsResponse>(`/api/ticket-issues/stats${ticketIssueQuery(filters, false)}`),
+  create: (data: TicketIssueInput) =>
+    request<TicketIssueResponse>('/api/ticket-issues', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id: number, data: TicketIssueInput) =>
+    request<TicketIssueResponse>(`/api/ticket-issues?id=${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: number) =>
+    request<MessageResponse>(`/api/ticket-issues?id=${id}`, { method: 'DELETE' }),
 }
 
 // ─── Checklists ─────────────────────────────────────────────────
@@ -426,7 +479,7 @@ export const settings = {
       method: 'DELETE',
       body: JSON.stringify({ password }),
     }),
-  importData: async (file: File): Promise<{ message: string; attendance_count: number; work_log_count: number }> => {
+  importData: async (file: File): Promise<DataImportResponse> => {
     const token = getToken()
     const form = new FormData()
     form.append('file', file)

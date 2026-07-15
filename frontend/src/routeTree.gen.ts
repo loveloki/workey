@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrendsRouteImport } from './routes/trends'
 import { Route as TodosRouteImport } from './routes/todos'
+import { Route as TicketIssuesRouteImport } from './routes/ticket-issues'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HistoryRouteImport } from './routes/history'
@@ -26,6 +27,11 @@ const TrendsRoute = TrendsRouteImport.update({
 const TodosRoute = TodosRouteImport.update({
   id: '/todos',
   path: '/todos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TicketIssuesRoute = TicketIssuesRouteImport.update({
+  id: '/ticket-issues',
+  path: '/ticket-issues',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof HistoryRoute
   '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
+  '/ticket-issues': typeof TicketIssuesRoute
   '/todos': typeof TodosRoute
   '/trends': typeof TrendsRoute
 }
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/history': typeof HistoryRoute
   '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
+  '/ticket-issues': typeof TicketIssuesRoute
   '/todos': typeof TodosRoute
   '/trends': typeof TrendsRoute
 }
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/history': typeof HistoryRoute
   '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
+  '/ticket-issues': typeof TicketIssuesRoute
   '/todos': typeof TodosRoute
   '/trends': typeof TrendsRoute
 }
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/login'
     | '/settings'
+    | '/ticket-issues'
     | '/todos'
     | '/trends'
   fileRoutesByTo: FileRoutesByTo
@@ -109,6 +119,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/login'
     | '/settings'
+    | '/ticket-issues'
     | '/todos'
     | '/trends'
   id:
@@ -119,6 +130,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/login'
     | '/settings'
+    | '/ticket-issues'
     | '/todos'
     | '/trends'
   fileRoutesById: FileRoutesById
@@ -130,6 +142,7 @@ export interface RootRouteChildren {
   HistoryRoute: typeof HistoryRoute
   LoginRoute: typeof LoginRoute
   SettingsRoute: typeof SettingsRoute
+  TicketIssuesRoute: typeof TicketIssuesRoute
   TodosRoute: typeof TodosRoute
   TrendsRoute: typeof TrendsRoute
 }
@@ -148,6 +161,13 @@ declare module '@tanstack/react-router' {
       path: '/todos'
       fullPath: '/todos'
       preLoaderRoute: typeof TodosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ticket-issues': {
+      id: '/ticket-issues'
+      path: '/ticket-issues'
+      fullPath: '/ticket-issues'
+      preLoaderRoute: typeof TicketIssuesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -202,6 +222,7 @@ const rootRouteChildren: RootRouteChildren = {
   HistoryRoute: HistoryRoute,
   LoginRoute: LoginRoute,
   SettingsRoute: SettingsRoute,
+  TicketIssuesRoute: TicketIssuesRoute,
   TodosRoute: TodosRoute,
   TrendsRoute: TrendsRoute,
 }

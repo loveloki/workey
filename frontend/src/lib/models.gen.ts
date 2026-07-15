@@ -36,6 +36,23 @@ export interface Todo {
   created_at: string;
   updated_at: string;
 }
+/**
+ * TicketIssue 记录工单问题、根因分类和复盘结论。
+ */
+export interface TicketIssue {
+  id: number /* int64 */;
+  user_id: number /* int64 */;
+  ticket_no: string;
+  ticket_title: string;
+  ticket_url: string;
+  occurred_on: string;
+  cause_type: string;
+  problem_description: string;
+  cause_detail: string;
+  resolution: string;
+  created_at: string;
+  updated_at: string;
+}
 export interface Checklist {
   id: number /* int64 */;
   user_id: number /* int64 */;
@@ -93,6 +110,7 @@ export interface ExportData {
   attendance: Attendance[];
   work_logs: WorkLog[];
   todos: Todo[];
+  ticket_issues: TicketIssue[];
   checklists: Checklist[];
   checklist_snapshots: ChecklistSnapshot[];
   user_settings: { [key: string]: string};
@@ -135,6 +153,17 @@ export interface TodoResponse {
 }
 export interface TodoListResponse {
   todos: Todo[];
+}
+export interface TicketIssueResponse {
+  ticket_issue: TicketIssue;
+}
+export interface TicketIssueListResponse {
+  ticket_issues: TicketIssue[];
+}
+export interface TicketIssueStatsResponse {
+  total_count: number /* int64 */;
+  code_count: number /* int64 */;
+  operation_count: number /* int64 */;
 }
 export interface ChecklistResponse {
   checklist: Checklist;
@@ -192,6 +221,7 @@ export interface DataImportResponse {
   attendance_count: number /* int */;
   work_log_count: number /* int */;
   todo_count: number /* int */;
+  ticket_issue_count: number /* int */;
   checklist_count: number /* int */;
   snapshot_count: number /* int */;
   override_count: number /* int */;
@@ -201,6 +231,7 @@ export interface DataDeleteResponse {
   attendance_count: number /* int64 */;
   work_log_count: number /* int64 */;
   todo_count: number /* int64 */;
+  ticket_issue_count: number /* int64 */;
 }
 export interface VapidKeyResponse {
   public_key: string;
