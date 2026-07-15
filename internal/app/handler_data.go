@@ -94,7 +94,7 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 
 	checklistsList := []Checklist{}
 	rows, err = db.Query(
-		"SELECT id, user_id, title, items, created_at, updated_at FROM checklists WHERE user_id = ? ORDER BY id",
+		"SELECT id, user_id, title, items, kind, created_at, updated_at FROM checklists WHERE user_id = ? ORDER BY id",
 		userID,
 	)
 	if err != nil {
@@ -104,8 +104,27 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	for rows.Next() {
 		var c Checklist
-		rows.Scan(&c.ID, &c.UserID, &c.Title, &c.Items, &c.CreatedAt, &c.UpdatedAt)
+		rows.Scan(&c.ID, &c.UserID, &c.Title, &c.Items, &c.Kind, &c.CreatedAt, &c.UpdatedAt)
 		checklistsList = append(checklistsList, c)
+	}
+
+	checklistRunsList := []ChecklistRun{}
+	rows, err = db.Query(`SELECT id, user_id, checklist_id, kind, occurrence_key, iteration_number,
+		title, items, data, completed, completed_at, created_at, updated_at
+		FROM checklist_runs WHERE user_id = ? ORDER BY id`, userID)
+	if err != nil {
+		jsonError(w, "Failed to export checklist runs", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var run ChecklistRun
+		var completed int
+		rows.Scan(&run.ID, &run.UserID, &run.ChecklistID, &run.Kind, &run.OccurrenceKey,
+			&run.IterationNumber, &run.Title, &run.Items, &run.Data, &completed,
+			&run.CompletedAt, &run.CreatedAt, &run.UpdatedAt)
+		run.Completed = completed != 0
+		checklistRunsList = append(checklistRunsList, run)
 	}
 
 	snapshotsList := []ChecklistSnapshot{}
@@ -159,6 +178,7 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		Todos:              todosList,
 		TicketIssues:       ticketIssuesList,
 		Checklists:         checklistsList,
+		ChecklistRuns:      checklistRunsList,
 		ChecklistSnapshots: snapshotsList,
 		UserSettings:       userSettings,
 		IterationOverrides: overridesList,
@@ -217,6 +237,7 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		Todos              []Todo              `json:"todos"`
 		TicketIssues       []TicketIssue       `json:"ticket_issues"`
 		Checklists         []Checklist         `json:"checklists"`
+		ChecklistRuns      []ChecklistRun      `json:"checklist_runs"`
 		ChecklistSnapshots []ChecklistSnapshot `json:"checklist_snapshots"`
 		UserSettings       map[string]string   `json:"user_settings"`
 		IterationOverrides []IterationOverride `json:"iteration_overrides"`
@@ -318,25 +339,75 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 			items = "[]"
 		}
 		now := nowDatetime()
+		kind := c.Kind
+		if kind != checklistKindDailyStart && kind != checklistKindIterationEnd {
+			kind = checklistKindManual
+		}
 		var existingID int64
-		err := db.QueryRow("SELECT id FROM checklists WHERE user_id = ? AND title = ?", userID, c.Title).Scan(&existingID)
+		var err error
+		if kind == checklistKindManual {
+			err = db.QueryRow("SELECT id FROM checklists WHERE user_id = ? AND kind = 'manual' AND title = ?", userID, c.Title).Scan(&existingID)
+		} else {
+			err = db.QueryRow("SELECT id FROM checklists WHERE user_id = ? AND kind = ?", userID, kind).Scan(&existingID)
+		}
 		if err == nil {
-			_, err = db.Exec("UPDATE checklists SET items = ?, updated_at = ? WHERE id = ? AND user_id = ?",
-				items, now, existingID, userID)
+			_, err = db.Exec("UPDATE checklists SET title = ?, items = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+				c.Title, items, now, existingID, userID)
 			if err == nil {
 				checklistIDMap[c.ID] = existingID
 				checklistCount++
 			}
 		} else {
-			result, err := db.Exec(
-				"INSERT INTO checklists (user_id, title, items, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-				userID, c.Title, items, now, now,
+			result, insertErr := db.Exec(
+				"INSERT INTO checklists (user_id, title, items, kind, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+				userID, c.Title, items, kind, now, now,
 			)
-			if err == nil {
+			if insertErr == nil {
 				newID, _ := result.LastInsertId()
 				checklistIDMap[c.ID] = newID
 				checklistCount++
 			}
+		}
+	}
+
+	checklistRunCount := 0
+	for _, run := range importData.ChecklistRuns {
+		newID, ok := checklistIDMap[run.ChecklistID]
+		if !ok || run.OccurrenceKey == "" {
+			continue
+		}
+		kind := run.Kind
+		if kind != checklistKindDailyStart && kind != checklistKindIterationEnd {
+			continue
+		}
+		data := run.Data
+		if data == "" {
+			data = "{}"
+		}
+		createdAt := run.CreatedAt
+		if createdAt == "" {
+			createdAt = nowDatetime()
+		}
+		updatedAt := run.UpdatedAt
+		if updatedAt == "" {
+			updatedAt = createdAt
+		}
+		completed := 0
+		if run.Completed {
+			completed = 1
+		}
+		_, err := db.Exec(`INSERT INTO checklist_runs (
+			user_id, checklist_id, kind, occurrence_key, iteration_number, title, items, data,
+			completed, completed_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(user_id, kind, occurrence_key) DO UPDATE SET
+			checklist_id = excluded.checklist_id, title = excluded.title, items = excluded.items,
+			data = excluded.data, completed = excluded.completed, completed_at = excluded.completed_at,
+			updated_at = excluded.updated_at`,
+			userID, newID, kind, run.OccurrenceKey, run.IterationNumber, run.Title, run.Items,
+			data, completed, run.CompletedAt, createdAt, updatedAt)
+		if err == nil {
+			checklistRunCount++
 		}
 	}
 
@@ -455,14 +526,15 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonOK(w, DataImportResponse{
-		Message:          "Data imported successfully",
-		AttendanceCount:  attendanceCount,
-		WorkLogCount:     workLogCount,
-		TodoCount:        todoCount,
-		TicketIssueCount: ticketIssueCount,
-		ChecklistCount:   checklistCount,
-		SnapshotCount:    snapshotCount,
-		OverrideCount:    overrideCount,
+		Message:           "Data imported successfully",
+		AttendanceCount:   attendanceCount,
+		WorkLogCount:      workLogCount,
+		TodoCount:         todoCount,
+		TicketIssueCount:  ticketIssueCount,
+		ChecklistCount:    checklistCount,
+		ChecklistRunCount: checklistRunCount,
+		SnapshotCount:     snapshotCount,
+		OverrideCount:     overrideCount,
 	})
 }
 
@@ -494,7 +566,7 @@ func handleDataDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tables := []string{"attendance", "work_logs", "todos", "ticket_issues", "checklist_snapshots", "checklists", "iteration_overrides"}
+	tables := []string{"attendance", "work_logs", "todos", "ticket_issues", "checklist_runs", "checklist_snapshots", "checklists", "iteration_overrides"}
 	counts := map[string]int64{}
 	for _, table := range tables {
 		result, err := db.Exec("DELETE FROM "+table+" WHERE user_id = ?", userID)

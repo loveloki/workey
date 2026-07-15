@@ -11,6 +11,7 @@ import { WorkLogSection } from '../components/dashboard/WorkLogSection'
 import { CompletedTodosSection } from '../components/dashboard/CompletedTodosSection'
 import { TodayCreatedTodosSidebar, TodayCreatedTodosInline } from '../components/dashboard/TodayCreatedTodos'
 import { AttendanceStatusBar } from '../components/dashboard/AttendanceStatusBar'
+import { ChecklistReminderSection } from '../components/dashboard/ChecklistReminderSection'
 import { useAttendanceToday } from '../lib/queries'
 
 export const Route = createFileRoute('/')({ component: Dashboard })
@@ -57,6 +58,11 @@ function Dashboard() {
       <PageHeader
         eyebrow="今日工作"
         title={new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
+      />
+
+      <ChecklistReminderSection
+        date={getToday()}
+        enabled={!!todayData?.clock_in && todayData.status !== 'leave'}
       />
 
       {/* Desktop: two-column layout */}

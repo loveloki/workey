@@ -7,6 +7,7 @@ import type {
   TicketIssueResponse, TicketIssueListResponse, TicketIssueStatsResponse,
   ChecklistResponse, ChecklistListResponse,
   SnapshotResponse, SnapshotListResponse,
+  ChecklistReminderListResponse, ChecklistRunResponse,
   IterationOverrideResponse, IterationOverrideListResponse,
   SettingsResponse, VersionResponse, VersionRangeResponse,
   MessageResponse, AuthResponse, MeResponse,
@@ -16,7 +17,7 @@ import type {
 } from './models.gen'
 
 export type {
-  Attendance, WorkLog, Todo, TicketIssue, Checklist, ChecklistSnapshot,
+  Attendance, WorkLog, Todo, TicketIssue, Checklist, ChecklistSnapshot, ChecklistRun, ChecklistReminder,
   IterationOverride, Passkey, AttendanceStatsResponse as AttendanceStats,
   TicketIssueStatsResponse as TicketIssueStats,
 } from './models.gen'
@@ -256,6 +257,26 @@ export const checklistSnapshots = {
     }),
   delete: (id: number) =>
     request<MessageResponse>(`/api/checklist-snapshots?id=${id}`, { method: 'DELETE' }),
+}
+
+export type ChecklistKind = 'manual' | 'daily_start' | 'iteration_end'
+
+export interface ChecklistRunInput {
+  checklist_id: number
+  kind: Exclude<ChecklistKind, 'manual'>
+  occurrence_key: string
+  checked: boolean[]
+  notes: string[]
+}
+
+export const checklistReminders = {
+  list: (date: string) =>
+    request<ChecklistReminderListResponse>(`/api/checklist-reminders?date=${encodeURIComponent(date)}`),
+  save: (data: ChecklistRunInput) =>
+    request<ChecklistRunResponse>('/api/checklist-runs', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 }
 
 // ─── Passkeys ───────────────────────────────────────────────────

@@ -95,6 +95,26 @@ type SnapshotListResponse struct {
 	Snapshots []ChecklistSnapshot `json:"snapshots"`
 }
 
+type ChecklistRunResponse struct {
+	Run ChecklistRun `json:"run"`
+}
+
+type ChecklistReminder struct {
+	Kind            string        `json:"kind"`
+	OccurrenceKey   string        `json:"occurrence_key"`
+	Label           string        `json:"label"`
+	DueDate         string        `json:"due_date"`
+	IterationNumber *int64        `json:"iteration_number"`
+	IterationStart  string        `json:"iteration_start,omitempty"`
+	IterationEnd    string        `json:"iteration_end,omitempty"`
+	Checklist       Checklist     `json:"checklist"`
+	Run             *ChecklistRun `json:"run"`
+}
+
+type ChecklistReminderListResponse struct {
+	Reminders []ChecklistReminder `json:"reminders"`
+}
+
 // ─── Iterations ─────────────────────────────────────────────
 
 type IterationOverrideResponse struct {
@@ -151,14 +171,15 @@ type PasskeyAuthBeginResponse struct {
 // ─── Data ───────────────────────────────────────────────────
 
 type DataImportResponse struct {
-	Message          string `json:"message"`
-	AttendanceCount  int    `json:"attendance_count"`
-	WorkLogCount     int    `json:"work_log_count"`
-	TodoCount        int    `json:"todo_count"`
-	TicketIssueCount int    `json:"ticket_issue_count"`
-	ChecklistCount   int    `json:"checklist_count"`
-	SnapshotCount    int    `json:"snapshot_count"`
-	OverrideCount    int    `json:"override_count"`
+	Message           string `json:"message"`
+	AttendanceCount   int    `json:"attendance_count"`
+	WorkLogCount      int    `json:"work_log_count"`
+	TodoCount         int    `json:"todo_count"`
+	TicketIssueCount  int    `json:"ticket_issue_count"`
+	ChecklistCount    int    `json:"checklist_count"`
+	ChecklistRunCount int    `json:"checklist_run_count"`
+	SnapshotCount     int    `json:"snapshot_count"`
+	OverrideCount     int    `json:"override_count"`
 }
 
 type DataDeleteResponse struct {

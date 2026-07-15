@@ -60,8 +60,25 @@ type Checklist struct {
 	UserID    int64  `json:"user_id"`
 	Title     string `json:"title"`
 	Items     string `json:"items"` // JSON 数组字符串
+	Kind      string `json:"kind"`  // manual / daily_start / iteration_end
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
+}
+
+type ChecklistRun struct {
+	ID              int64   `json:"id"`
+	UserID          int64   `json:"user_id"`
+	ChecklistID     int64   `json:"checklist_id"`
+	Kind            string  `json:"kind"`
+	OccurrenceKey   string  `json:"occurrence_key"`
+	IterationNumber *int64  `json:"iteration_number"`
+	Title           string  `json:"title"`
+	Items           string  `json:"items"` // 创建进度时的清单项目快照
+	Data            string  `json:"data"`  // JSON: { checked: bool[], notes: string[] }
+	Completed       bool    `json:"completed"`
+	CompletedAt     *string `json:"completed_at"`
+	CreatedAt       string  `json:"created_at"`
+	UpdatedAt       string  `json:"updated_at"`
 }
 
 type ChecklistSnapshot struct {
@@ -116,6 +133,7 @@ type ExportData struct {
 	Todos              []Todo              `json:"todos"`
 	TicketIssues       []TicketIssue       `json:"ticket_issues"`
 	Checklists         []Checklist         `json:"checklists"`
+	ChecklistRuns      []ChecklistRun      `json:"checklist_runs"`
 	ChecklistSnapshots []ChecklistSnapshot `json:"checklist_snapshots"`
 	UserSettings       map[string]string   `json:"user_settings"`
 	IterationOverrides []IterationOverride `json:"iteration_overrides"`

@@ -44,7 +44,11 @@ func TestHandleChecklists_CRUD(t *testing.T) {
 
 		var resp ChecklistListResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Len(t, resp.Checklists, 1)
+		assert.Len(t, resp.Checklists, 3)
+		assert.Contains(t, resp.Checklists, Checklist{
+			ID: checklistID, UserID: userID, Title: "每日检查", Items: `[{"text":"item1","checked":false}]`,
+			Kind: checklistKindManual, CreatedAt: resp.Checklists[2].CreatedAt, UpdatedAt: resp.Checklists[2].UpdatedAt,
+		})
 	})
 
 	t.Run("更新检查清单标题", func(t *testing.T) {

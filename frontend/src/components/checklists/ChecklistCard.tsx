@@ -23,6 +23,12 @@ export function ChecklistCard({
   const deleteMut = useDeleteChecklist()
 
   const parsedItems = parseItems(checklist.items)
+  const isReminder = checklist.kind === 'daily_start' || checklist.kind === 'iteration_end'
+  const kindLabel = checklist.kind === 'daily_start'
+    ? '每日上班'
+    : checklist.kind === 'iteration_end'
+      ? 'Iteration 结束'
+      : '手动清单'
 
   const handleEditSave = async (data: Checklist | { title: string; items: string }) => {
     try {
@@ -77,7 +83,12 @@ export function ChecklistCard({
             <path d="M9 11l3 3L22 4" />
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
           </svg>
-          {checklist.title}
+          <span>
+            {checklist.title}
+            <span className="block font-mono text-[10px] font-normal mt-0.5 text-[var(--color-ink-faint)]">
+              {kindLabel}{isReminder ? ' · Dashboard 自动提醒' : ''}
+            </span>
+          </span>
         </span>
         <span className="font-mono text-xs font-normal text-[var(--color-ink-faint)]">
           {parsedItems.length} 项
@@ -114,7 +125,7 @@ export function ChecklistCard({
           onClick={onUse}
           className="font-mono text-xs px-4 py-1.5 rounded-md text-[var(--color-solid-text)] transition-colors bg-[var(--color-solid)]"
         >
-          开始检查
+          {isReminder ? '预览检查' : '开始检查'}
         </button>
         <button
           onClick={() => setEditing(true)}
@@ -122,7 +133,11 @@ export function ChecklistCard({
         >
           编辑
         </button>
-        {!confirmDelete ? (
+        {isReminder ? (
+          <span className="font-mono text-[10px] ml-auto text-[var(--color-ink-faint)]">
+            系统提醒清单不可删除
+          </span>
+        ) : !confirmDelete ? (
           <button
             onClick={() => setConfirmDelete(true)}
             className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] ml-auto text-[var(--color-danger-text,#c00)]"

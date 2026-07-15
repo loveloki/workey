@@ -104,6 +104,8 @@ func registerRoutes(mux *http.ServeMux) {
 	// 检查清单
 	mux.HandleFunc("/api/checklists", corsMiddleware(authMiddleware(handleChecklists)))
 	mux.HandleFunc("/api/checklist-snapshots", corsMiddleware(authMiddleware(handleChecklistSnapshots)))
+	mux.HandleFunc("/api/checklist-reminders", corsMiddleware(authMiddleware(handleChecklistReminders)))
+	mux.HandleFunc("/api/checklist-runs", corsMiddleware(authMiddleware(handleChecklistRuns)))
 
 	// 迭代周期
 	mux.HandleFunc("/api/iteration-overrides", corsMiddleware(authMiddleware(handleIterationOverrides)))

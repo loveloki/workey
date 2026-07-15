@@ -50,8 +50,25 @@ func initDB() {
 			user_id INTEGER NOT NULL REFERENCES users(id),
 			title TEXT NOT NULL DEFAULT '',
 			items TEXT NOT NULL DEFAULT '[]',
+			kind TEXT NOT NULL DEFAULT 'manual',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS checklist_runs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL REFERENCES users(id),
+			checklist_id INTEGER NOT NULL REFERENCES checklists(id),
+			kind TEXT NOT NULL,
+			occurrence_key TEXT NOT NULL,
+			iteration_number INTEGER,
+			title TEXT NOT NULL,
+			items TEXT NOT NULL DEFAULT '[]',
+			data TEXT NOT NULL DEFAULT '{}',
+			completed INTEGER NOT NULL DEFAULT 0,
+			completed_at DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, kind, occurrence_key)
 		)`,
 		`CREATE TABLE IF NOT EXISTS checklist_snapshots (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -184,6 +201,42 @@ func migrateDB() {
 			log.Fatalf("Failed to backfill is_overtime: %v", err)
 		}
 	}
+
+	if tableExists("checklists") {
+		if !tableHasColumn("checklists", "kind") {
+			if _, err = db.Exec("ALTER TABLE checklists ADD COLUMN kind TEXT NOT NULL DEFAULT 'manual'"); err != nil {
+				log.Fatalf("Failed to add checklist kind column: %v", err)
+			}
+		}
+		if _, err = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_checklists_user_system_kind
+			ON checklists(user_id, kind) WHERE kind IN ('daily_start', 'iteration_end')`); err != nil {
+			log.Fatalf("Failed to create checklist kind index: %v", err)
+		}
+	}
+}
+
+func tableExists(table string) bool {
+	var name string
+	return db.QueryRow("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&name) == nil
+}
+
+func tableHasColumn(table, column string) bool {
+	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, columnType string
+		var notNull int
+		var defaultValue *string
+		var primaryKey int
+		if rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey) == nil && name == column {
+			return true
+		}
+	}
+	return false
 }
 
 // initPasskeyDB 创建 passkey 相关数据表

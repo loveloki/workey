@@ -58,6 +58,22 @@ export interface Checklist {
   user_id: number /* int64 */;
   title: string;
   items: string; // JSON 数组字符串
+  kind: string; // manual / daily_start / iteration_end
+  created_at: string;
+  updated_at: string;
+}
+export interface ChecklistRun {
+  id: number /* int64 */;
+  user_id: number /* int64 */;
+  checklist_id: number /* int64 */;
+  kind: string;
+  occurrence_key: string;
+  iteration_number?: number /* int64 */;
+  title: string;
+  items: string; // 创建进度时的清单项目快照
+  data: string; // JSON: { checked: bool[], notes: string[] }
+  completed: boolean;
+  completed_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -112,6 +128,7 @@ export interface ExportData {
   todos: Todo[];
   ticket_issues: TicketIssue[];
   checklists: Checklist[];
+  checklist_runs: ChecklistRun[];
   checklist_snapshots: ChecklistSnapshot[];
   user_settings: { [key: string]: string};
   iteration_overrides: IterationOverride[];
@@ -177,6 +194,23 @@ export interface SnapshotResponse {
 export interface SnapshotListResponse {
   snapshots: ChecklistSnapshot[];
 }
+export interface ChecklistRunResponse {
+  run: ChecklistRun;
+}
+export interface ChecklistReminder {
+  kind: string;
+  occurrence_key: string;
+  label: string;
+  due_date: string;
+  iteration_number?: number /* int64 */;
+  iteration_start?: string;
+  iteration_end?: string;
+  checklist: Checklist;
+  run?: ChecklistRun;
+}
+export interface ChecklistReminderListResponse {
+  reminders: ChecklistReminder[];
+}
 export interface IterationOverrideResponse {
   override: IterationOverride;
 }
@@ -223,6 +257,7 @@ export interface DataImportResponse {
   todo_count: number /* int */;
   ticket_issue_count: number /* int */;
   checklist_count: number /* int */;
+  checklist_run_count: number /* int */;
   snapshot_count: number /* int */;
   override_count: number /* int */;
 }
