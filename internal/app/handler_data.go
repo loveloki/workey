@@ -172,6 +172,22 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		overridesList = append(overridesList, o)
 	}
 
+	calendarDays := []HolidayCalendarDay{}
+	rows, err = db.Query(`SELECT id, user_id, date, is_workday, name, source, created_at, updated_at
+		FROM holiday_calendar_days WHERE user_id = ? ORDER BY date`, userID)
+	if err != nil {
+		jsonError(w, "Failed to export holiday calendar", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var day HolidayCalendarDay
+		var isWorkday int
+		rows.Scan(&day.ID, &day.UserID, &day.Date, &isWorkday, &day.Name, &day.Source, &day.CreatedAt, &day.UpdatedAt)
+		day.IsWorkday = isWorkday != 0
+		calendarDays = append(calendarDays, day)
+	}
+
 	exportData := ExportData{
 		Attendance:         attendances,
 		WorkLogs:           workLogsList,
@@ -182,6 +198,7 @@ func handleDataExport(w http.ResponseWriter, r *http.Request) {
 		ChecklistSnapshots: snapshotsList,
 		UserSettings:       userSettings,
 		IterationOverrides: overridesList,
+		HolidayCalendar:    calendarDays,
 		ExportedAt:         time.Now().Format(time.RFC3339),
 	}
 
@@ -232,15 +249,16 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var importData struct {
-		Attendance         []Attendance        `json:"attendance"`
-		WorkLogs           []WorkLog           `json:"work_logs"`
-		Todos              []Todo              `json:"todos"`
-		TicketIssues       []TicketIssue       `json:"ticket_issues"`
-		Checklists         []Checklist         `json:"checklists"`
-		ChecklistRuns      []ChecklistRun      `json:"checklist_runs"`
-		ChecklistSnapshots []ChecklistSnapshot `json:"checklist_snapshots"`
-		UserSettings       map[string]string   `json:"user_settings"`
-		IterationOverrides []IterationOverride `json:"iteration_overrides"`
+		Attendance         []Attendance         `json:"attendance"`
+		WorkLogs           []WorkLog            `json:"work_logs"`
+		Todos              []Todo               `json:"todos"`
+		TicketIssues       []TicketIssue        `json:"ticket_issues"`
+		Checklists         []Checklist          `json:"checklists"`
+		ChecklistRuns      []ChecklistRun       `json:"checklist_runs"`
+		ChecklistSnapshots []ChecklistSnapshot  `json:"checklist_snapshots"`
+		UserSettings       map[string]string    `json:"user_settings"`
+		IterationOverrides []IterationOverride  `json:"iteration_overrides"`
+		HolidayCalendar    []HolidayCalendarDay `json:"holiday_calendar"`
 	}
 	foundJSON := false
 
@@ -525,6 +543,28 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		overrideCount++
 	}
 
+	calendarDayCount := 0
+	for _, day := range importData.HolidayCalendar {
+		if _, err := time.Parse(dateFormat, day.Date); err != nil {
+			continue
+		}
+		isWorkday := 0
+		if day.IsWorkday {
+			isWorkday = 1
+		}
+		now := nowDatetime()
+		_, err := db.Exec(`INSERT INTO holiday_calendar_days
+			(user_id, date, is_workday, name, source, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(user_id, date) DO UPDATE SET
+				is_workday = excluded.is_workday, name = excluded.name,
+				source = excluded.source, updated_at = excluded.updated_at`,
+			userID, day.Date, isWorkday, day.Name, day.Source, now, now)
+		if err == nil {
+			calendarDayCount++
+		}
+	}
+
 	jsonOK(w, DataImportResponse{
 		Message:           "Data imported successfully",
 		AttendanceCount:   attendanceCount,
@@ -535,6 +575,7 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 		ChecklistRunCount: checklistRunCount,
 		SnapshotCount:     snapshotCount,
 		OverrideCount:     overrideCount,
+		CalendarDayCount:  calendarDayCount,
 	})
 }
 
@@ -566,7 +607,7 @@ func handleDataDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tables := []string{"attendance", "work_logs", "todos", "ticket_issues", "checklist_runs", "checklist_snapshots", "checklists", "iteration_overrides"}
+	tables := []string{"attendance", "work_logs", "todos", "ticket_issues", "checklist_runs", "checklist_snapshots", "checklists", "iteration_overrides", "holiday_calendar_days"}
 	counts := map[string]int64{}
 	for _, table := range tables {
 		result, err := db.Exec("DELETE FROM "+table+" WHERE user_id = ?", userID)

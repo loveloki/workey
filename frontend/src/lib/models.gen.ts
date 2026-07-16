@@ -95,6 +95,38 @@ export interface IterationOverride {
   created_at: string;
   updated_at: string;
 }
+/**
+ * HolidayCalendarDay 只保存中国法定节假日与调休工作日等例外日期。
+ */
+export interface HolidayCalendarDay {
+  id: number /* int64 */;
+  user_id: number /* int64 */;
+  date: string;
+  is_workday: boolean;
+  name: string;
+  source: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface HolidayCalendarImportDay {
+  date: string;
+  is_workday: boolean;
+  name: string;
+}
+export interface HolidayCalendarImportRequest {
+  days: HolidayCalendarImportDay[];
+  replace_years: boolean;
+  source: string;
+}
+export interface SettingsUpdateRequest {
+  timezone?: string;
+  kanban_url?: string;
+  theme?: string;
+  iteration_start_date?: string;
+  iteration_duration_days?: string; // 兼容旧客户端
+  iteration_workdays?: string;
+  reminder_delay?: string;
+}
 export interface Passkey {
   id: number /* int64 */;
   name: string;
@@ -132,6 +164,7 @@ export interface ExportData {
   checklist_snapshots: ChecklistSnapshot[];
   user_settings: { [key: string]: string};
   iteration_overrides: IterationOverride[];
+  holiday_calendar: HolidayCalendarDay[];
   exported_at: string;
 }
 
@@ -217,12 +250,39 @@ export interface IterationOverrideResponse {
 export interface IterationOverrideListResponse {
   overrides: IterationOverride[];
 }
+export interface IterationRange {
+  iteration_number: number /* int64 */;
+  start_date: string;
+  end_date: string;
+  calendar_days: number /* int */;
+  workdays: number /* int */;
+  is_overridden: boolean;
+}
+export interface IterationListResponse {
+  current_iteration: number /* int64 */;
+  iterations: IterationRange[];
+}
+export interface HolidayCalendarYearSummary {
+  year: number /* int */;
+  day_count: number /* int */;
+  holiday_count: number /* int */;
+  workday_count: number /* int */;
+}
+export interface HolidayCalendarResponse {
+  days: HolidayCalendarDay[];
+  years: HolidayCalendarYearSummary[];
+}
+export interface HolidayCalendarImportResponse {
+  imported_count: number /* int */;
+  replaced_years: number /* int */[];
+}
 export interface SettingsResponse {
   timezone: string;
   kanban_url: string;
   theme: string;
   iteration_start_date: string;
-  iteration_duration_days: string;
+  iteration_duration_days: string; // 兼容旧客户端
+  iteration_workdays: string;
   reminder_delay: string;
 }
 export interface VersionResponse {
@@ -260,6 +320,7 @@ export interface DataImportResponse {
   checklist_run_count: number /* int */;
   snapshot_count: number /* int */;
   override_count: number /* int */;
+  calendar_day_count: number /* int */;
 }
 export interface DataDeleteResponse {
   message: string;

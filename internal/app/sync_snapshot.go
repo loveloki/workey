@@ -175,6 +175,24 @@ func buildExportData(ctx context.Context, tx *sql.Tx, userID int64) (*ExportData
 		overridesList = append(overridesList, o)
 	}
 
+	calendarDays := []HolidayCalendarDay{}
+	rows8, err := tx.QueryContext(ctx, `SELECT id, user_id, date, is_workday, name, source, created_at, updated_at
+		FROM holiday_calendar_days WHERE user_id = ? ORDER BY date`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("query holiday_calendar_days: %w", err)
+	}
+	defer rows8.Close()
+	for rows8.Next() {
+		var day HolidayCalendarDay
+		var isWorkday int
+		if err := rows8.Scan(&day.ID, &day.UserID, &day.Date, &isWorkday, &day.Name,
+			&day.Source, &day.CreatedAt, &day.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan holiday_calendar_days: %w", err)
+		}
+		day.IsWorkday = isWorkday != 0
+		calendarDays = append(calendarDays, day)
+	}
+
 	return &ExportData{
 		Attendance:         attendances,
 		WorkLogs:           workLogsList,
@@ -185,6 +203,7 @@ func buildExportData(ctx context.Context, tx *sql.Tx, userID int64) (*ExportData
 		ChecklistSnapshots: snapshotsList,
 		UserSettings:       userSettings,
 		IterationOverrides: overridesList,
+		HolidayCalendar:    calendarDays,
 		ExportedAt:         time.Now().UTC().Format(time.RFC3339),
 	}, nil
 }
@@ -267,6 +286,15 @@ type hashIterationOverride struct {
 	UpdatedAt       string `json:"updated_at"`
 }
 
+type hashHolidayCalendarDay struct {
+	Date      string `json:"date"`
+	IsWorkday bool   `json:"is_workday"`
+	Name      string `json:"name"`
+	Source    string `json:"source"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 // computeDataHash 计算导出数据的确定性 hash
 // 只使用业务数据字段（排除 id/user_id），确保同一数据在不同环境中 hash 一致
 func computeDataHash(data *ExportData) (string, error) {
@@ -326,17 +354,23 @@ func computeDataHash(data *ExportData) (string, error) {
 	for i, o := range data.IterationOverrides {
 		hOverrides[i] = hashIterationOverride{IterationNumber: o.IterationNumber, StartDate: o.StartDate, EndDate: o.EndDate, CreatedAt: o.CreatedAt, UpdatedAt: o.UpdatedAt}
 	}
+	hCalendar := make([]hashHolidayCalendarDay, len(data.HolidayCalendar))
+	for i, day := range data.HolidayCalendar {
+		hCalendar[i] = hashHolidayCalendarDay{Date: day.Date, IsWorkday: day.IsWorkday, Name: day.Name,
+			Source: day.Source, CreatedAt: day.CreatedAt, UpdatedAt: day.UpdatedAt}
+	}
 
 	stable := struct {
-		Attendance         []hashAttendance        `json:"attendance"`
-		WorkLogs           []hashWorkLog           `json:"work_logs"`
-		Todos              []hashTodo              `json:"todos"`
-		TicketIssues       []hashTicketIssue       `json:"ticket_issues,omitempty"`
-		Checklists         []hashChecklist         `json:"checklists"`
-		ChecklistRuns      []hashChecklistRun      `json:"checklist_runs"`
-		ChecklistSnapshots []hashChecklistSnapshot `json:"checklist_snapshots"`
-		UserSettings       [][2]string             `json:"user_settings"`
-		IterationOverrides []hashIterationOverride `json:"iteration_overrides"`
+		Attendance         []hashAttendance         `json:"attendance"`
+		WorkLogs           []hashWorkLog            `json:"work_logs"`
+		Todos              []hashTodo               `json:"todos"`
+		TicketIssues       []hashTicketIssue        `json:"ticket_issues,omitempty"`
+		Checklists         []hashChecklist          `json:"checklists"`
+		ChecklistRuns      []hashChecklistRun       `json:"checklist_runs"`
+		ChecklistSnapshots []hashChecklistSnapshot  `json:"checklist_snapshots"`
+		UserSettings       [][2]string              `json:"user_settings"`
+		IterationOverrides []hashIterationOverride  `json:"iteration_overrides"`
+		HolidayCalendar    []hashHolidayCalendarDay `json:"holiday_calendar"`
 	}{
 		Attendance:         hAttendances,
 		WorkLogs:           hWorkLogs,
@@ -347,6 +381,7 @@ func computeDataHash(data *ExportData) (string, error) {
 		ChecklistSnapshots: hSnapshots,
 		UserSettings:       orderedSettings,
 		IterationOverrides: hOverrides,
+		HolidayCalendar:    hCalendar,
 	}
 
 	jsonBytes, err := json.Marshal(stable)
@@ -456,6 +491,7 @@ func replaceImportData(ctx context.Context, tx *sql.Tx, userID int64, data *Expo
 		"checklist_snapshots",
 		"checklists",
 		"iteration_overrides",
+		"holiday_calendar_days",
 		"ticket_issues",
 		"todos",
 		"work_logs",
@@ -632,6 +668,20 @@ func replaceImportData(ctx context.Context, tx *sql.Tx, userID int64, data *Expo
 		)
 		if err != nil {
 			return fmt.Errorf("insert iteration_override: %w", err)
+		}
+	}
+
+	for _, day := range data.HolidayCalendar {
+		isWorkday := 0
+		if day.IsWorkday {
+			isWorkday = 1
+		}
+		_, err := tx.Exec(`INSERT INTO holiday_calendar_days
+			(user_id, date, is_workday, name, source, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`, userID, day.Date, isWorkday, day.Name,
+			day.Source, day.CreatedAt, day.UpdatedAt)
+		if err != nil {
+			return fmt.Errorf("insert holiday_calendar_day: %w", err)
 		}
 	}
 

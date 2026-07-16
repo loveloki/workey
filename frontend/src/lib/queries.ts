@@ -1,10 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   attendance, workLogs, todos, ticketIssues, checklists, checklistSnapshots, checklistReminders,
-  settings, iterationOverrides, passkeys, system, history, sync,
+  settings, iterations, iterationOverrides, holidayCalendar, passkeys, system, history, sync,
   type Attendance, type WorkLog, type Todo, type Checklist,
   type ChecklistItem, type SnapshotData, type AttendanceStats,
   type TicketIssueInput, type TicketIssueFilters, type SyncConfigInput, type ChecklistRunInput,
+  type SettingsUpdateRequest, type HolidayCalendarImportRequest,
 } from './api'
 
 // ─── Query Keys ──────────────────────────────────────────────────
@@ -40,7 +41,9 @@ export const queryKeys = {
     list: (date: string) => ['checklistReminders', date] as const,
   },
   settings: ['settings'] as const,
+  iterations: ['iterations'] as const,
   iterationOverrides: ['iterationOverrides'] as const,
+  holidayCalendar: ['holidayCalendar'] as const,
   passkeys: ['passkeys'] as const,
   systemVersion: ['system', 'version'] as const,
   historyDateRange: ['history', 'dateRange'] as const,
@@ -361,16 +364,23 @@ export function useSettings(enabled = true) {
 export function useSaveSettings() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: { timezone?: string; kanban_url?: string; theme?: string;
-      iteration_start_date?: string; iteration_duration_days?: string; reminder_delay?: string }) =>
-      settings.save(data),
+    mutationFn: (data: SettingsUpdateRequest) => settings.save(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.settings })
+      qc.invalidateQueries({ queryKey: queryKeys.iterations })
     },
   })
 }
 
-// ─── Iteration Overrides ─────────────────────────────────────────
+// ─── Iterations ──────────────────────────────────────────────────
+
+export function useIterations(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.iterations,
+    queryFn: () => iterations.list(),
+    enabled,
+  })
+}
 
 export function useIterationOverrides(enabled = true) {
   return useQuery({
@@ -388,6 +398,7 @@ export function useSaveIterationOverride() {
     }) => iterationOverrides.save(iterationNumber, startDate, endDate),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.iterationOverrides })
+      qc.invalidateQueries({ queryKey: queryKeys.iterations })
     },
   })
 }
@@ -398,6 +409,37 @@ export function useDeleteIterationOverride() {
     mutationFn: (iterationNumber: number) => iterationOverrides.delete(iterationNumber),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.iterationOverrides })
+      qc.invalidateQueries({ queryKey: queryKeys.iterations })
+    },
+  })
+}
+
+export function useHolidayCalendar(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.holidayCalendar,
+    queryFn: () => holidayCalendar.get(),
+    enabled,
+  })
+}
+
+export function useImportHolidayCalendar() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: HolidayCalendarImportRequest) => holidayCalendar.import(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.holidayCalendar })
+      qc.invalidateQueries({ queryKey: queryKeys.iterations })
+    },
+  })
+}
+
+export function useDeleteHolidayCalendarYear() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (year: number) => holidayCalendar.deleteYear(year),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.holidayCalendar })
+      qc.invalidateQueries({ queryKey: queryKeys.iterations })
     },
   })
 }

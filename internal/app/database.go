@@ -114,6 +114,18 @@ func initDB() {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(user_id, iteration_number)
 		)`,
+		`CREATE TABLE IF NOT EXISTS holiday_calendar_days (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL REFERENCES users(id),
+			date TEXT NOT NULL,
+			is_workday INTEGER NOT NULL,
+			name TEXT NOT NULL DEFAULT '',
+			source TEXT NOT NULL DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, date)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_holiday_calendar_user_date ON holiday_calendar_days(user_id, date)`,
 		`CREATE TABLE IF NOT EXISTS pending_reminders (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER NOT NULL REFERENCES users(id),
@@ -211,6 +223,23 @@ func migrateDB() {
 		if _, err = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_checklists_user_system_kind
 			ON checklists(user_id, kind) WHERE kind IN ('daily_start', 'iteration_end')`); err != nil {
 			log.Fatalf("Failed to create checklist kind index: %v", err)
+		}
+	}
+
+	// 旧版按自然日配置，迁移为等价的每周工作日数（14 天 → 10 个工作日）。
+	if tableExists("user_settings") {
+		_, err = db.Exec(`INSERT INTO user_settings (user_id, key, value)
+			SELECT user_id, 'iteration_workdays',
+				CAST(CASE WHEN CAST(value AS INTEGER) < 2 THEN 1
+					ELSE (CAST(value AS INTEGER) * 5 + 3) / 7 END AS TEXT)
+			FROM user_settings old
+			WHERE key = 'iteration_duration_days'
+				AND NOT EXISTS (
+					SELECT 1 FROM user_settings current
+					WHERE current.user_id = old.user_id AND current.key = 'iteration_workdays'
+				)`)
+		if err != nil {
+			log.Fatalf("Failed to migrate iteration workdays: %v", err)
 		}
 	}
 }

@@ -1,4 +1,5 @@
 /workey
+frontend/workey
 workey.db
 workey.db-shm
 workey.db-wal

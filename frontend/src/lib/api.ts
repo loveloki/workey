@@ -1,6 +1,6 @@
 import type {
   Attendance, WorkLog, Todo, TicketIssue, Checklist, ChecklistSnapshot,
-  IterationOverride, Passkey,
+  IterationOverride, HolidayCalendarDay, IterationRange, Passkey,
   AttendanceResponse, AttendanceListResponse, AttendanceStatsResponse,
   WorkLogResponse, WorkLogListResponse,
   TodoResponse, TodoListResponse,
@@ -8,8 +8,9 @@ import type {
   ChecklistResponse, ChecklistListResponse,
   SnapshotResponse, SnapshotListResponse,
   ChecklistReminderListResponse, ChecklistRunResponse,
-  IterationOverrideResponse, IterationOverrideListResponse,
-  SettingsResponse, VersionResponse, VersionRangeResponse,
+  IterationOverrideResponse, IterationOverrideListResponse, IterationListResponse,
+  HolidayCalendarResponse, HolidayCalendarImportResponse, HolidayCalendarImportRequest,
+  SettingsResponse, SettingsUpdateRequest, VersionResponse, VersionRangeResponse,
   MessageResponse, AuthResponse, MeResponse,
   PasskeyListResponse, DataImportResponse, DataDeleteResponse,
   SyncConfigResponse, SyncStatusResponse, SyncCheckResponse,
@@ -18,8 +19,8 @@ import type {
 
 export type {
   Attendance, WorkLog, Todo, TicketIssue, Checklist, ChecklistSnapshot, ChecklistRun, ChecklistReminder,
-  IterationOverride, Passkey, AttendanceStatsResponse as AttendanceStats,
-  TicketIssueStatsResponse as TicketIssueStats,
+  IterationOverride, HolidayCalendarDay, IterationRange, Passkey, AttendanceStatsResponse as AttendanceStats,
+  TicketIssueStatsResponse as TicketIssueStats, SettingsUpdateRequest, HolidayCalendarImportRequest,
 } from './models.gen'
 
 const API_BASE = ''
@@ -369,6 +370,10 @@ export const passkeys = {
 
 // ─── Iteration Overrides ────────────────────────────────────────
 
+export const iterations = {
+  list: () => request<IterationListResponse>('/api/iterations'),
+}
+
 export const iterationOverrides = {
   list: () =>
     request<IterationOverrideListResponse>('/api/iteration-overrides'),
@@ -381,6 +386,17 @@ export const iterationOverrides = {
     request<MessageResponse>(`/api/iteration-overrides?iteration_number=${iteration_number}`, {
       method: 'DELETE',
     }),
+}
+
+export const holidayCalendar = {
+  get: () => request<HolidayCalendarResponse>('/api/holiday-calendar'),
+  import: (data: HolidayCalendarImportRequest) =>
+    request<HolidayCalendarImportResponse>('/api/holiday-calendar', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  deleteYear: (year: number) =>
+    request<MessageResponse>(`/api/holiday-calendar?year=${year}`, { method: 'DELETE' }),
 }
 
 // ─── WebDAV 同步 ─────────────────────────────────────────────────
@@ -474,7 +490,7 @@ export const push = {
 
 export const settings = {
   get: () => request<SettingsResponse>('/api/settings'),
-  save: (data: { timezone?: string; kanban_url?: string; theme?: string; iteration_start_date?: string; iteration_duration_days?: string; reminder_delay?: string }) =>
+  save: (data: SettingsUpdateRequest) =>
     request<SettingsResponse>('/api/settings', {
       method: 'POST',
       body: JSON.stringify(data),

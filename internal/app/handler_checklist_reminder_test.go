@@ -17,7 +17,7 @@ func TestChecklistReminders_DailyAndIterationEnd(t *testing.T) {
 
 	userID := createTestUser(t, "reminder-user", "password123")
 	db.Exec("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'iteration_start_date', '2024-01-01')", userID)
-	db.Exec("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'iteration_duration_days', '2')", userID)
+	db.Exec("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'iteration_workdays', '2')", userID)
 	db.Exec(`INSERT INTO attendance (user_id, date, clock_in, status, created_at, updated_at)
 		VALUES (?, '2024-01-02', '2024-01-02T09:00:00Z', 'normal', '2024-01-02T09:00:00Z', '2024-01-02T09:00:00Z')`, userID)
 

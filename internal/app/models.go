@@ -101,6 +101,40 @@ type IterationOverride struct {
 	UpdatedAt       string `json:"updated_at"`
 }
 
+// HolidayCalendarDay 只保存中国法定节假日与调休工作日等例外日期。
+type HolidayCalendarDay struct {
+	ID        int64  `json:"id"`
+	UserID    int64  `json:"user_id"`
+	Date      string `json:"date"`
+	IsWorkday bool   `json:"is_workday"`
+	Name      string `json:"name"`
+	Source    string `json:"source"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type HolidayCalendarImportDay struct {
+	Date      string `json:"date"`
+	IsWorkday bool   `json:"is_workday"`
+	Name      string `json:"name"`
+}
+
+type HolidayCalendarImportRequest struct {
+	Days         []HolidayCalendarImportDay `json:"days"`
+	ReplaceYears bool                       `json:"replace_years"`
+	Source       string                     `json:"source"`
+}
+
+type SettingsUpdateRequest struct {
+	Timezone              string `json:"timezone,omitempty"`
+	KanbanURL             string `json:"kanban_url,omitempty"`
+	Theme                 string `json:"theme,omitempty"`
+	IterationStartDate    string `json:"iteration_start_date,omitempty"`
+	IterationDurationDays string `json:"iteration_duration_days,omitempty"` // 兼容旧客户端
+	IterationWorkdays     string `json:"iteration_workdays,omitempty"`
+	ReminderDelay         string `json:"reminder_delay,omitempty"`
+}
+
 type Passkey struct {
 	ID         int64   `json:"id"`
 	Name       string  `json:"name"`
@@ -128,14 +162,15 @@ type PushSubscription struct {
 
 // 数据导出结构
 type ExportData struct {
-	Attendance         []Attendance        `json:"attendance"`
-	WorkLogs           []WorkLog           `json:"work_logs"`
-	Todos              []Todo              `json:"todos"`
-	TicketIssues       []TicketIssue       `json:"ticket_issues"`
-	Checklists         []Checklist         `json:"checklists"`
-	ChecklistRuns      []ChecklistRun      `json:"checklist_runs"`
-	ChecklistSnapshots []ChecklistSnapshot `json:"checklist_snapshots"`
-	UserSettings       map[string]string   `json:"user_settings"`
-	IterationOverrides []IterationOverride `json:"iteration_overrides"`
-	ExportedAt         string              `json:"exported_at"`
+	Attendance         []Attendance         `json:"attendance"`
+	WorkLogs           []WorkLog            `json:"work_logs"`
+	Todos              []Todo               `json:"todos"`
+	TicketIssues       []TicketIssue        `json:"ticket_issues"`
+	Checklists         []Checklist          `json:"checklists"`
+	ChecklistRuns      []ChecklistRun       `json:"checklist_runs"`
+	ChecklistSnapshots []ChecklistSnapshot  `json:"checklist_snapshots"`
+	UserSettings       map[string]string    `json:"user_settings"`
+	IterationOverrides []IterationOverride  `json:"iteration_overrides"`
+	HolidayCalendar    []HolidayCalendarDay `json:"holiday_calendar"`
+	ExportedAt         string               `json:"exported_at"`
 }

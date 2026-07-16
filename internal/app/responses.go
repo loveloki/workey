@@ -125,6 +125,37 @@ type IterationOverrideListResponse struct {
 	Overrides []IterationOverride `json:"overrides"`
 }
 
+type IterationRange struct {
+	IterationNumber int64  `json:"iteration_number"`
+	StartDate       string `json:"start_date"`
+	EndDate         string `json:"end_date"`
+	CalendarDays    int    `json:"calendar_days"`
+	Workdays        int    `json:"workdays"`
+	IsOverridden    bool   `json:"is_overridden"`
+}
+
+type IterationListResponse struct {
+	CurrentIteration int64            `json:"current_iteration"`
+	Iterations       []IterationRange `json:"iterations"`
+}
+
+type HolidayCalendarYearSummary struct {
+	Year         int `json:"year"`
+	DayCount     int `json:"day_count"`
+	HolidayCount int `json:"holiday_count"`
+	WorkdayCount int `json:"workday_count"`
+}
+
+type HolidayCalendarResponse struct {
+	Days  []HolidayCalendarDay         `json:"days"`
+	Years []HolidayCalendarYearSummary `json:"years"`
+}
+
+type HolidayCalendarImportResponse struct {
+	ImportedCount int   `json:"imported_count"`
+	ReplacedYears []int `json:"replaced_years"`
+}
+
 // ─── Settings ───────────────────────────────────────────────
 
 type SettingsResponse struct {
@@ -132,7 +163,8 @@ type SettingsResponse struct {
 	KanbanURL             string `json:"kanban_url"`
 	Theme                 string `json:"theme"`
 	IterationStartDate    string `json:"iteration_start_date"`
-	IterationDurationDays string `json:"iteration_duration_days"`
+	IterationDurationDays string `json:"iteration_duration_days"` // 兼容旧客户端
+	IterationWorkdays     string `json:"iteration_workdays"`
 	ReminderDelay         string `json:"reminder_delay"`
 }
 
@@ -180,6 +212,7 @@ type DataImportResponse struct {
 	ChecklistRunCount int    `json:"checklist_run_count"`
 	SnapshotCount     int    `json:"snapshot_count"`
 	OverrideCount     int    `json:"override_count"`
+	CalendarDayCount  int    `json:"calendar_day_count"`
 }
 
 type DataDeleteResponse struct {

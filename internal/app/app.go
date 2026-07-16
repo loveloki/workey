@@ -107,8 +107,10 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/checklist-reminders", corsMiddleware(authMiddleware(handleChecklistReminders)))
 	mux.HandleFunc("/api/checklist-runs", corsMiddleware(authMiddleware(handleChecklistRuns)))
 
-	// 迭代周期
+	// 迭代周期与节假日日历
+	mux.HandleFunc("/api/iterations", corsMiddleware(authMiddleware(handleIterations)))
 	mux.HandleFunc("/api/iteration-overrides", corsMiddleware(authMiddleware(handleIterationOverrides)))
+	mux.HandleFunc("/api/holiday-calendar", corsMiddleware(authMiddleware(handleHolidayCalendar)))
 
 	// 设置
 	mux.HandleFunc("/api/settings", corsMiddleware(authMiddleware(handleSettings)))
