@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
+import { Link } from '@tanstack/react-router'
 import type { HolidayCalendarImportDay } from '../../lib/models.gen'
 import { Card } from '../Card'
 import {
@@ -150,6 +151,18 @@ export function IterationSettingsSection() {
             <p className="font-mono text-xs text-[var(--color-ink-faint)]">尚未导入节假日日历，将按普通周一至周五计算。</p>
           )}
         </div>
+      </Card>
+
+      <Card title="Iteration 时间线">
+        <p className="mb-4 font-serif text-sm text-[var(--color-ink-muted)]">
+          查看所有 Iteration 的起止日期范围，或手动调整某期 Iteration 的起止日期。
+        </p>
+        <Link
+          to="/iterations"
+          className="inline-block rounded-md bg-[var(--color-solid)] px-5 py-2 font-mono text-sm text-[var(--color-solid-text)]"
+        >
+          管理 Iteration 时间线 →
+        </Link>
       </Card>
     </>
   )
