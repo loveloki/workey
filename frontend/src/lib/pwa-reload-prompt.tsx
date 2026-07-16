@@ -9,11 +9,11 @@ export function PWAReloadPrompt() {
       // Immediate update check on load
       r && r.update()
       
-      // Check for updates every hour
+      // Check for updates every 10 minutes
       if (r) {
         setInterval(() => {
           r.update()
-        }, 60 * 60 * 1000)
+        }, 10 * 60 * 1000)
       }
     },
     onRegisterError(error) {
