@@ -14,6 +14,7 @@ import { Route as TodosRouteImport } from './routes/todos'
 import { Route as TicketIssuesRouteImport } from './routes/ticket-issues'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as IterationsRouteImport } from './routes/iterations'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as ClockRouteImport } from './routes/clock'
 import { Route as ChecklistsRouteImport } from './routes/checklists'
@@ -44,6 +45,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IterationsRoute = IterationsRouteImport.update({
+  id: '/iterations',
+  path: '/iterations',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HistoryRoute = HistoryRouteImport.update({
   id: '/history',
   path: '/history',
@@ -70,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/checklists': typeof ChecklistsRoute
   '/clock': typeof ClockRoute
   '/history': typeof HistoryRoute
+  '/iterations': typeof IterationsRoute
   '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
   '/ticket-issues': typeof TicketIssuesRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/checklists': typeof ChecklistsRoute
   '/clock': typeof ClockRoute
   '/history': typeof HistoryRoute
+  '/iterations': typeof IterationsRoute
   '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
   '/ticket-issues': typeof TicketIssuesRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/checklists': typeof ChecklistsRoute
   '/clock': typeof ClockRoute
   '/history': typeof HistoryRoute
+  '/iterations': typeof IterationsRoute
   '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
   '/ticket-issues': typeof TicketIssuesRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/checklists'
     | '/clock'
     | '/history'
+    | '/iterations'
     | '/login'
     | '/settings'
     | '/ticket-issues'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/checklists'
     | '/clock'
     | '/history'
+    | '/iterations'
     | '/login'
     | '/settings'
     | '/ticket-issues'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/checklists'
     | '/clock'
     | '/history'
+    | '/iterations'
     | '/login'
     | '/settings'
     | '/ticket-issues'
@@ -140,6 +152,7 @@ export interface RootRouteChildren {
   ChecklistsRoute: typeof ChecklistsRoute
   ClockRoute: typeof ClockRoute
   HistoryRoute: typeof HistoryRoute
+  IterationsRoute: typeof IterationsRoute
   LoginRoute: typeof LoginRoute
   SettingsRoute: typeof SettingsRoute
   TicketIssuesRoute: typeof TicketIssuesRoute
@@ -184,6 +197,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/iterations': {
+      id: '/iterations'
+      path: '/iterations'
+      fullPath: '/iterations'
+      preLoaderRoute: typeof IterationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/history': {
       id: '/history'
       path: '/history'
@@ -220,6 +240,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChecklistsRoute: ChecklistsRoute,
   ClockRoute: ClockRoute,
   HistoryRoute: HistoryRoute,
+  IterationsRoute: IterationsRoute,
   LoginRoute: LoginRoute,
   SettingsRoute: SettingsRoute,
   TicketIssuesRoute: TicketIssuesRoute,

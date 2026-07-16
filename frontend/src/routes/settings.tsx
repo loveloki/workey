@@ -4,7 +4,6 @@ import { useAuthGuard } from '../lib/useAuthGuard'
 import { LoadingScreen } from '../components/LoadingScreen'
 import { ThemeSection } from '../components/settings/ThemeSection'
 import { TimezoneSection } from '../components/settings/TimezoneSection'
-import { IterationSection } from '../components/settings/IterationSection'
 import { KanbanUrlSection } from '../components/settings/KanbanUrlSection'
 import { PasskeySection } from '../components/settings/PasskeySection'
 import { PasswordSection } from '../components/settings/PasswordSection'
@@ -13,6 +12,7 @@ import { DeleteDataSection } from '../components/settings/DeleteDataSection'
 import { VersionSection } from '../components/settings/VersionSection'
 import { SyncSection } from '../components/settings/SyncSection'
 import { ReminderSection } from '../components/settings/ReminderSection'
+import { IterationSettingsSection } from '../components/settings/IterationSettingsSection'
 
 export const Route = createFileRoute('/settings')({ component: SettingsPage })
 
@@ -29,7 +29,7 @@ function SettingsPage() {
       <div className="grid gap-6">
         <ThemeSection />
         <TimezoneSection />
-        <IterationSection />
+        <IterationSettingsSection />
         <KanbanUrlSection />
         <PasskeySection />
         <PasswordSection />
