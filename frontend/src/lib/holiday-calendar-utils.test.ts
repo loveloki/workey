@@ -101,13 +101,56 @@ describe('parseHolidayCalendar', () => {
     ])
   })
 
+  it('解析 chinese-days 格式：holidays + workdays + inLieuDays', () => {
+    const result = parseHolidayCalendar(JSON.stringify({
+      holidays: {
+        '2025-01-01': "New Year's Day,元旦,1",
+        '2025-01-28': 'Spring Festival,春节,4',
+        '2025-01-29': 'Spring Festival,春节,4',
+        '2025-02-03': 'Spring Festival,春节,4',
+      },
+      workdays: {
+        '2025-01-26': 'Spring Festival,春节,4',
+        '2025-02-08': 'Spring Festival,春节,4',
+      },
+      inLieuDays: {
+        '2025-02-03': 'Spring Festival,春节,4',
+        '2025-05-05': 'Labour Day,劳动节,2',
+      },
+    }))
+
+    expect(result).toEqual([
+      { date: '2025-01-01', is_workday: false, name: '元旦' },
+      { date: '2025-01-26', is_workday: true, name: '春节' },
+      { date: '2025-01-28', is_workday: false, name: '春节' },
+      { date: '2025-01-29', is_workday: false, name: '春节' },
+      { date: '2025-02-03', is_workday: false, name: '春节' },
+      { date: '2025-02-08', is_workday: true, name: '春节' },
+      { date: '2025-05-05', is_workday: false, name: '劳动节' },
+    ])
+  })
+
+  it('解析 chinese-days 格式：仅有 inLieuDays 也能解析', () => {
+    const result = parseHolidayCalendar(JSON.stringify({
+      inLieuDays: {
+        '2025-02-03': 'Spring Festival,春节,4',
+        '2025-05-05': 'Labour Day,劳动节,2',
+      },
+    }))
+
+    expect(result).toEqual([
+      { date: '2025-02-03', is_workday: false, name: '春节' },
+      { date: '2025-05-05', is_workday: false, name: '劳动节' },
+    ])
+  })
+
   it('解析 chinese-days 格式：空对象抛出错误', () => {
-    expect(() => parseHolidayCalendar('{}')).toThrow('JSON 需为数组，或包含 days 数组，或包含 holidays/workdays 字段')
+    expect(() => parseHolidayCalendar('{}')).toThrow('JSON 需为数组，或包含 days 数组，或包含 holidays/workdays/inLieuDays 字段')
   })
 
   it('解析 chinese-days 格式：只有不相关字段也抛出错误', () => {
     expect(() => parseHolidayCalendar(JSON.stringify({ foo: 'bar' }))).toThrow(
-      'JSON 需为数组，或包含 days 数组，或包含 holidays/workdays 字段',
+      'JSON 需为数组，或包含 days 数组，或包含 holidays/workdays/inLieuDays 字段',
     )
   })
 })

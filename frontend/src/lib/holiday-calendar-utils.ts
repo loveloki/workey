@@ -99,13 +99,21 @@ function extractChineseName(value: string): string {
 
 /**
  * 解析 chinese-days 包格式的 JSON：
- * { "holidays": { "2025-01-01": "New Year's Day,元旦,1" }, "workdays": { ... } }
+ * { "holidays": { "2025-01-01": "New Year's Day,元旦,1" }, "workdays": { ... }, "inLieuDays": { ... } }
  */
 function parseChineseDays(obj: Record<string, unknown>): HolidayCalendarImportDay[] {
   const result: HolidayCalendarImportDay[] = []
 
   if (obj.holidays && typeof obj.holidays === 'object' && !Array.isArray(obj.holidays)) {
     for (const [dateStr, value] of Object.entries(obj.holidays)) {
+      const date = normalizeDate(dateStr)
+      if (!date) continue
+      result.push({ date, is_workday: false, name: extractChineseName(String(value)) })
+    }
+  }
+
+  if (obj.inLieuDays && typeof obj.inLieuDays === 'object' && !Array.isArray(obj.inLieuDays)) {
+    for (const [dateStr, value] of Object.entries(obj.inLieuDays)) {
       const date = normalizeDate(dateStr)
       if (!date) continue
       result.push({ date, is_workday: false, name: extractChineseName(String(value)) })
@@ -147,10 +155,10 @@ export function parseHolidayCalendar(text: string, fileName = ''): HolidayCalend
       // 尝试 chinese-days 格式
       days = parseChineseDays(parsed as Record<string, unknown>)
       if (days.length === 0) {
-        throw new Error('JSON 需为数组，或包含 days 数组，或包含 holidays/workdays 字段')
+        throw new Error('JSON 需为数组，或包含 days 数组，或包含 holidays/workdays/inLieuDays 字段')
       }
     } else {
-      throw new Error('JSON 需为数组，或包含 days 数组，或包含 holidays/workdays 字段')
+      throw new Error('JSON 需为数组，或包含 days 数组，或包含 holidays/workdays/inLieuDays 字段')
     }
   }
 
