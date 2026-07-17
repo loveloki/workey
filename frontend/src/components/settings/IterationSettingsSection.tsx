@@ -159,7 +159,7 @@ export function IterationSettingsSection() {
         </p>
         <Link
           to="/iterations"
-          className="inline-block rounded-md bg-[var(--color-solid)] px-5 py-2 font-mono text-sm text-[var(--color-solid-text)]"
+          className="inline-block rounded-md bg-[var(--color-solid)] px-5 py-2 font-mono text-sm no-underline text-[var(--color-solid-text)]"
         >
           管理 Iteration 时间线 →
         </Link>

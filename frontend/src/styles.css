@@ -233,15 +233,17 @@ body {
 
 /* ── Links ────────────────────────────────────────────────── */
 
-a {
-  color: var(--color-ink);
-  text-decoration-color: var(--color-border);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
-}
+@layer base {
+  a {
+    color: var(--color-ink);
+    text-decoration-color: var(--color-border);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
 
-a:hover {
-  color: var(--color-ink-strong);
+  a:hover {
+    color: var(--color-ink-strong);
+  }
 }
 
 /* ── Code ─────────────────────────────────────────────────── */

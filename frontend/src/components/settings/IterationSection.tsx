@@ -226,7 +226,7 @@ export function IterationSection() {
             </div>
             <div className="space-y-1">
               {timeline.map(iteration => editingIter === iteration.iteration_number ? (
-                <div key={iteration.iteration_number} className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--color-border-focus)] bg-[var(--color-info-bg)] p-2.5">
+                <div key={iteration.iteration_number} className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--color-border-focus)] bg-[var(--color-surface-selected)] p-2.5">
                   <span className="min-w-16 font-mono text-sm font-semibold">Iter {iteration.iteration_number}</span>
                   <input type="date" value={editStart} onChange={event => setEditStart(event.target.value)} className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 font-mono text-xs" />
                   <span className="font-mono text-xs text-[var(--color-ink-faint)]">至</span>
