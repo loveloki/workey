@@ -70,6 +70,14 @@ export function resolveInitialLanguage(): Language {
 export function applyDocumentLanguage(lang: Language): void {
   if (typeof document !== 'undefined') {
     document.documentElement.lang = lang
+    document.title = lang === 'en-US' ? 'Workey - Work Log' : 'Workey - 工作记录'
+    const description = document.querySelector('meta[name="description"]')
+    description?.setAttribute(
+      'content',
+      lang === 'en-US'
+        ? 'Track daily work, clock-ins, and to-dos'
+        : '记录每日工作内容、打卡与待办事项',
+    )
   }
 }
 

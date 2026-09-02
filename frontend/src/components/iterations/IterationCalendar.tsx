@@ -92,7 +92,7 @@ function MonthlyGrid({
   dateIterMap: Map<string, IterationRange>
   currentNumber: number
   today: string
-  onDateClick: (date: string, iter: IterationRange) => void
+  onDateClick: (event: React.MouseEvent, date: string, iter: IterationRange) => void
 }) {
   const { t } = useI18n()
   const days = daysInMonth(year, month)
@@ -127,7 +127,7 @@ function MonthlyGrid({
           return (
             <div
               key={i}
-              onClick={() => iter && onDateClick(dateStr, iter)}
+              onClick={e => iter && onDateClick(e, dateStr, iter)}
               className={`
                 aspect-square relative flex flex-col items-center justify-start pt-1.5 rounded-sm
                 transition-all duration-75 select-none
