@@ -63,6 +63,13 @@ tygo generate
   - `font-serif`（而非 `style={{ fontFamily: 'Georgia, serif' }}`）
 - 设计系统变量定义在 `frontend/src/styles.css`
 
+### 多语言
+
+- 用户可见文案**禁止硬编码**，统一走 `frontend/src/lib/i18n.tsx`：组件内 `const { t } = useI18n()`，非组件环境用模块级 `t()`
+- 文案定义在 `frontend/src/lib/locales/zh-CN.ts`（key 的唯一来源）与 `en-US.ts`，两者 key 必须完全一致
+- 语言持久化在 `localStorage` 的 `workey-language`，未设置时按浏览器语言推断
+- 日期/时间格式化使用 `date-utils.ts` 中的函数（默认跟随当前语言），禁止硬编码 `'zh-CN'` locale
+
 ### 认证
 
 - 路由页面统一使用 `useAuthGuard()` hook，不要手动写认证逻辑
@@ -88,7 +95,9 @@ frontend/src/
     ├── auth-context.tsx    # 认证 Context
     ├── useAuthGuard.ts     # 路由认证守卫
     ├── theme-context.tsx   # 主题 Context
-    ├── date-utils.ts       # 日期计算工具
+    ├── i18n.tsx            # 多语言 Context（zh-CN / en-US）
+    ├── locales/            # 语言文案词典（zh-CN.ts 为 key 来源）
+    ├── date-utils.ts       # 日期计算工具（格式化跟随当前语言）
     ├── report-utils.ts     # 报告导出工具
     ├── markdown-editor.tsx # Markdown 编辑器组件
     └── pwa-reload-prompt.tsx # PWA 更新提示

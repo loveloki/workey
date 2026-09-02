@@ -1,10 +1,12 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
+import { setModuleLanguage } from './i18n'
 import {
   formatDate,
   getDateRange,
   formatTime,
   formatDateDisplay,
   formatDateFull,
+  formatTodayTitle,
   makeIterationConfig,
   computeIterations,
   getIterationNumber,
@@ -241,5 +243,42 @@ describe('iteration computation', () => {
       expect(range.end).toBe('2025-01-28')
       expect(range.label).toBe('Iter2 (1.15–1.28)')
     })
+  })
+})
+
+// ─── 多语言日期格式 ─────────────────────────────
+describe('日期格式跟随语言', () => {
+  afterEach(() => setModuleLanguage('zh-CN'))
+
+  it('formatDateDisplay 支持 lang 参数', () => {
+    expect(formatDateDisplay('2026-05-15', 'zh-CN')).toBe('5月15日 周五')
+    expect(formatDateDisplay('2026-05-15', 'en-US')).toBe('May 15 (Fri)')
+    expect(formatDateDisplay('2026-01-01', 'en-US')).toBe('Jan 1 (Thu)')
+  })
+
+  it('formatDateFull 支持 lang 参数', () => {
+    expect(formatDateFull('2026-05-15', 'zh-CN')).toBe('2026年5月15日 星期五')
+    expect(formatDateFull('2026-05-15', 'en-US')).toBe('Friday, May 15, 2026')
+  })
+
+  it('不传 lang 时跟随当前语言', () => {
+    setModuleLanguage('en-US')
+    expect(formatDateDisplay('2026-05-15')).toBe('May 15 (Fri)')
+    expect(formatDateFull('2026-05-15')).toBe('Friday, May 15, 2026')
+
+    setModuleLanguage('zh-CN')
+    expect(formatDateDisplay('2026-05-15')).toBe('5月15日 周五')
+    expect(formatDateFull('2026-05-15')).toBe('2026年5月15日 星期五')
+  })
+
+  it('formatTime 在两种语言下均为 24 小时制', () => {
+    expect(formatTime('2026-05-15 14:25:00', 'zh-CN')).toMatch(/^\d{2}:\d{2}$/)
+    expect(formatTime('2026-05-15 14:25:00', 'en-US')).toMatch(/^\d{2}:\d{2}$/)
+  })
+
+  it('formatTodayTitle 跟随语言返回不同文本', () => {
+    const date = new Date(2026, 4, 15)
+    expect(formatTodayTitle(date, 'zh-CN')).toMatch(/[\u4e00-\u9fff]/)
+    expect(formatTodayTitle(date, 'en-US')).toBe('Friday, May 15')
   })
 })

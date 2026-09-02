@@ -5,6 +5,7 @@ import {
   type SnapshotData,
 } from '../../lib/api'
 import { useToast } from '../../lib/toast-context'
+import { useI18n } from '../../lib/i18n'
 import { AutoTextarea } from './AutoTextarea'
 import { parseItems, itemsHash as computeItemsHash } from './checklist-utils'
 import { useChecklistSnapshots, useCreateSnapshot, useDeleteSnapshot } from '../../lib/queries'
@@ -19,6 +20,7 @@ type DraftRun = {
 }
 
 export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBack: () => void }) {
+  const { t, locale } = useI18n()
   const { toastError } = useToast()
   const parsedItems = parseItems(checklist.items)
   const draftKey = `checklist-run:${checklist.id}`
@@ -72,7 +74,9 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
   }, [notes, extras, draftKey, hash])
 
   const saveSnapshot = async () => {
-    const title = snapshotTitle.trim() || `检查 - ${new Date().toLocaleString('zh-CN')}`
+    const title =
+      snapshotTitle.trim() ||
+      t('checklists.use.defaultSnapshotTitle', { time: new Date().toLocaleString(locale) })
     try {
       const data: SnapshotData = {
         notes: [...notes],
@@ -82,7 +86,11 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
       setSnapshotTitle('')
       setShowSavedList(true)
     } catch (e: unknown) {
-      toastError('保存失败：' + (e instanceof Error ? e.message : '未知错误'))
+      toastError(
+        t('checklists.use.saveFailedMsg', {
+          msg: e instanceof Error ? e.message : t('common.unknownError'),
+        })
+      )
     }
   }
 
@@ -103,7 +111,11 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
       setEditingNote(null)
       setEditingExtraNote(null)
     } catch (e: unknown) {
-      toastError('加载失败：' + (e instanceof Error ? e.message : '未知错误'))
+      toastError(
+        t('checklists.use.loadFailedMsg', {
+          msg: e instanceof Error ? e.message : t('common.unknownError'),
+        })
+      )
     }
   }
 
@@ -112,7 +124,11 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
       await deleteSnapshotMut.mutateAsync({ id, checklistId: checklist.id })
       if (viewingRunId === id) setViewingRunId(null)
     } catch (e: unknown) {
-      toastError('删除失败：' + (e instanceof Error ? e.message : '未知错误'))
+      toastError(
+        t('checklists.use.deleteFailedMsg', {
+          msg: e instanceof Error ? e.message : t('common.unknownError'),
+        })
+      )
     } finally {
       setConfirmDeleteRunId(null)
     }
@@ -184,7 +200,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
         >
           <polyline points="15 18 9 12 15 6" />
         </svg>
-        返回清单列表
+        {t('checklists.use.backToList')}
       </button>
 
       <div
@@ -197,8 +213,8 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
           <div>
             <h2 className="font-mono text-xl font-medium text-[var(--color-ink)] mb-1">{checklist.title}</h2>
             <p className="font-mono text-xs text-[var(--color-ink-muted)]">
-              {checkedCount} / {totalCount} 项已填写
-              {allDone && ' ✅ 全部完成！'}
+              {t('checklists.use.filledCount', { done: checkedCount, total: totalCount })}
+              {allDone && t('checklists.use.allDoneBadge')}
             </p>
           </div>
           {(checkedCount > 0 || notes.some(n => n.trim() !== '')) && (
@@ -206,7 +222,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
               onClick={startNewRun}
               className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
             >
-              {viewingRunId ? '新建一份' : '重置'}
+              {viewingRunId ? t('checklists.use.newCopy') : t('checklists.use.reset')}
             </button>
           )}
         </div>
@@ -273,7 +289,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                     <AutoTextarea
                       value={notes[idx]}
                       onChange={e => updateNote(idx, (e.target as HTMLTextAreaElement).value)}
-                      placeholder="输入备注... (Esc 收起)"
+                      placeholder={t('checklists.use.notePlaceholderEsc')}
                       rows={2}
                       autoFocus
                       className="font-mono text-xs w-full px-2.5 py-1.5 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none text-[var(--color-ink-secondary)] min-h-[2.5rem]"
@@ -296,7 +312,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
           {extras.length > 0 && (
             <div className="pt-2 mt-2 border-t border-dashed border-t-[var(--color-border)]">
               <p className="font-mono text-xs px-3 py-1 text-[var(--color-ink-faint)]">
-                临时添加（{extras.length}）
+                {t('checklists.use.extrasTitle', { count: extras.length })}
               </p>
               {extras.map(extra => {
                 const done = isExtraDone(extra)
@@ -343,7 +359,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                           removeExtra(extra.id)
                         }}
                         className="shrink-0 font-mono text-xs px-1.5 py-0.5 rounded transition-colors hover:bg-[var(--color-surface-strong)] text-[var(--color-danger-text,#c00)]"
-                        title="删除临时项"
+                        title={t('checklists.use.deleteExtra')}
                       >
                         ✕
                       </button>
@@ -355,7 +371,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                           onChange={e =>
                             updateExtraNote(extra.id, (e.target as HTMLTextAreaElement).value)
                           }
-                          placeholder="输入备注..."
+                          placeholder={t('checklists.use.notePlaceholder')}
                           rows={2}
                           autoFocus
                           className="font-mono text-xs w-full px-2.5 py-1.5 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none text-[var(--color-ink-secondary)] min-h-[2.5rem]"
@@ -397,7 +413,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                     addExtra()
                   }
                 }}
-                placeholder="临时添加检查项（仅本次进度使用，Enter 添加）"
+                placeholder={t('checklists.use.addExtraPlaceholder')}
                 className="font-mono text-sm flex-1 px-2.5 py-1.5 bg-[var(--color-surface-strong)] border border-dashed border-[var(--color-border)] rounded-md outline-none"
               />
               <button
@@ -405,7 +421,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                 disabled={!newExtraText.trim()}
                 className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-40 border border-[var(--color-border)] text-[var(--color-ink-muted)]"
               >
-                添加
+                {t('checklists.use.add')}
               </button>
             </div>
           </div>
@@ -415,7 +431,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
           <div className="mt-6 pt-4 text-center border-t border-t-[var(--color-border)]">
             <p className="text-2xl mb-1">🎉</p>
             <p className="font-mono text-sm text-[#22c55e] font-medium">
-              所有项目均已填写完毕
+              {t('checklists.use.allFilled')}
             </p>
           </div>
         )}
@@ -424,8 +440,8 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
       <div className="rounded-lg p-4 mt-4 bg-[var(--color-surface-strong)] border border-[var(--color-border)]">
         <p className="font-mono text-xs mb-2 text-[var(--color-ink-muted)]">
           {viewingRunId
-            ? '📂 正在查看已保存的记录，可修改后另存一份'
-            : '💾 保存当前进度为一份快照（云端保存）'}
+            ? t('checklists.use.viewingHint')
+            : t('checklists.use.saveHint')}
         </p>
         <div className="flex items-center gap-2 flex-wrap">
           <input
@@ -438,7 +454,9 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                 saveSnapshot()
               }
             }}
-            placeholder={`快照标题（默认：检查 - ${new Date().toLocaleString('zh-CN')}）`}
+            placeholder={t('checklists.use.snapshotTitlePlaceholder', {
+              time: new Date().toLocaleString(locale),
+            })}
             className="font-mono text-sm flex-1 min-w-[200px] px-3 py-2 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none"
           />
           <button
@@ -446,7 +464,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
             disabled={createSnapshotMut.isPending || (checkedCount === 0 && notes.every(n => n.trim() === ''))}
             className="font-mono text-sm px-4 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 bg-[var(--color-solid)]"
           >
-            {createSnapshotMut.isPending ? '保存中...' : '保存快照'}
+            {createSnapshotMut.isPending ? t('common.saving') : t('checklists.use.saveSnapshot')}
           </button>
         </div>
       </div>
@@ -457,7 +475,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
             onClick={() => setShowSavedList(v => !v)}
             className="w-full flex items-center justify-between px-4 py-3 font-mono text-sm transition-colors hover:bg-[var(--color-surface-hover)] text-[var(--color-ink)] rounded-lg"
           >
-            <span>📚 已保存的快照 ({savedRuns.length})</span>
+            <span>{t('checklists.use.savedSnapshots', { count: savedRuns.length })}</span>
             <svg
               width="14"
               height="14"
@@ -506,12 +524,16 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                         {run.title}
                         {!isMatch && (
                           <span className="ml-2 text-xs text-[var(--color-ink-faint)]">
-                            （清单已变更）
+                            {t('checklists.use.listChanged')}
                           </span>
                         )}
                       </p>
                       <p className="font-mono text-xs text-[var(--color-ink-faint)]">
-                        {runNoteCount}/{runTotal} 项 · {new Date(run.created_at).toLocaleString('zh-CN')}
+                        {t('checklists.use.snapshotMeta', {
+                          done: runNoteCount,
+                          total: runTotal,
+                          time: new Date(run.created_at).toLocaleString(locale),
+                        })}
                       </p>
                     </div>
                     <button
@@ -520,7 +542,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                       className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-strong)] disabled:opacity-40 border border-[var(--color-border)] text-[var(--color-ink-muted)]"
                       type="button"
                     >
-                      查看
+                      {t('checklists.use.view')}
                     </button>
                     {confirmDeleteRunId === run.id ? (
                       <>
@@ -529,21 +551,21 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
                           className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors bg-[var(--color-danger-text,#c00)] text-white"
                           type="button"
                         >
-                          确认
+                          {t('common.confirm')}
                         </button>
                         <button
                           onClick={() => setConfirmDeleteRunId(null)}
                           className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-strong)] text-[var(--color-ink-muted)]"
                           type="button"
                         >
-                          取消
+                          {t('common.cancel')}
                         </button>
                       </>
                     ) : (
                       <button
                         onClick={() => setConfirmDeleteRunId(run.id)}
                         className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-strong)] text-[var(--color-danger-text,#c00)]"
-                        title="删除快照"
+                        title={t('checklists.use.deleteSnapshot')}
                         type="button"
                       >
                         ✕
@@ -559,8 +581,8 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
 
       <p className="font-mono text-xs text-center mt-4 text-[var(--color-ink-faint)]">
         {lastSavedAt && !viewingRunId
-          ? `💾 已恢复上次草稿 (${new Date(lastSavedAt).toLocaleString('zh-CN')})、草稿保存在本设备本地`
-          : '💾 草稿保存在本设备本地，快照保存到云端'}
+          ? t('checklists.use.draftRestored', { time: new Date(lastSavedAt).toLocaleString(locale) })
+          : t('checklists.use.draftHint')}
       </p>
     </div>
   )

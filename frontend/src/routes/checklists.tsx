@@ -8,18 +8,20 @@ import { ChecklistForm } from '../components/checklists/ChecklistForm'
 import { ChecklistCard } from '../components/checklists/ChecklistCard'
 import { ChecklistUse } from '../components/checklists/ChecklistUse'
 import { useChecklistList } from '../lib/queries'
+import { useI18n } from '../lib/i18n'
 
 export const Route = createFileRoute('/checklists')({ component: ChecklistsPage })
 
 function ChecklistsPage() {
   const { user, loading } = useAuthGuard()
+  const { t } = useI18n()
 
   if (loading) return <LoadingScreen />
   if (!user) return null
 
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
-      <PageHeader eyebrow="清单" title="检查清单" />
+      <PageHeader eyebrow={t('checklists.eyebrow')} title={t('checklists.title')} />
       <ChecklistManager />
     </main>
   )
@@ -29,6 +31,7 @@ function ChecklistManager() {
   const [activeId, setActiveId] = useState<number | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const { data, isLoading } = useChecklistList()
+  const { t } = useI18n()
 
   const items = data?.checklists ?? []
 
@@ -52,9 +55,9 @@ function ChecklistManager() {
   return (
     <div>
       <div className="rounded-lg px-4 py-3 mb-5 bg-[var(--color-surface-strong)] border border-[var(--color-border)]">
-        <p className="font-mono text-sm text-[var(--color-ink)]">自定义检查清单</p>
+        <p className="font-mono text-sm text-[var(--color-ink)]">{t('checklists.introTitle')}</p>
         <p className="font-serif text-sm mt-1 text-[var(--color-ink-muted)]">
-          创建可重复使用的检查清单，记录每次执行时的备注并保存历史快照。
+          {t('checklists.introDesc')}
         </p>
       </div>
 
@@ -63,7 +66,7 @@ function ChecklistManager() {
           onClick={() => setShowCreate(true)}
           className="font-mono text-sm px-5 py-2.5 rounded-md text-[var(--color-solid-text)] transition-colors mb-6 bg-[var(--color-solid)]"
         >
-          + 新建清单
+          {t('checklists.new')}
         </button>
       )}
 
@@ -73,15 +76,15 @@ function ChecklistManager() {
 
       {isLoading ? (
         <p className="font-mono text-sm text-center py-8 text-[var(--color-ink-muted)]">
-          加载中...
+          {t('common.loading')}
         </p>
       ) : items.length === 0 && !showCreate ? (
         <div className="rounded-lg py-12 text-center border border-dashed border-[var(--color-border)]">
           <p className="font-mono text-sm text-[var(--color-ink-faint)]">
-            暂无检查清单
+            {t('checklists.empty')}
           </p>
           <p className="text-sm mt-1 font-serif text-[var(--color-ink-faint)]">
-            点击上方按钮创建你的第一个清单
+            {t('checklists.emptyHint')}
           </p>
         </div>
       ) : (

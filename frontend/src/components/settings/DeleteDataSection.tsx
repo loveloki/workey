@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { settings } from '../../lib/api'
 import { Card } from '../../components/Card'
 import { useQueryClient } from '@tanstack/react-query'
+import { useI18n } from '../../lib/i18n'
 
 export function DeleteDataSection() {
+  const { t } = useI18n()
   const [step, setStep] = useState<'idle' | 'confirm' | 'password'>('idle')
   const [password, setPassword] = useState('')
   const [deleting, setDeleting] = useState(false)
@@ -13,7 +15,7 @@ export function DeleteDataSection() {
 
   const handleDelete = async () => {
     if (!password) {
-      setMsg('请输入密码')
+      setMsg(t('settings.deleteData.enterPasswordRequired'))
       setIsError(true)
       return
     }
@@ -22,18 +24,27 @@ export function DeleteDataSection() {
     try {
       const result = await settings.deleteData(password)
       const parts = []
-      if (result.attendance_count) parts.push(`${result.attendance_count} 条考勤`)
-      if (result.work_log_count) parts.push(`${result.work_log_count} 条工作日志`)
-      if (result.todo_count) parts.push(`${result.todo_count} 条待办`)
-      if (result.ticket_issue_count) parts.push(`${result.ticket_issue_count} 条工单问题`)
-      setMsg(`已删除：${parts.join('，') || '无数据'}`)
+      if (result.attendance_count)
+        parts.push(t('settings.deleteData.countAttendance', { count: result.attendance_count }))
+      if (result.work_log_count)
+        parts.push(t('settings.deleteData.countWorkLog', { count: result.work_log_count }))
+      if (result.todo_count)
+        parts.push(t('settings.deleteData.countTodo', { count: result.todo_count }))
+      if (result.ticket_issue_count)
+        parts.push(t('settings.deleteData.countTicketIssue', { count: result.ticket_issue_count }))
+      setMsg(
+        t('settings.deleteData.deleted', {
+          items:
+            parts.join(t('settings.deleteData.listSeparator')) || t('settings.deleteData.noData'),
+        })
+      )
       setIsError(false)
       setStep('idle')
       setPassword('')
       // 删除数据后刷新所有缓存
       qc.invalidateQueries()
     } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : '删除失败')
+      setMsg(e instanceof Error ? e.message : t('common.deleteFailed'))
       setIsError(true)
     } finally {
       setDeleting(false)
@@ -47,9 +58,9 @@ export function DeleteDataSection() {
   }
 
   return (
-    <Card title="危险操作">
+    <Card title={t('settings.deleteData.title')}>
       <p className="text-sm mb-4 font-serif text-[var(--color-danger-text)]">
-        删除所有数据（考勤、工作日志、待办事项、工单问题），此操作不可恢复。
+        {t('settings.deleteData.description')}
       </p>
 
       {step === 'idle' && (
@@ -57,27 +68,27 @@ export function DeleteDataSection() {
           onClick={() => setStep('confirm')}
           className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors bg-[var(--color-danger)]"
         >
-          🗑 删除所有数据
+          {t('settings.deleteData.deleteAll')}
         </button>
       )}
 
       {step === 'confirm' && (
         <div className="rounded-lg p-4 bg-[var(--color-danger-bg)] border border-[var(--color-danger-border)]">
           <p className="font-mono text-sm font-semibold mb-3 text-[var(--color-danger-strong)]">
-            ⚠️ 确认删除所有数据？此操作不可撤销！
+            {t('settings.deleteData.confirmWarning')}
           </p>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setStep('password')}
               className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors bg-[var(--color-danger)]"
             >
-              确认删除
+              {t('settings.deleteData.confirmDelete')}
             </button>
             <button
               onClick={cancel}
               className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-surface-strong)] transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)]"
             >
-              取消
+              {t('common.cancel')}
             </button>
           </div>
         </div>
@@ -86,14 +97,14 @@ export function DeleteDataSection() {
       {step === 'password' && (
         <div className="rounded-lg p-4 bg-[var(--color-danger-bg)] border border-[var(--color-danger-border)]">
           <p className="font-mono text-sm font-semibold mb-3 text-[var(--color-danger-strong)]">
-            🔒 请输入账号密码以确认删除
+            {t('settings.deleteData.passwordPrompt')}
           </p>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="输入密码"
+              placeholder={t('settings.deleteData.passwordPlaceholder')}
               className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)] w-full sm:w-64 border border-[var(--color-border)] rounded-md outline-none"
               onKeyDown={e => e.key === 'Enter' && void handleDelete()}
               autoFocus
@@ -103,13 +114,13 @@ export function DeleteDataSection() {
               disabled={deleting}
               className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 bg-[var(--color-danger)]"
             >
-              {deleting ? '删除中...' : '确认删除'}
+              {deleting ? t('common.deleting') : t('settings.deleteData.confirmDelete')}
             </button>
             <button
               onClick={cancel}
               className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-surface-strong)] transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)]"
             >
-              取消
+              {t('common.cancel')}
             </button>
           </div>
         </div>

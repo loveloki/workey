@@ -3,7 +3,7 @@ import { PageHeader } from '../components/PageHeader'
 import { useAuthGuard } from '../lib/useAuthGuard'
 import { useEffect, useCallback } from 'react'
 import { attendance, workLogs, todos as todosApi } from '../lib/api'
-import { getToday } from '../lib/date-utils'
+import { getToday, formatTodayTitle } from '../lib/date-utils'
 import { formatDayMarkdown } from '../lib/report-utils'
 import { CopyButton } from '../components/CopyButton'
 import { LoadingScreen } from '../components/LoadingScreen'
@@ -12,11 +12,13 @@ import { CompletedTodosSection } from '../components/dashboard/CompletedTodosSec
 import { TodayCreatedTodosSidebar, TodayCreatedTodosInline } from '../components/dashboard/TodayCreatedTodos'
 import { AttendanceStatusBar } from '../components/dashboard/AttendanceStatusBar'
 import { useAttendanceToday } from '../lib/queries'
+import { useI18n } from '../lib/i18n'
 
 export const Route = createFileRoute('/')({ component: Dashboard })
 
 
 function Dashboard() {
+  const { t } = useI18n()
   const { user, loading: authLoading } = useAuthGuard()
   const navigate = useNavigate()
   const { data: todayQuery, isLoading: checking } = useAttendanceToday(!!user)
@@ -55,8 +57,8 @@ function Dashboard() {
   return (
     <main className="max-w-7xl mx-auto px-4 pb-8 pt-8">
       <PageHeader
-        eyebrow="今日工作"
-        title={new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
+        eyebrow={t('dashboard.eyebrow')}
+        title={formatTodayTitle()}
       />
 
       {/* Desktop: two-column layout */}

@@ -2,8 +2,10 @@ import { useState, type FormEvent } from 'react'
 import { settings } from '../../lib/api'
 import { Card } from '../../components/Card'
 import { InputField } from '../../components/InputField'
+import { useI18n } from '../../lib/i18n'
 
 export function PasswordSection() {
+  const { t } = useI18n()
   const [oldPw, setOldPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
@@ -16,12 +18,12 @@ export function PasswordSection() {
     setMsg('')
 
     if (newPw.length < 6) {
-      setMsg('新密码至少需要 6 个字符')
+      setMsg(t('settings.password.tooShort'))
       setIsError(true)
       return
     }
     if (newPw !== confirmPw) {
-      setMsg('两次输入的新密码不一致')
+      setMsg(t('settings.password.mismatch'))
       setIsError(true)
       return
     }
@@ -29,13 +31,13 @@ export function PasswordSection() {
     setSaving(true)
     try {
       await settings.changePassword(oldPw, newPw)
-      setMsg('密码已修改')
+      setMsg(t('settings.password.changed'))
       setIsError(false)
       setOldPw('')
       setNewPw('')
       setConfirmPw('')
     } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : '修改失败')
+      setMsg(e instanceof Error ? e.message : t('settings.password.changeFailed'))
       setIsError(true)
     } finally {
       setSaving(false)
@@ -43,18 +45,18 @@ export function PasswordSection() {
   }
 
   return (
-    <Card title="修改密码">
+    <Card title={t('settings.password.title')}>
       <form onSubmit={submit} className="space-y-3 max-w-sm">
-        <InputField label="当前密码" type="password" value={oldPw} onChange={setOldPw} placeholder="输入当前密码" />
-        <InputField label="新密码" type="password" value={newPw} onChange={setNewPw} placeholder="至少 6 个字符" />
-        <InputField label="确认新密码" type="password" value={confirmPw} onChange={setConfirmPw} placeholder="再次输入新密码" />
+        <InputField label={t('settings.password.current')} type="password" value={oldPw} onChange={setOldPw} placeholder={t('settings.password.currentPlaceholder')} />
+        <InputField label={t('settings.password.new')} type="password" value={newPw} onChange={setNewPw} placeholder={t('settings.password.newPlaceholder')} />
+        <InputField label={t('settings.password.confirm')} type="password" value={confirmPw} onChange={setConfirmPw} placeholder={t('settings.password.confirmPlaceholder')} />
         <div className="flex items-center gap-3 pt-1">
           <button
             type="submit"
             disabled={saving}
             className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 bg-[var(--color-solid)]"
           >
-            {saving ? '修改中...' : '修改密码'}
+            {saving ? t('settings.password.changing') : t('settings.password.title')}
           </button>
           {msg && (
             <span

@@ -2,12 +2,14 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../lib/auth-context'
 import { useState, useEffect } from 'react'
 import { passkeys, base64urlToBuffer } from '../lib/api'
+import { useI18n } from '../lib/i18n'
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,
 })
 
 function LoginPage() {
+  const { t } = useI18n()
   const { user, loading, login, register, loginWithToken } = useAuth()
   const navigate = useNavigate()
   const [isRegister, setIsRegister] = useState(false)
@@ -33,7 +35,7 @@ function LoginPage() {
       }
       navigate({ to: '/' })
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : '操作失败')
+      setError(e instanceof Error ? e.message : t('common.operationFailed'))
     }
     setSubmitting(false)
   }
@@ -54,7 +56,7 @@ function LoginPage() {
       })) as PublicKeyCredential | null
 
       if (!credential) {
-        setError('通行密钥验证已取消')
+        setError(t('login.passkeyCancelled'))
         setPasskeyLoading(false)
         return
       }
@@ -63,7 +65,7 @@ function LoginPage() {
       loginWithToken(result.token, result.user)
       navigate({ to: '/' })
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : '通行密钥登录失败')
+      setError(e instanceof Error ? e.message : t('login.passkeyFailed'))
     }
     setPasskeyLoading(false)
   }
@@ -79,12 +81,12 @@ function LoginPage() {
           <h1
             className="mb-2 text-3xl font-normal tracking-tight font-serif text-[var(--color-ink)]"
           >
-            {isRegister ? '注册账号' : '登录'}
+            {isRegister ? t('login.registerTitle') : t('login.loginTitle')}
           </h1>
           <p
             className="text-base font-serif text-[var(--color-ink-muted)]"
           >
-            {isRegister ? '创建一个新账号' : '登录以记录工作内容'}
+            {isRegister ? t('login.registerSubtitle') : t('login.loginSubtitle')}
           </p>
         </div>
 
@@ -94,7 +96,7 @@ function LoginPage() {
               htmlFor="username"
               className="mb-1.5 block font-mono text-sm font-semibold tracking-wide text-[var(--color-ink)]"
             >
-              用户名
+              {t('login.username')}
             </label>
             <input
               id="username"
@@ -112,7 +114,7 @@ function LoginPage() {
               htmlFor="password"
               className="mb-1.5 block font-mono text-sm font-semibold tracking-wide text-[var(--color-ink)]"
             >
-              密码
+              {t('login.password')}
             </label>
             <input
               id="password"
@@ -136,7 +138,7 @@ function LoginPage() {
             disabled={submitting}
             className="w-full rounded-full py-3.5 font-mono text-base font-semibold hover:bg-[var(--color-solid-hover)] disabled:opacity-50 bg-[var(--color-solid)] text-[var(--color-solid-text)]"
           >
-            {submitting ? '请稍候...' : isRegister ? '注册' : '登录'}
+            {submitting ? t('login.pleaseWait') : isRegister ? t('login.register') : t('login.login')}
           </button>
 
           {!isRegister && (
@@ -149,7 +151,7 @@ function LoginPage() {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
               </svg>
-              {passkeyLoading ? '验证中...' : '使用通行密钥登录'}
+              {passkeyLoading ? t('login.verifying') : t('login.passkeyLogin')}
             </button>
           )}
         </form>
@@ -157,12 +159,12 @@ function LoginPage() {
         <p
           className="mt-6 text-center text-sm font-serif text-[var(--color-ink-muted)]"
         >
-          {isRegister ? '已有账号？' : '没有账号？'}
+          {isRegister ? t('login.haveAccount') : t('login.noAccount')}
           <button
             onClick={() => { setIsRegister(!isRegister); setError('') }}
             className="ml-1 font-semibold underline font-serif text-[var(--color-ink)]"
           >
-            {isRegister ? '去登录' : '注册'}
+            {isRegister ? t('login.goLogin') : t('login.register')}
           </button>
         </p>
       </div>

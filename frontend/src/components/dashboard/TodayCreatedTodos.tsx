@@ -3,6 +3,7 @@ import { useState, useRef, type FormEvent, type KeyboardEvent } from 'react'
 import { type Todo } from '../../lib/api'
 import { useToast } from '../../lib/toast-context'
 import { useCreatedTodosToday, useCreateTodo, useUpdateTodo, useDeleteTodo } from '../../lib/queries'
+import { useI18n } from '../../lib/i18n'
 
 function useTodayCreatedTodos() {
   const { data, isLoading } = useCreatedTodosToday()
@@ -32,6 +33,7 @@ function useTodayCreatedTodos() {
 }
 
 function AddTodoForm({ onAdd }: { onAdd: (content: string, url: string) => Promise<void> }) {
+  const { t } = useI18n()
   const [content, setContent] = useState('')
   const [url, setUrl] = useState('')
   const [showUrl, setShowUrl] = useState(false)
@@ -50,7 +52,7 @@ function AddTodoForm({ onAdd }: { onAdd: (content: string, url: string) => Promi
       setShowUrl(false)
       inputRef.current?.focus()
     } catch (e: unknown) {
-      toastError(e instanceof Error ? e.message : '操作失败')
+      toastError(e instanceof Error ? e.message : t('common.operationFailed'))
     } finally {
       setAdding(false)
     }
@@ -64,14 +66,14 @@ function AddTodoForm({ onAdd }: { onAdd: (content: string, url: string) => Promi
           type="text"
           value={content}
           onChange={e => setContent(e.target.value)}
-          placeholder="添加待办..."
+          placeholder={t('todos.addPlaceholder')}
           className="font-mono text-sm flex-1 px-3 py-1.5 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none"
         />
         <button
           type="button"
           onClick={() => setShowUrl(!showUrl)}
           className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] shrink-0 border border-[var(--color-border)] text-[var(--color-ink-muted)]"
-          title="添加链接"
+          title={t('todos.addLink')}
         >
           🔗
         </button>
@@ -88,7 +90,7 @@ function AddTodoForm({ onAdd }: { onAdd: (content: string, url: string) => Promi
           type="url"
           value={url}
           onChange={e => setUrl(e.target.value)}
-          placeholder="相关链接（可选）"
+          placeholder={t('todos.relatedLinkOptional')}
           className="font-mono text-sm w-full mt-2 px-3 py-1.5 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none"
         />
       )}
@@ -107,6 +109,7 @@ function TodoItemInteractive({
   onUpdate: (data: { content?: string; url?: string }) => Promise<void>
   onDelete: () => void
 }) {
+  const { t } = useI18n()
   const [editing, setEditing] = useState(false)
   const [editContent, setEditContent] = useState(todo.content)
   const [editUrl, setEditUrl] = useState(todo.url)
@@ -131,7 +134,7 @@ function TodoItemInteractive({
       await onUpdate({ content: editContent.trim(), url: editUrl.trim() })
       setEditing(false)
     } catch (e: unknown) {
-      toastError(e instanceof Error ? e.message : '保存失败')
+      toastError(e instanceof Error ? e.message : t('common.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -151,7 +154,7 @@ function TodoItemInteractive({
           value={editContent}
           onChange={e => setEditContent(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="待办内容..."
+          placeholder={t('todos.contentPlaceholder')}
           className="font-mono text-sm w-full px-2 py-1 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded outline-none"
         />
         <input
@@ -159,7 +162,7 @@ function TodoItemInteractive({
           value={editUrl}
           onChange={e => setEditUrl(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="链接（可选）"
+          placeholder={t('common.optionalLink')}
           className="font-mono text-sm w-full mt-1 px-2 py-1 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded outline-none"
         />
         <div className="flex items-center gap-2 mt-2">
@@ -168,13 +171,13 @@ function TodoItemInteractive({
             disabled={saving}
             className="font-mono text-xs px-3 py-1 rounded text-[var(--color-solid-text)] disabled:opacity-50 bg-[var(--color-solid)]"
           >
-            {saving ? '...' : '保存'}
+            {saving ? '...' : t('common.save')}
           </button>
           <button
             onClick={cancelEdit}
             className="font-mono text-xs px-3 py-1 rounded hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
           >
-            取消
+            {t('common.cancel')}
           </button>
         </div>
       </div>
@@ -213,7 +216,7 @@ function TodoItemInteractive({
             (todo.done ? 'line-through' : 'no-underline')
           }
         >
-          {todo.content || <span className="text-[var(--color-ink-faint)]">(无内容)</span>}
+          {todo.content || <span className="text-[var(--color-ink-faint)]">{t('common.empty')}</span>}
         </p>
         {todo.url && (
           <a
@@ -232,7 +235,7 @@ function TodoItemInteractive({
       <button
         onClick={startEdit}
         className="opacity-0 group-hover:opacity-100 transition-opacity font-mono text-xs px-1 py-0.5 rounded hover:bg-[var(--color-surface-hover)] shrink-0 text-[var(--color-ink-muted)]"
-        title="编辑"
+        title={t('common.edit')}
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -242,7 +245,7 @@ function TodoItemInteractive({
       <button
         onClick={onDelete}
         className="opacity-0 group-hover:opacity-100 transition-opacity font-mono text-xs px-1 py-0.5 rounded hover:bg-[var(--color-danger-bg)] shrink-0 text-[var(--color-danger-text)]"
-        title="删除"
+        title={t('common.delete')}
       >
         ✕
       </button>
@@ -251,6 +254,7 @@ function TodoItemInteractive({
 }
 
 export function TodayCreatedTodosSidebar() {
+  const { t } = useI18n()
   const { items, loading, toggleDone, updateTodo, deleteTodo, addTodo } = useTodayCreatedTodos()
   const navigate = useNavigate()
 
@@ -258,22 +262,22 @@ export function TodayCreatedTodosSidebar() {
     <div className="rounded-lg overflow-hidden sticky top-8 bg-[var(--color-surface-strong)] border border-[var(--color-border)]">
       <div className="flex items-center justify-between px-4 py-3">
         <p className="font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">
-          § 今日待办 §
+          {t('todos.todayHeading')}
         </p>
         <button
           onClick={() => navigate({ to: '/todos' })}
           className="font-mono text-xs px-2 py-1 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
         >
-          全部 →
+          {t('common.all')}
         </button>
       </div>
       <div className="border-t border-dashed border-t-[var(--color-border)]" />
       <div className="px-4 py-3">
         <AddTodoForm onAdd={addTodo} />
         {loading ? (
-          <p className="text-sm text-[var(--color-ink-muted)] py-4 text-center font-serif">加载中...</p>
+          <p className="text-sm text-[var(--color-ink-muted)] py-4 text-center font-serif">{t('common.loading')}</p>
         ) : items.length === 0 ? (
-          <p className="text-sm text-[var(--color-ink-faint)] py-4 text-center font-serif">今天还没有创建待办</p>
+          <p className="text-sm text-[var(--color-ink-faint)] py-4 text-center font-serif">{t('todos.noneCreatedToday')}</p>
         ) : (
           <div className="space-y-1 max-h-[calc(100vh-16rem)] overflow-y-auto">
             {items.map(todo => (
@@ -293,6 +297,7 @@ export function TodayCreatedTodosSidebar() {
 }
 
 export function TodayCreatedTodosInline() {
+  const { t } = useI18n()
   const { items, loading, toggleDone, updateTodo, deleteTodo, addTodo } = useTodayCreatedTodos()
   const navigate = useNavigate()
 
@@ -300,20 +305,20 @@ export function TodayCreatedTodosInline() {
     <div className="px-6 py-5">
       <div className="flex items-center justify-between mb-4">
         <p className="font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">
-          § 今日待办 §
+          {t('todos.todayHeading')}
         </p>
         <button
           onClick={() => navigate({ to: '/todos' })}
           className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
         >
-          全部 →
+          {t('common.all')}
         </button>
       </div>
       <AddTodoForm onAdd={addTodo} />
       {loading ? (
-        <p className="text-sm text-[var(--color-ink-muted)] font-serif">加载中...</p>
+        <p className="text-sm text-[var(--color-ink-muted)] font-serif">{t('common.loading')}</p>
       ) : items.length === 0 ? (
-        <p className="text-sm text-[var(--color-ink-faint)] font-serif">今天还没有创建待办</p>
+        <p className="text-sm text-[var(--color-ink-faint)] font-serif">{t('todos.noneCreatedToday')}</p>
       ) : (
         <div className="space-y-1">
           {items.map(todo => (

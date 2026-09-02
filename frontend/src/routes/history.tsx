@@ -13,6 +13,7 @@ import {
 import { MarkdownContent, MarkdownEditor } from '../lib/markdown-editor'
 import { formatDayMarkdown } from '../lib/report-utils'
 import { CopyButton } from '../components/CopyButton'
+import { useI18n, type TranslationKey } from '../lib/i18n'
 
 export const Route = createFileRoute('/history')({
   component: HistoryPage,
@@ -36,6 +37,7 @@ function IterationSelector({
   iterOverrides: IterationOverrideMap
   onSelect: (n: number) => void
 }) {
+  const { t } = useI18n()
   const [jumpValue, setJumpValue] = useState('')
 
   const clamp = (n: number) => Math.max(minIter, Math.min(maxIter, n))
@@ -98,7 +100,7 @@ function IterationSelector({
       {/* Row 2: jump input + date range hint */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-1.5">
-          <span className="font-mono text-xs text-[var(--color-ink-muted)]">跳转到</span>
+          <span className="font-mono text-xs text-[var(--color-ink-muted)]">{t('history.jumpTo')}</span>
           <input
             type="number"
             min={minIter}
@@ -124,7 +126,16 @@ function IterationSelector({
   )
 }
 
+const PRESETS: { key: RangePreset | 'custom' | 'iteration'; labelKey: TranslationKey }[] = [
+  { key: 'iteration', labelKey: 'history.preset.iteration' },
+  { key: 'month', labelKey: 'history.preset.month' },
+  { key: 'quarter', labelKey: 'history.preset.quarter' },
+  { key: 'year', labelKey: 'history.preset.year' },
+  { key: 'custom', labelKey: 'history.preset.custom' },
+]
+
 function HistoryPage() {
+  const { t } = useI18n()
   const { user, loading } = useAuthGuard()
   const [preset, setPreset] = useState<RangePreset | 'custom' | 'iteration'>('iteration')
   const [customStart, setCustomStart] = useState('')
@@ -215,13 +226,7 @@ function HistoryPage() {
     if (customStart && customEnd) setActiveCustom({ start: customStart, end: customEnd })
   }
 
-  const presets: { key: RangePreset | 'custom' | 'iteration'; label: string }[] = [
-    { key: 'iteration', label: '本迭代' },
-    { key: 'month', label: '本月' },
-    { key: 'quarter', label: '季度' },
-    { key: 'year', label: '年度' },
-    { key: 'custom', label: '自定义' },
-  ]
+  const presets = PRESETS
 
   // Group completed todos by date (using updated_at)
   const todosByDate = new Map<string, Todo[]>()
@@ -266,7 +271,7 @@ function HistoryPage() {
   /** Build markdown for all days and trigger download */
   const downloadAll = () => {
     const parts = sortedDates.map(d => getDayMarkdown(d))
-    const content = '# 工作记录\n\n' + parts.join('\n\n')
+    const content = '# ' + t('history.exportTitle') + '\n\n' + parts.join('\n\n')
     const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -283,8 +288,8 @@ function HistoryPage() {
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
       <PageHeader
-        eyebrow="回顾"
-        title="工作回顾"
+        eyebrow={t('history.eyebrow')}
+        title={t('history.title')}
         actions={sortedDates.length > 0 && (
           <button
             onClick={downloadAll}
@@ -295,7 +300,7 @@ function HistoryPage() {
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-            <span className="hidden sm:inline">下载</span> .md
+            <span className="hidden sm:inline">{t('history.download')}</span> .md
           </button>
         )}
       />
@@ -312,7 +317,7 @@ function HistoryPage() {
                 : 'border-[var(--color-border)] bg-[var(--color-surface-strong)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]'
             }`}
           >
-            {p.label}
+            {t(p.labelKey)}
           </button>
         ))}
       </div>
@@ -339,7 +344,7 @@ function HistoryPage() {
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-sm text-[var(--color-ink)] focus:outline-none"
             >
               {availableYears.map(y => (
-                <option key={y} value={y}>{y} 年</option>
+                <option key={y} value={y}>{t('history.yearOption', { year: y })}</option>
               ))}
             </select>
             <div className="flex gap-1.5 overflow-x-auto pb-1">
@@ -370,7 +375,7 @@ function HistoryPage() {
             className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-sm text-[var(--color-ink)] focus:outline-none"
           >
             {availableYears.map(y => (
-              <option key={y} value={y}>{y} 年</option>
+              <option key={y} value={y}>{t('history.yearOption', { year: y })}</option>
             ))}
           </select>
         </div>
@@ -385,7 +390,7 @@ function HistoryPage() {
             onChange={e => setCustomStart(e.target.value)}
             className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3.5 font-mono text-sm text-[var(--color-ink)] focus:border-[var(--color-border-focus)] focus:outline-none"
           />
-          <span className="font-serif text-sm text-[var(--color-ink-muted)]">至</span>
+          <span className="font-serif text-sm text-[var(--color-ink-muted)]">{t('history.to')}</span>
           <input
             type="date"
             value={customEnd}
@@ -396,17 +401,17 @@ function HistoryPage() {
             onClick={handleCustomSearch}
             className="rounded-md bg-[var(--color-solid)] px-5 py-2.5 font-mono text-sm text-[var(--color-solid-text)] hover:bg-[var(--color-solid-hover)]"
           >
-            查询
+            {t('history.search')}
           </button>
         </div>
       )}
 
       {/* Results */}
       {fetching ? (
-        <p className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
+        <p className="font-mono text-sm text-[var(--color-ink-muted)]">{t('common.loading')}</p>
       ) : sortedDates.length === 0 ? (
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-8 text-center">
-          <p className="font-serif text-sm text-[var(--color-ink-muted)]">暂无记录</p>
+          <p className="font-serif text-sm text-[var(--color-ink-muted)]">{t('history.empty')}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -427,6 +432,7 @@ interface HistoryEntryData {
 }
 
 function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: HistoryEntryData, getDayMarkdown: (d: string) => string }) {
+  const { t } = useI18n()
   const [isEditing, setIsEditing] = useState(false)
   const [logContent, setLogContent] = useState('')
   const saveLogMut = useSaveWorkLog()
@@ -442,7 +448,7 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
       await saveLogMut.mutateAsync({ date, content: logContent })
       setIsEditing(false)
     } catch (e: unknown) {
-      toastError('保存失败: ' + (e instanceof Error ? e.message : '未知错误'))
+      toastError(t('history.saveFailedWith', { error: e instanceof Error ? e.message : t('common.unknownError') }))
     }
   }
 
@@ -459,7 +465,7 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
               onClick={handleEdit}
               className="rounded border border-[var(--color-border)] px-2 py-1 font-mono text-xs text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-hover)]"
             >
-              编辑
+              {t('common.edit')}
             </button>
           )}
         </div>
@@ -472,8 +478,8 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
                 isLeave={entry.attendance.status === 'leave'}
                 onChanged={() => {}}
               />
-              <span>上班 {formatTime(entry.attendance.clock_in)}</span>
-              <span>下班 {formatTime(entry.attendance.clock_out)}</span>
+              <span>{t('history.clockInAt', { time: formatTime(entry.attendance.clock_in) })}</span>
+              <span>{t('history.clockOutAt', { time: formatTime(entry.attendance.clock_out) })}</span>
             </div>
           )}
           <CopyButton getText={() => getDayMarkdown(date)} className="hidden sm:flex" />
@@ -483,11 +489,11 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
       {isEditing ? (
         <div className="space-y-4 mt-4">
           <div>
-            <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">工作内容</p>
+            <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">{t('history.workContent')}</p>
             <MarkdownEditor
               value={logContent}
               onChange={setLogContent}
-              placeholder="记录工作内容..."
+              placeholder={t('history.workContentPlaceholder')}
               rows={8}
             />
           </div>
@@ -497,14 +503,14 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
               disabled={saveLogMut.isPending}
               className="rounded-md bg-[var(--color-solid)] px-5 py-2 font-mono text-sm text-[var(--color-solid-text)] hover:bg-[var(--color-solid-hover)] disabled:opacity-50"
             >
-              {saveLogMut.isPending ? '保存中...' : '保存修改'}
+              {saveLogMut.isPending ? t('common.saving') : t('history.saveChanges')}
             </button>
             <button
               onClick={() => setIsEditing(false)}
               disabled={saveLogMut.isPending}
               className="rounded-md border border-[var(--color-border)] px-5 py-2 font-mono text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
             >
-              取消
+              {t('common.cancel')}
             </button>
           </div>
         </div>
@@ -516,13 +522,13 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
             </div>
           ) : (
             <p className="m-0 mt-2 font-serif text-sm italic text-[var(--color-ink-faint)]">
-              未记录工作内容
+              {t('history.noWorkLog')}
             </p>
           )}
 
           {entry.todos.length > 0 && (
             <div className="mt-3 border-t border-dashed border-[var(--color-border)] pt-3">
-              <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">§ 已完成待办 §</p>
+              <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">{t('history.completedTodos')}</p>
               <div className="space-y-1">
                 {entry.todos.map((todo) => (
                   <div key={todo.id} className="flex items-start gap-2 px-1">
@@ -563,6 +569,7 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
 }
 
 function OvertimeBadge({ date, isOvertime, isLeave }: { date: string, isOvertime: boolean, isLeave: boolean, onChanged?: () => void }) {
+  const { t } = useI18n()
   const overtimeMut = useSetOvertime()
   const { toastError } = useToast()
   if (isLeave) return null
@@ -571,17 +578,17 @@ function OvertimeBadge({ date, isOvertime, isLeave }: { date: string, isOvertime
     try {
       await overtimeMut.mutateAsync({ date, isOvertime: !isOvertime })
     } catch (e: unknown) {
-      toastError(e instanceof Error ? e.message : '更新失败')
+      toastError(e instanceof Error ? e.message : t('history.updateFailed'))
     }
   }
   return (
     <button
       onClick={toggle}
       disabled={overtimeMut.isPending}
-      title={isOvertime ? '点击取消加班标记' : '点击标记为加班'}
+      title={isOvertime ? t('history.overtimeUnmarkTip') : t('history.overtimeMarkTip')}
       className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition-colors disabled:opacity-50 ${isOvertime ? 'border border-transparent bg-red-100 text-red-600' : 'border border-dashed border-[var(--color-border)] bg-transparent text-[var(--color-ink-faint)]'}`}
     >
-      {isOvertime ? '加班' : '+ 加班'}
+      {isOvertime ? t('history.overtime') : t('history.overtimeAdd')}
     </button>
   )
 }

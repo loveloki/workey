@@ -1,3 +1,5 @@
+import { getLanguage, getLocale, type Language } from './i18n'
+
 export function formatDate(date: Date): string {
   // Use local components to avoid UTC offset day-shift bugs
   const y = date.getFullYear()
@@ -45,31 +47,46 @@ export function getDateRange(preset: RangePreset): { start: string; end: string 
   return { start: formatDate(start), end }
 }
 
-export function formatTime(datetime: string | null | undefined): string {
+export function formatTime(datetime: string | null | undefined, lang: Language = getLanguage()): string {
   if (!datetime) return '--:--'
   // Handle ISO format (2026-03-11T10:05:45Z) or space format (2026-03-11 10:05:45)
   const d = new Date(datetime)
   if (isNaN(d.getTime())) return '--:--'
-  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return d.toLocaleTimeString(getLocale(lang), { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-export function formatDateDisplay(dateStr: string): string {
+const ZH_WEEKDAYS_SHORT = ['日', '一', '二', '三', '四', '五', '六']
+const EN_WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const EN_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const ZH_WEEKDAYS_FULL = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+const EN_WEEKDAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+/** 短日期展示，如「5月15日 周五」/「May 15 (Fri)」 */
+export function formatDateDisplay(dateStr: string, lang: Language = getLanguage()): string {
   const date = new Date(dateStr + 'T00:00:00')
-  const weekdays = ['日', '一', '二', '三', '四', '五', '六']
   const m = date.getMonth() + 1
   const d = date.getDate()
-  const w = weekdays[date.getDay()]
-  return `${m}月${d}日 周${w}`
+  if (lang === 'en-US') {
+    return `${EN_MONTHS_SHORT[date.getMonth()]} ${d} (${EN_WEEKDAYS_SHORT[date.getDay()]})`
+  }
+  return `${m}月${d}日 周${ZH_WEEKDAYS_SHORT[date.getDay()]}`
 }
 
-export function formatDateFull(dateStr: string): string {
+/** 完整日期展示，如「2026年5月15日 星期五」/「Friday, May 15, 2026」 */
+export function formatDateFull(dateStr: string, lang: Language = getLanguage()): string {
   const date = new Date(dateStr + 'T00:00:00')
-  const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
   const y = date.getFullYear()
   const m = date.getMonth() + 1
   const d = date.getDate()
-  const w = weekdays[date.getDay()]
-  return `${y}年${m}月${d}日 ${w}`
+  if (lang === 'en-US') {
+    return `${EN_WEEKDAYS_FULL[date.getDay()]}, ${EN_MONTHS_SHORT[date.getMonth()]} ${d}, ${y}`
+  }
+  return `${y}年${m}月${d}日 ${ZH_WEEKDAYS_FULL[date.getDay()]}`
+}
+
+/** 当天标题：如「5月15日 星期五」/「Friday, May 15」 */
+export function formatTodayTitle(date: Date = new Date(), lang: Language = getLanguage()): string {
+  return date.toLocaleDateString(getLocale(lang), { month: 'long', day: 'numeric', weekday: 'long' })
 }
 
 // --- Iteration utilities ---

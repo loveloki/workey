@@ -3,9 +3,31 @@ import type { IterationRange } from '../../lib/models.gen'
 import { useDeleteIterationOverride, useIterations, useSaveIterationOverride } from '../../lib/queries'
 import { getToday, formatDateFull } from '../../lib/date-utils'
 import { useToast } from '../../lib/toast-context'
+import { useI18n, type TranslationKey } from '../../lib/i18n'
 
-const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
-const MONTH_NAMES = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月']
+const WEEKDAY_KEYS: TranslationKey[] = [
+  'iterCal.weekday.sun',
+  'iterCal.weekday.mon',
+  'iterCal.weekday.tue',
+  'iterCal.weekday.wed',
+  'iterCal.weekday.thu',
+  'iterCal.weekday.fri',
+  'iterCal.weekday.sat',
+]
+const MONTH_NAME_KEYS: TranslationKey[] = [
+  'iterCal.month.jan',
+  'iterCal.month.feb',
+  'iterCal.month.mar',
+  'iterCal.month.apr',
+  'iterCal.month.may',
+  'iterCal.month.jun',
+  'iterCal.month.jul',
+  'iterCal.month.aug',
+  'iterCal.month.sep',
+  'iterCal.month.oct',
+  'iterCal.month.nov',
+  'iterCal.month.dec',
+]
 
 // 8 种高对比度迭代颜色（循环使用）
 const ITER_COLORS = [
@@ -72,6 +94,7 @@ function MonthlyGrid({
   today: string
   onDateClick: (date: string, iter: IterationRange) => void
 }) {
+  const { t } = useI18n()
   const days = daysInMonth(year, month)
   const startDow = monthStartDow(year, month)
   const weeks = Math.ceil((days + startDow) / 7)
@@ -81,9 +104,9 @@ function MonthlyGrid({
     <div>
       {/* 星期列头 */}
       <div className="grid grid-cols-7 mb-1">
-        {WEEKDAYS.map(w => (
+        {WEEKDAY_KEYS.map(w => (
           <div key={w} className="text-center font-mono text-[10px] text-[var(--color-ink-muted)] py-1">
-            {w}
+            {t(w)}
           </div>
         ))}
       </div>
@@ -156,6 +179,7 @@ function YearlyGrid({
   today: string
   onMonthClick: (month: number) => void
 }) {
+  const { t } = useI18n()
   const todayDate = new Date(today + 'T00:00:00')
   const currentMonth = todayDate.getMonth()
   const currentYear = todayDate.getFullYear()
@@ -173,11 +197,11 @@ function YearlyGrid({
           <div key={month} onClick={() => onMonthClick(month)}
             className={`rounded-lg border p-2 cursor-pointer transition-all hover:shadow-md ${isCurrentMonth ? 'border-[var(--color-border-strong)] bg-[var(--color-surface)] ring-1 ring-[var(--color-border-focus)]' : 'border-[var(--color-border)] bg-[var(--color-surface-strong)] hover:bg-[var(--color-surface)]'}`}>
             <div className="text-center font-mono text-[11px] font-semibold text-[var(--color-ink-secondary)] mb-1.5">
-              {MONTH_NAMES[month]}
+              {t(MONTH_NAME_KEYS[month])}
             </div>
             <div className="grid grid-cols-7 mb-px">
-              {WEEKDAYS.map(w => (
-                <div key={w} className="text-center font-mono text-[6px] text-[var(--color-ink-faint)] leading-none py-0.5">{w}</div>
+              {WEEKDAY_KEYS.map(w => (
+                <div key={w} className="text-center font-mono text-[6px] text-[var(--color-ink-faint)] leading-none py-0.5">{t(w)}</div>
               ))}
             </div>
             <div className="grid grid-cols-7 gap-[1px]">
@@ -210,6 +234,7 @@ function YearlyGrid({
 // ─── 主组件 ─────────────────────────────────────────────
 
 export function IterationCalendar() {
+  const { t } = useI18n()
   const today = getToday()
   const { toastError, toastSuccess } = useToast()
   const { data: iterationData } = useIterations()
@@ -269,7 +294,7 @@ export function IterationCalendar() {
 
   const handleDateSearch = () => {
     if (!searchDate) return
-    if (!jumpToDate(searchDate)) toastError('未找到该日期所在的 Iteration')
+    if (!jumpToDate(searchDate)) toastError(t('iterCal.dateNotFound'))
   }
 
   // 覆写编辑
@@ -288,16 +313,16 @@ export function IterationCalendar() {
 
   const saveEdit = async () => {
     if (editingIter === null || !editStart || !editEnd || editStart > editEnd) {
-      toastError('请填写有效的起止日期')
+      toastError(t('iterCal.invalidDates'))
       return
     }
     try {
       await saveOverride.mutateAsync({ iterationNumber: editingIter, startDate: editStart, endDate: editEnd })
       setEditingIter(null)
       setShowEditPanel(false)
-      toastSuccess(`Iter ${editingIter} 已手动调整`)
+      toastSuccess(t('iterCal.adjusted', { number: editingIter }))
     } catch (error) {
-      toastError(error instanceof Error ? error.message : '保存失败')
+      toastError(error instanceof Error ? error.message : t('common.saveFailed'))
     }
   }
 
@@ -309,9 +334,9 @@ export function IterationCalendar() {
   const removeOverrideLocal = async (number: number) => {
     try {
       await deleteOverride.mutateAsync(number)
-      toastSuccess(`Iter ${number} 已恢复自动计算`)
+      toastSuccess(t('iterCal.restored', { number }))
     } catch (error) {
-      toastError(error instanceof Error ? error.message : '恢复失败')
+      toastError(error instanceof Error ? error.message : t('iterCal.restoreFailed'))
     }
   }
 
@@ -380,7 +405,7 @@ export function IterationCalendar() {
   if (!iterationData || iterationData.iterations.length === 0) {
     return (
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-8 text-center font-mono text-sm text-[var(--color-ink-muted)]">
-        暂无 Iteration 数据
+        {t('iterCal.empty')}
       </div>
     )
   }
@@ -392,8 +417,8 @@ export function IterationCalendar() {
         {currentIterProgress && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="font-mono text-xs text-[var(--color-ink-muted)]">Iter {currentNumber} 进度</span>
-              <span className="font-mono text-xs text-[var(--color-ink-muted)]">{currentIterProgress.elapsed} / {currentIterProgress.total} 天 ({currentIterProgress.pct}%)</span>
+              <span className="font-mono text-xs text-[var(--color-ink-muted)]">{t('iterCal.progressTitle', { number: currentNumber })}</span>
+              <span className="font-mono text-xs text-[var(--color-ink-muted)]">{t('iterCal.progressDays', { elapsed: currentIterProgress.elapsed, total: currentIterProgress.total, pct: currentIterProgress.pct })}</span>
             </div>
             <div className="h-2 w-full rounded-full bg-[var(--color-surface)]">
               <div className="h-full rounded-full bg-[var(--color-solid)] transition-all duration-500" style={{ width: `${currentIterProgress.pct}%` }} />
@@ -407,15 +432,15 @@ export function IterationCalendar() {
             <>
               <button onClick={goPrevMonth} className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]">◀</button>
               <button onClick={goNextMonth} className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]">▶</button>
-              <span className="font-mono text-sm font-semibold text-[var(--color-ink)] min-w-[120px] text-center">{focusYear}年{focusMonth + 1}月</span>
-              <button onClick={goToToday} className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]">今天</button>
+              <span className="font-mono text-sm font-semibold text-[var(--color-ink)] min-w-[120px] text-center">{t('iterCal.yearMonth', { year: focusYear, month: focusMonth + 1 })}</span>
+              <button onClick={goToToday} className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]">{t('iterCal.today')}</button>
             </>
           ) : (
             <>
               <button onClick={goPrevYear} className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]">◀</button>
               <button onClick={goNextYear} className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]">▶</button>
-              <span className="font-mono text-sm font-semibold text-[var(--color-ink)] min-w-[80px] text-center">{focusYear}年</span>
-              <button onClick={goToToday} className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]">回到当前月</button>
+              <span className="font-mono text-sm font-semibold text-[var(--color-ink)] min-w-[80px] text-center">{t('iterCal.yearOnly', { year: focusYear })}</span>
+              <button onClick={goToToday} className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]">{t('iterCal.backToCurrentMonth')}</button>
             </>
           )}
 
@@ -423,18 +448,18 @@ export function IterationCalendar() {
             {/* 视图切换 */}
             <div className="flex rounded-md border border-[var(--color-border)] overflow-hidden">
               <button onClick={() => setViewMode('month')}
-                className={`px-2.5 py-1.5 font-mono text-xs transition-colors ${viewMode === 'month' ? 'bg-[var(--color-solid)] text-[var(--color-solid-text)]' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]'}`}>月</button>
+                className={`px-2.5 py-1.5 font-mono text-xs transition-colors ${viewMode === 'month' ? 'bg-[var(--color-solid)] text-[var(--color-solid-text)]' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]'}`}>{t('iterCal.viewMonth')}</button>
               <button onClick={() => setViewMode('year')}
-                className={`px-2.5 py-1.5 font-mono text-xs transition-colors ${viewMode === 'year' ? 'bg-[var(--color-solid)] text-[var(--color-solid-text)]' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]'}`}>年</button>
+                className={`px-2.5 py-1.5 font-mono text-xs transition-colors ${viewMode === 'year' ? 'bg-[var(--color-solid)] text-[var(--color-solid-text)]' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]'}`}>{t('iterCal.viewYear')}</button>
             </div>
             <input ref={searchInputRef} type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleDateSearch()}
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 font-mono text-xs outline-none w-32" />
-            <button onClick={handleDateSearch} className="rounded-md bg-[var(--color-solid)] px-2 py-1 font-mono text-xs text-[var(--color-solid-text)]">跳转</button>
-            <span className="font-mono text-[10px] text-[var(--color-ink-faint)] ml-1">过滤:</span>
+            <button onClick={handleDateSearch} className="rounded-md bg-[var(--color-solid)] px-2 py-1 font-mono text-xs text-[var(--color-solid-text)]">{t('iterCal.jump')}</button>
+            <span className="font-mono text-[10px] text-[var(--color-ink-faint)] ml-1">{t('iterCal.filter')}</span>
             <select value={yearFilter ?? ''} onChange={e => setYearFilter(e.target.value ? Number(e.target.value) : null)}
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 font-mono text-xs outline-none">
-              <option value="">全部</option>
-              {years.map(y => <option key={y} value={y}>{y}年</option>)}
+              <option value="">{t('iterCal.filterAll')}</option>
+              {years.map(y => <option key={y} value={y}>{t('iterCal.yearOnly', { year: y })}</option>)}
             </select>
           </div>
         </div>
@@ -449,7 +474,7 @@ export function IterationCalendar() {
         {/* 月视图迭代图例 */}
         {viewMode === 'month' && monthIterations.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-3 pt-3 border-t border-[var(--color-border)]">
-            <span className="font-mono text-[10px] text-[var(--color-ink-faint)]">迭代:</span>
+            <span className="font-mono text-[10px] text-[var(--color-ink-faint)]">{t('iterCal.iterationsLabel')}</span>
             {monthIterations.map(iterNum => {
               const iter = iterationData.iterations.find(i => i.iteration_number === iterNum)
               if (!iter) return null
@@ -460,9 +485,9 @@ export function IterationCalendar() {
                   className="flex items-center gap-1 cursor-pointer rounded-md px-1.5 py-0.5 hover:bg-[var(--color-surface-hover)] transition-colors">
                   <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: color.border }} />
                   <span className={`font-mono text-[10px] ${isCurrent ? 'font-bold' : ''}`} style={{ color: color.text }}>
-                    Iter {iterNum}{isCurrent && ' (当前)'}
+                    Iter {iterNum}{isCurrent && ` ${t('iterCal.currentTag')}`}
                   </span>
-                  {iter.is_overridden && <span className="rounded bg-[var(--color-success-bg)] px-1 font-mono text-[7px] text-[var(--color-success-text)] leading-none">改</span>}
+                  {iter.is_overridden && <span className="rounded bg-[var(--color-success-bg)] px-1 font-mono text-[7px] text-[var(--color-success-text)] leading-none">{t('iterCal.overrideBadge')}</span>}
                   <span className="font-mono text-[9px] text-[var(--color-ink-faint)] ml-0.5">{iter.workdays}/{iter.calendar_days}d</span>
                 </div>
               )
@@ -472,30 +497,30 @@ export function IterationCalendar() {
 
         {/* 全局图例 */}
         <div className="mt-3 flex flex-wrap items-center gap-4">
-          <span className="font-mono text-[10px] text-[var(--color-ink-faint)]">图例:</span>
+          <span className="font-mono text-[10px] text-[var(--color-ink-faint)]">{t('iterCal.legend')}</span>
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: ITER_COLORS[0].fill, borderLeft: `3px solid ${ITER_COLORS[0].border}` }} />
-            <span className="font-mono text-[10px] text-[var(--color-ink-muted)]">有迭代</span>
+            <span className="font-mono text-[10px] text-[var(--color-ink-muted)]">{t('iterCal.hasIteration')}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-sm border border-dashed border-[var(--color-border)]" />
-            <span className="font-mono text-[10px] text-[var(--color-ink-muted)]">无迭代</span>
+            <span className="font-mono text-[10px] text-[var(--color-ink-muted)]">{t('iterCal.noIteration')}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="font-mono text-[10px] font-bold text-[var(--color-danger)]">今</span>
-            <span className="font-mono text-[10px] text-[var(--color-ink-muted)]">今天</span>
+            <span className="font-mono text-[10px] font-bold text-[var(--color-danger)]">{t('iterCal.todayShort')}</span>
+            <span className="font-mono text-[10px] text-[var(--color-ink-muted)]">{t('iterCal.today')}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="font-mono text-[7px] text-[var(--color-ink-muted)] bg-[var(--color-surface)] px-0.5 rounded">S</span>
-            <span className="font-mono text-[10px] text-[var(--color-ink-muted)]">起始日</span>
+            <span className="font-mono text-[10px] text-[var(--color-ink-muted)]">{t('iterCal.startDay')}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="font-mono text-[7px] text-[var(--color-ink-muted)] bg-[var(--color-surface)] px-0.5 rounded">E</span>
-            <span className="font-mono text-[10px] text-[var(--color-ink-muted)]">结束日</span>
+            <span className="font-mono text-[10px] text-[var(--color-ink-muted)]">{t('iterCal.endDay')}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="rounded bg-[var(--color-success-bg)] px-1 font-mono text-[8px] text-[var(--color-success-text)] leading-none">改</span>
-            <span className="font-mono text-[10px] text-[var(--color-ink-muted)]">已手动覆写</span>
+            <span className="rounded bg-[var(--color-success-bg)] px-1 font-mono text-[8px] text-[var(--color-success-text)] leading-none">{t('iterCal.overrideBadge')}</span>
+            <span className="font-mono text-[10px] text-[var(--color-ink-muted)]">{t('iterCal.overridden')}</span>
           </div>
         </div>
       </div>
@@ -504,17 +529,17 @@ export function IterationCalendar() {
       {showEditPanel && editingIter !== null && (
         <div className="rounded-lg border border-[var(--color-border-focus)] bg-[var(--color-surface-strong)] p-4 shadow-sm">
           <div className="flex items-center gap-3">
-            <span className="font-mono text-sm font-semibold text-[var(--color-ink)]">Iter {editingIter} 手动调整</span>
+            <span className="font-mono text-sm font-semibold text-[var(--color-ink)]">{t('iterCal.editTitle', { number: editingIter })}</span>
             <input type="date" value={editStart} onChange={e => setEditStart(e.target.value)}
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 font-mono text-xs outline-none w-36" />
             <span className="font-mono text-xs text-[var(--color-ink-faint)]">~</span>
             <input type="date" value={editEnd} onChange={e => setEditEnd(e.target.value)}
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 font-mono text-xs outline-none w-36" />
-            <button onClick={saveEdit} className="rounded-md bg-[var(--color-solid)] px-3 py-1.5 font-mono text-xs text-[var(--color-solid-text)]">保存</button>
-            <button onClick={cancelEdit} className="rounded-md border border-[var(--color-border)] px-3 py-1.5 font-mono text-xs text-[var(--color-ink-muted)]">取消</button>
+            <button onClick={saveEdit} className="rounded-md bg-[var(--color-solid)] px-3 py-1.5 font-mono text-xs text-[var(--color-solid-text)]">{t('common.save')}</button>
+            <button onClick={cancelEdit} className="rounded-md border border-[var(--color-border)] px-3 py-1.5 font-mono text-xs text-[var(--color-ink-muted)]">{t('common.cancel')}</button>
             {filteredIterations.find(i => i.iteration_number === editingIter)?.is_overridden && (
               <button onClick={() => { removeOverrideLocal(editingIter); cancelEdit() }}
-                className="rounded-md border border-[var(--color-danger-border)] px-3 py-1.5 font-mono text-xs text-[var(--color-danger-text)]">还原</button>
+                className="rounded-md border border-[var(--color-danger-border)] px-3 py-1.5 font-mono text-xs text-[var(--color-danger-text)]">{t('iterCal.restore')}</button>
             )}
           </div>
         </div>
@@ -525,7 +550,7 @@ export function IterationCalendar() {
         <div className="fixed z-50 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-strong)] px-3 py-2 shadow-lg pointer-events-none"
           style={{ left: tooltip.x, top: tooltip.y, transform: 'translate(-50%, -100%)' }}>
           <p className="whitespace-nowrap font-mono text-xs text-[var(--color-ink)]">{formatDateFull(tooltip.date)}</p>
-          <p className="whitespace-nowrap font-mono text-[10px] text-[var(--color-ink-muted)]">{tooltip.isWeekend ? '休息日' : '工作日'}</p>
+          <p className="whitespace-nowrap font-mono text-[10px] text-[var(--color-ink-muted)]">{tooltip.isWeekend ? t('iterCal.restDay') : t('iterCal.workday')}</p>
         </div>
       )}
 
@@ -536,20 +561,20 @@ export function IterationCalendar() {
           <p className="whitespace-nowrap font-mono text-sm font-semibold text-[var(--color-ink)]">{formatDateFull(popover.date)}</p>
           <div className="mt-1 space-y-0.5">
             <p className="whitespace-nowrap font-mono text-xs text-[var(--color-ink-secondary)]">
-              Iter {popover.iteration.iteration_number}{popover.date === popover.iteration.start_date && ' · 起始日'}{popover.date === popover.iteration.end_date && ' · 结束日'}
+              Iter {popover.iteration.iteration_number}{popover.date === popover.iteration.start_date && ` · ${t('iterCal.startDay')}`}{popover.date === popover.iteration.end_date && ` · ${t('iterCal.endDay')}`}
             </p>
             <p className="whitespace-nowrap font-mono text-[10px] text-[var(--color-ink-muted)]">
-              {isWeekend(popover.date) ? '休息日' : '工作日'} · 第{Math.round((new Date(popover.date + 'T00:00:00').getTime() - new Date(popover.iteration.start_date + 'T00:00:00').getTime()) / 86400000) + 1}天
+              {isWeekend(popover.date) ? t('iterCal.restDay') : t('iterCal.workday')} · {t('iterCal.dayIndex', { day: Math.round((new Date(popover.date + 'T00:00:00').getTime() - new Date(popover.iteration.start_date + 'T00:00:00').getTime()) / 86400000) + 1 })}
             </p>
           </div>
           <div className="mt-3 flex items-center gap-2 border-t border-[var(--color-border)] pt-3">
             <button onClick={() => { setEditingIter(popover.iteration.iteration_number); setEditStart(popover.date); setEditEnd(popover.iteration.end_date); setShowEditPanel(true); setPopover(null) }}
-              className="rounded-md bg-[var(--color-solid)] px-3 py-1.5 font-mono text-[10px] text-[var(--color-solid-text)]">设此日为起始</button>
+              className="rounded-md bg-[var(--color-solid)] px-3 py-1.5 font-mono text-[10px] text-[var(--color-solid-text)]">{t('iterCal.setAsStart')}</button>
             <button onClick={() => { setEditingIter(popover.iteration.iteration_number); setEditStart(popover.iteration.start_date); setEditEnd(popover.date); setShowEditPanel(true); setPopover(null) }}
-              className="rounded-md border border-[var(--color-border)] px-3 py-1.5 font-mono text-[10px] text-[var(--color-ink-muted)]">设此日为结束</button>
+              className="rounded-md border border-[var(--color-border)] px-3 py-1.5 font-mono text-[10px] text-[var(--color-ink-muted)]">{t('iterCal.setAsEnd')}</button>
             {popover.iteration.is_overridden && (
               <button onClick={() => { removeOverrideLocal(popover.iteration.iteration_number); setPopover(null) }}
-                className="rounded-md border border-[var(--color-danger-border)] px-3 py-1.5 font-mono text-[10px] text-[var(--color-danger-text)]">还原</button>
+                className="rounded-md border border-[var(--color-danger-border)] px-3 py-1.5 font-mono text-[10px] text-[var(--color-danger-text)]">{t('iterCal.restore')}</button>
             )}
           </div>
         </div>

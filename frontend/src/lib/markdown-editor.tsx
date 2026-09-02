@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useI18n } from './i18n'
 
 interface MarkdownEditorProps {
   value: string
@@ -12,6 +13,7 @@ interface MarkdownEditorProps {
 }
 
 export function MarkdownEditor({ value, onChange, placeholder, rows = 6, toolbarExtra }: MarkdownEditorProps) {
+  const { t } = useI18n()
   const [preview, setPreview] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -54,7 +56,7 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6, toolbar
     const start = ta.selectionStart
     const end = ta.selectionEnd
     const selected = value.substring(start, end)
-    const wrapped = before + (selected || '文本') + after
+    const wrapped = before + (selected || t('editor.defaultText')) + after
     const newVal = value.substring(0, start) + wrapped + value.substring(end)
     onChange(newVal)
     requestAnimationFrame(() => {
@@ -67,17 +69,17 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6, toolbar
       }
       ta.focus()
     })
-  }, [value, onChange])
+  }, [value, onChange, t])
 
   return (
     <div>
       {/* Toolbar */}
       <div className="flex items-center gap-1 mb-2 flex-wrap">
-        <ToolbarBtn title="粗体" onClick={() => wrapSelection('**', '**')}>B</ToolbarBtn>
-        <ToolbarBtn title="斜体" onClick={() => wrapSelection('*', '*')}><i>I</i></ToolbarBtn>
-        <ToolbarBtn title="代码" onClick={() => wrapSelection('`', '`')}>&lt;/&gt;</ToolbarBtn>
-        <ToolbarBtn title="链接" onClick={() => wrapSelection('[', '](url)')}>🔗</ToolbarBtn>
-        <ToolbarBtn title="列表" onClick={() => appendAtEnd('- ')}>•</ToolbarBtn>
+        <ToolbarBtn title={t('editor.bold')} onClick={() => wrapSelection('**', '**')}>B</ToolbarBtn>
+        <ToolbarBtn title={t('editor.italic')} onClick={() => wrapSelection('*', '*')}><i>I</i></ToolbarBtn>
+        <ToolbarBtn title={t('editor.code')} onClick={() => wrapSelection('`', '`')}>&lt;/&gt;</ToolbarBtn>
+        <ToolbarBtn title={t('editor.link')} onClick={() => wrapSelection('[', '](url)')}>🔗</ToolbarBtn>
+        <ToolbarBtn title={t('editor.list')} onClick={() => appendAtEnd('- ')}>•</ToolbarBtn>
         <div className="flex-1" />
         {toolbarExtra}
         <button
@@ -86,7 +88,7 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6, toolbar
             preview ? 'bg-[var(--color-surface-hover)]' : 'bg-[var(--color-surface-strong)]'
           }`}
         >
-          {preview ? '编辑' : '预览'}
+          {preview ? t('common.edit') : t('editor.preview')}
         </button>
       </div>
 
@@ -98,7 +100,7 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6, toolbar
           {value ? (
             <MarkdownContent content={value} />
           ) : (
-            <p className="text-[var(--color-ink-faint)] italic">无内容</p>
+            <p className="text-[var(--color-ink-faint)] italic">{t('editor.noContent')}</p>
           )}
         </div>
       ) : (
@@ -113,7 +115,7 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 6, toolbar
       )}
 
       <p className="mt-1 font-mono text-xs text-[var(--color-ink-faint)]">
-        支持 Markdown
+        {t('editor.markdownSupported')}
       </p>
     </div>
   )

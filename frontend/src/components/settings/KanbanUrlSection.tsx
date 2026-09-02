@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Card } from '../../components/Card'
 import { useSettings, useSaveSettings } from '../../lib/queries'
+import { useI18n } from '../../lib/i18n'
 
 export function KanbanUrlSection() {
+  const { t } = useI18n()
   const [url, setUrl] = useState('https://www.fizzy.do/')
-  const [msg, setMsg] = useState('')
+  const [msg, setMsg] = useState<'' | 'saved' | 'error'>('')
+  const [errorText, setErrorText] = useState('')
   const { data, isSuccess } = useSettings()
   const saveMut = useSaveSettings()
 
@@ -14,19 +17,21 @@ export function KanbanUrlSection() {
 
   const save = async () => {
     setMsg('')
+    setErrorText('')
     try {
       await saveMut.mutateAsync({ kanban_url: url })
-      setMsg('已保存')
+      setMsg('saved')
       setTimeout(() => setMsg(''), 2000)
     } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : '保存失败')
+      setErrorText(e instanceof Error ? e.message : t('common.saveFailed'))
+      setMsg('error')
     }
   }
 
   return (
-    <Card title="看板链接">
+    <Card title={t('settings.kanbanUrl.title')}>
       <p className="text-sm mb-4 font-serif text-[var(--color-ink-muted)]">
-        设置外部看板工具的链接，在"待办"页面可快捷跳转。
+        {t('settings.kanbanUrl.desc')}
       </p>
       {isSuccess && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -42,13 +47,13 @@ export function KanbanUrlSection() {
             disabled={saveMut.isPending}
             className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 bg-[var(--color-solid)]"
           >
-            {saveMut.isPending ? '保存中...' : '保存'}
+            {saveMut.isPending ? t('common.saving') : t('common.save')}
           </button>
           {msg && (
             <span
-              className={`font-mono text-sm ${msg === '已保存' ? 'text-[var(--color-ink-muted)]' : 'text-[var(--color-danger-text)]'}`}
+              className={`font-mono text-sm ${msg === 'saved' ? 'text-[var(--color-ink-muted)]' : 'text-[var(--color-danger-text)]'}`}
             >
-              {msg}
+              {msg === 'saved' ? t('common.saved') : errorText}
             </span>
           )}
         </div>

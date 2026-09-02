@@ -2,17 +2,20 @@ import { useState } from 'react'
 import { settings } from '../../lib/api'
 import { useTheme, type Theme } from '../../lib/theme-context'
 import { Card } from '../../components/Card'
+import { useI18n, type TranslationKey } from '../../lib/i18n'
 
-const THEME_OPTIONS: { label: string; value: Theme; icon: string }[] = [
-  { label: '浅色', value: 'light', icon: '☀️' },
-  { label: '深色', value: 'dark', icon: '🌙' },
-  { label: '跟随系统', value: 'auto', icon: '💻' },
+const THEME_OPTIONS: { labelKey: TranslationKey; value: Theme; icon: string }[] = [
+  { labelKey: 'settings.theme.light', value: 'light', icon: '☀️' },
+  { labelKey: 'settings.theme.dark', value: 'dark', icon: '🌙' },
+  { labelKey: 'settings.theme.auto', value: 'auto', icon: '💻' },
 ]
 
 export function ThemeSection() {
+  const { t } = useI18n()
   const { theme, setTheme } = useTheme()
   const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState('')
+  const [msg, setMsg] = useState<'' | 'saved' | 'error'>('')
+  const [errorText, setErrorText] = useState('')
 
   const handleChange = async (value: Theme) => {
     setTheme(value)
@@ -20,19 +23,20 @@ export function ThemeSection() {
     setMsg('')
     try {
       await settings.save({ theme: value })
-      setMsg('已保存')
+      setMsg('saved')
       setTimeout(() => setMsg(''), 2000)
     } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : '保存失败')
+      setErrorText(e instanceof Error ? e.message : t('common.saveFailed'))
+      setMsg('error')
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <Card title="主题设置">
+    <Card title={t('settings.theme.title')}>
       <p className="text-sm mb-4 font-serif text-[var(--color-ink-muted)]">
-        选择界面外观主题。「跟随系统」将根据你的操作系统偏好自动切换。
+        {t('settings.theme.desc')}
       </p>
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
         <div className="flex gap-2">
@@ -47,15 +51,15 @@ export function ThemeSection() {
                   : 'bg-[var(--color-surface-strong)] text-[var(--color-ink)] border border-[var(--color-border)]'
               }`}
             >
-              {opt.icon} {opt.label}
+              {opt.icon} {t(opt.labelKey)}
             </button>
           ))}
         </div>
         {msg && (
           <span
-            className={`font-mono text-sm ${msg === '已保存' ? 'text-[var(--color-ink-muted)]' : 'text-[var(--color-danger-text)]'}`}
+            className={`font-mono text-sm ${msg === 'saved' ? 'text-[var(--color-ink-muted)]' : 'text-[var(--color-danger-text)]'}`}
           >
-            {msg}
+            {msg === 'saved' ? t('common.saved') : errorText}
           </span>
         )}
       </div>

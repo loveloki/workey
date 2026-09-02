@@ -4,8 +4,10 @@ import { Card } from '../../components/Card'
 import { usePasskeyList, useDeletePasskey } from '../../lib/queries'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../lib/queries'
+import { useI18n } from '../../lib/i18n'
 
 export function PasskeySection() {
+  const { t, locale } = useI18n()
   const [name, setName] = useState('')
   const [adding, setAdding] = useState(false)
   const [msg, setMsg] = useState('')
@@ -18,7 +20,7 @@ export function PasskeySection() {
 
   const handleAdd = async () => {
     if (!name.trim()) {
-      setMsg('请输入通行密钥名称')
+      setMsg(t('passkey.nameRequired'))
       setIsError(true)
       return
     }
@@ -57,19 +59,19 @@ export function PasskeySection() {
       })) as PublicKeyCredential | null
 
       if (!credential) {
-        setMsg('创建通行密钥已取消')
+        setMsg(t('passkey.createCancelled'))
         setIsError(true)
         setAdding(false)
         return
       }
 
       await passkeysApi.registerFinish(name.trim(), credential)
-      setMsg('通行密钥已添加')
+      setMsg(t('passkey.added'))
       setIsError(false)
       setName('')
       qc.invalidateQueries({ queryKey: queryKeys.passkeys })
     } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : '添加通行密钥失败')
+      setMsg(e instanceof Error ? e.message : t('passkey.addFailed'))
       setIsError(true)
     } finally {
       setAdding(false)
@@ -79,30 +81,30 @@ export function PasskeySection() {
   const handleDelete = async (id: number) => {
     try {
       await deleteMut.mutateAsync(id)
-      setMsg('通行密钥已删除')
+      setMsg(t('passkey.deleted'))
       setIsError(false)
     } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : '删除失败')
+      setMsg(e instanceof Error ? e.message : t('common.deleteFailed'))
       setIsError(true)
     }
   }
 
   const formatDate = (dateStr: string | null | undefined) => {
-    if (!dateStr) return '从未使用'
+    if (!dateStr) return t('passkey.neverUsed')
     const d = new Date(dateStr.replace(' ', 'T') + 'Z')
     if (isNaN(d.getTime())) return dateStr
-    return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })
+    return d.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' })
   }
 
   return (
-    <Card title="通行密钥">
+    <Card title={t('passkey.title')}>
       <p className="text-sm mb-4 font-serif text-[var(--color-ink-muted)]">
-        通行密钥让你无需输入密码即可登录，支持指纹、面容识别等方式。
+        {t('passkey.desc')}
       </p>
 
       {isLoading ? (
         <p className="font-mono text-sm text-[var(--color-ink-muted)]">
-          加载中...
+          {t('common.loading')}
         </p>
       ) : (
         <>
@@ -118,14 +120,14 @@ export function PasskeySection() {
                       {pk.name}
                     </div>
                     <div className="font-mono text-xs text-[var(--color-ink-muted)]">
-                      添加于 {formatDate(pk.created_at)} · 上次使用 {formatDate(pk.last_used_at)}
+                      {t('passkey.meta', { created: formatDate(pk.created_at), lastUsed: formatDate(pk.last_used_at) })}
                     </div>
                   </div>
                   <button
                     onClick={() => handleDelete(pk.id)}
                     className="font-mono text-sm px-3 py-1 rounded-md transition-colors text-[var(--color-danger-text)] border border-[var(--color-danger-border)]"
                   >
-                    删除
+                    {t('common.delete')}
                   </button>
                 </div>
               ))}
@@ -137,7 +139,7 @@ export function PasskeySection() {
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="通行密钥名称（如 MacBook、iPhone）"
+              placeholder={t('passkey.namePlaceholder')}
               className="font-mono text-sm px-3 py-2 bg-[var(--color-surface-strong)] w-full sm:w-72 border border-[var(--color-border)] rounded-md outline-none"
               onKeyDown={e => e.key === 'Enter' && void handleAdd()}
             />
@@ -146,7 +148,7 @@ export function PasskeySection() {
               disabled={adding}
               className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 bg-[var(--color-solid)]"
             >
-              {adding ? '添加中...' : '添加通行密钥'}
+              {adding ? t('passkey.adding') : t('passkey.add')}
             </button>
           </div>
 

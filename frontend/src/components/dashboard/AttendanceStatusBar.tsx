@@ -2,6 +2,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { formatTime } from '../../lib/date-utils'
 import type { Attendance } from '../../lib/api'
 import { useSettings } from '../../lib/queries'
+import { useI18n } from '../../lib/i18n'
 
 interface AttendanceStatusBarProps {
   data: Attendance
@@ -9,6 +10,7 @@ interface AttendanceStatusBarProps {
 
 export function AttendanceStatusBar({ data }: AttendanceStatusBarProps) {
   const navigate = useNavigate()
+  const { t, locale } = useI18n()
   const { data: settingsData } = useSettings()
 
   const clockedIn = !!data.clock_in
@@ -22,7 +24,7 @@ export function AttendanceStatusBar({ data }: AttendanceStatusBarProps) {
     const clockInDate = new Date(data.clock_in)
     if (!isNaN(clockInDate.getTime())) {
       const expected = new Date(clockInDate.getTime() + delay * 60 * 60 * 1000)
-      expectedClockOut = expected.toLocaleTimeString('zh-CN', {
+      expectedClockOut = expected.toLocaleTimeString(locale, {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
@@ -33,12 +35,12 @@ export function AttendanceStatusBar({ data }: AttendanceStatusBarProps) {
   return (
     <div className="flex items-center gap-3 sm:gap-6 px-4 sm:px-6 py-4">
       <div className="flex items-center gap-2">
-        {data.is_overtime && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">加班</span>}
+        {data.is_overtime && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[10px] font-bold">{t('attendance.overtime')}</span>}
         {isLeave ? (
-          <span className="font-mono text-sm font-bold text-[var(--color-danger-text,#dc2626)]">已请假</span>
+          <span className="font-mono text-sm font-bold text-[var(--color-danger-text,#dc2626)]">{t('attendance.onLeave')}</span>
         ) : (
           <>
-            <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">上班</span>
+            <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">{t('attendance.clockIn')}</span>
             <span className="font-mono text-sm font-bold text-[var(--color-ink)]">{formatTime(data.clock_in)}</span>
           </>
         )}
@@ -49,7 +51,7 @@ export function AttendanceStatusBar({ data }: AttendanceStatusBarProps) {
           <div className="h-4 w-px bg-[var(--color-border)]" />
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)]">
-              {clockedOut ? '下班' : '预计'}
+              {clockedOut ? t('attendance.clockOut') : t('attendance.expected')}
             </span>
             <span className="font-mono text-sm font-bold text-[var(--color-ink)]">
               {clockedOut ? formatTime(data.clock_out) : (expectedClockOut ?? '--:--')}
@@ -62,7 +64,7 @@ export function AttendanceStatusBar({ data }: AttendanceStatusBarProps) {
         onClick={() => navigate({ to: '/clock' })}
         className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
       >
-        打卡 →
+        {t('attendance.goClock')}
       </button>
     </div>
   )

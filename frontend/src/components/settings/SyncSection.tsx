@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Card } from '../Card'
 import { useToast } from '../../lib/toast-context'
 import { ApiError } from '../../lib/api'
+import { useI18n, type TranslationKey } from '../../lib/i18n'
 import {
   useSyncConfig,
   useSyncStatus,
@@ -15,17 +16,19 @@ import {
 } from '../../lib/queries'
 import { useQueryClient } from '@tanstack/react-query'
 
+type TFunc = (key: TranslationKey, vars?: Record<string, string | number>) => string
+
 // 判断是否为冲突错误（后端返回 HTTP 409）
 function isConflictError(e: unknown): boolean {
   return e instanceof ApiError && e.status === 409
 }
 
-// 格式化日期时间为中文短格式（统一工具函数，避免重复定义）
-function formatDateTime(s?: string | null): string {
-  if (!s) return '从未'
+// 格式化日期时间为短格式（统一工具函数，避免重复定义）
+function formatDateTime(s: string | null | undefined, locale: string, t: TFunc): string {
+  if (!s) return t('sync.never')
   const d = new Date(s)
   if (isNaN(d.getTime())) return s
-  return d.toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 // 冲突选择弹窗
@@ -40,6 +43,8 @@ function ConflictModal({
   onCancel: () => void
   loading: boolean
 }) {
+  const { t } = useI18n()
+
   return (
     <div
       role="dialog"
@@ -50,22 +55,22 @@ function ConflictModal({
     >
       <div className="w-full max-w-md mx-4 rounded-xl bg-[var(--color-bg)] border border-[var(--color-border)] shadow-2xl">
         <div className="px-6 py-5 border-b border-[var(--color-border)]">
-          <h2 id="conflict-dialog-title" className="font-serif text-xl text-[var(--color-ink)]">检测到同步冲突</h2>
+          <h2 id="conflict-dialog-title" className="font-serif text-xl text-[var(--color-ink)]">{t('sync.conflict.title')}</h2>
           <p className="mt-1 font-mono text-xs text-[var(--color-ink-muted)]">
-            本地与远端数据存在差异，请选择保留哪一方
+            {t('sync.conflict.desc')}
           </p>
         </div>
         <div className="px-6 py-5 space-y-3">
           <ConflictOption
-            title={loading ? '执行中...' : '使用本地覆盖远端'}
-            desc="将本地数据推送到 WebDAV，远端旧数据将被替换"
+            title={loading ? t('sync.conflict.running') : t('sync.conflict.useLocal')}
+            desc={t('sync.conflict.useLocalDesc')}
             onClick={onLocal}
             disabled={loading}
             variant="danger"
           />
           <ConflictOption
-            title={loading ? '执行中...' : '使用远端覆盖本地'}
-            desc="从 WebDAV 拉取数据，本地数据将被替换"
+            title={loading ? t('sync.conflict.running') : t('sync.conflict.useRemote')}
+            desc={t('sync.conflict.useRemoteDesc')}
             onClick={onRemote}
             disabled={loading}
             variant="primary"
@@ -77,7 +82,7 @@ function ConflictModal({
             disabled={loading}
             className="font-mono text-sm px-4 py-2 rounded-md border border-[var(--color-border)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50 transition-colors"
           >
-            取消
+            {t('common.cancel')}
           </button>
         </div>
       </div>
@@ -113,7 +118,8 @@ function ConflictOption({
 
 // 同步日志条目
 function SyncLogItem({ log }: { log: { id: number; direction: string; status: string; message: string; created_at: string } }) {
-  const dirLabel = log.direction === 'push' ? '↑ 推送' : log.direction === 'pull' ? '↓ 拉取' : '🔍 检查'
+  const { t, locale } = useI18n()
+  const dirLabel = log.direction === 'push' ? t('sync.log.push') : log.direction === 'pull' ? t('sync.log.pull') : t('sync.log.check')
   const statusColor =
     log.status === 'success'
       ? 'text-[var(--color-success-text)]'
@@ -126,13 +132,14 @@ function SyncLogItem({ log }: { log: { id: number; direction: string; status: st
       <span className={`font-mono text-xs shrink-0 mt-0.5 ${statusColor}`}>{dirLabel}</span>
       <div className="flex-1 min-w-0">
         <p className="font-mono text-xs text-[var(--color-ink)] truncate">{log.message}</p>
-        <p className="font-mono text-[10px] text-[var(--color-ink-faint)] mt-0.5">{formatDateTime(log.created_at)}</p>
+        <p className="font-mono text-[10px] text-[var(--color-ink-faint)] mt-0.5">{formatDateTime(log.created_at, locale, t)}</p>
       </div>
     </div>
   )
 }
 
 export function SyncSection() {
+  const { t, locale } = useI18n()
   const { toastSuccess, toastError } = useToast()
   const qc = useQueryClient()
 
@@ -193,12 +200,12 @@ export function SyncSection() {
   const handleSave = async () => {
     const data = formData()
     if (!data.webdav_url || !data.webdav_username || !data.remote_path) {
-      toastError('请填写 WebDAV 地址、用户名和远端目录')
+      toastError(t('sync.error.missingFields'))
       return
     }
     // 校验远端目录必须以 / 开头（修复 S5）
     if (!data.remote_path.startsWith('/')) {
-      toastError('远端目录必须以 / 开头')
+      toastError(t('sync.error.pathMustStartWithSlash'))
       return
     }
     try {
@@ -207,12 +214,12 @@ export function SyncSection() {
       if (result.warning) {
         toastError(result.warning)
       } else {
-        toastSuccess('配置已保存')
+        toastSuccess(t('sync.configSaved'))
       }
       // 保存成功后清空密码字段（修复 M8）
       if (passwordRef.current) passwordRef.current.value = ''
     } catch (e) {
-      toastError(e instanceof Error ? e.message : '保存失败')
+      toastError(e instanceof Error ? e.message : t('common.saveFailed'))
     }
   }
 
@@ -222,12 +229,12 @@ export function SyncSection() {
       const data = isConfigured ? undefined : formData()
       const result = await validate.mutateAsync(data)
       if (result.success) {
-        toastSuccess('连接成功：' + result.message)
+        toastSuccess(t('sync.connectSuccess', { message: result.message }))
       } else {
-        toastError('连接失败：' + result.message)
+        toastError(t('sync.connectFailed', { message: result.message }))
       }
     } catch (e) {
-      toastError(e instanceof Error ? e.message : '连接测试失败')
+      toastError(e instanceof Error ? e.message : t('sync.validateFailed'))
     }
   }
 
@@ -241,9 +248,9 @@ export function SyncSection() {
       setAutoSyncInterval(0)
       setFormInited(false)
       setDeleteConfirm(false)
-      toastSuccess('配置已删除')
+      toastSuccess(t('sync.configDeleted'))
     } catch (e) {
-      toastError(e instanceof Error ? e.message : '删除失败')
+      toastError(e instanceof Error ? e.message : t('common.deleteFailed'))
     }
   }
 
@@ -256,12 +263,12 @@ export function SyncSection() {
         return
       }
       const result = await push.mutateAsync({ force: false, loginPassword: loginPasswordRef.current?.value })
-      toastSuccess('推送成功：' + result.message)
+      toastSuccess(t('sync.pushSuccess', { message: result.message }))
     } catch (e) {
       if (isConflictError(e)) {
         setConflictModal('push')
       } else {
-        toastError(e instanceof Error ? e.message : '推送失败')
+        toastError(e instanceof Error ? e.message : t('sync.pushFailed'))
       }
     }
   }
@@ -274,12 +281,12 @@ export function SyncSection() {
         return
       }
       const result = await pull.mutateAsync({ force: false, loginPassword: loginPasswordRef.current?.value })
-      toastSuccess('拉取成功：' + result.message)
+      toastSuccess(t('sync.pullSuccess', { message: result.message }))
     } catch (e) {
       if (isConflictError(e)) {
         setConflictModal('pull')
       } else {
-        toastError(e instanceof Error ? e.message : '拉取失败')
+        toastError(e instanceof Error ? e.message : t('sync.pullFailed'))
       }
     }
   }
@@ -289,10 +296,10 @@ export function SyncSection() {
     setConflictLoading(true)
     try {
       const result = await push.mutateAsync({ force: true, loginPassword: loginPasswordRef.current?.value })
-      toastSuccess('已以本地覆盖远端：' + result.message)
+      toastSuccess(t('sync.forcePushDone', { message: result.message }))
       setConflictModal(null)
     } catch (e) {
-      toastError(e instanceof Error ? e.message : '强制推送失败')
+      toastError(e instanceof Error ? e.message : t('sync.forcePushFailed'))
     } finally {
       setConflictLoading(false)
     }
@@ -303,10 +310,10 @@ export function SyncSection() {
     setConflictLoading(true)
     try {
       const result = await pull.mutateAsync({ force: true, loginPassword: loginPasswordRef.current?.value })
-      toastSuccess('已以远端覆盖本地：' + result.message)
+      toastSuccess(t('sync.forcePullDone', { message: result.message }))
       setConflictModal(null)
     } catch (e) {
-      toastError(e instanceof Error ? e.message : '强制拉取失败')
+      toastError(e instanceof Error ? e.message : t('sync.forcePullFailed'))
     } finally {
       setConflictLoading(false)
     }
@@ -318,16 +325,16 @@ export function SyncSection() {
 
   return (
     <>
-      <Card title="WebDAV 同步">
+      <Card title={t('sync.title')}>
         <p className="text-sm mb-5 font-serif text-[var(--color-ink-muted)]">
-          将数据同步到 WebDAV 服务器。可开启定时自动推送；冲突时需手动选择保留哪一方。
+          {t('sync.desc')}
         </p>
 
         {/* WebDAV 配置表单 */}
         <div className="space-y-3 mb-5">
           <div>
             <label className="block font-mono text-xs mb-1 text-[var(--color-ink-muted)]">
-              WebDAV 地址
+              {t('sync.field.url')}
             </label>
             <input
               type="url"
@@ -341,7 +348,7 @@ export function SyncSection() {
           </div>
           <div>
             <label className="block font-mono text-xs mb-1 text-[var(--color-ink-muted)]">
-              用户名
+              {t('sync.field.username')}
             </label>
             <input
               type="text"
@@ -354,55 +361,55 @@ export function SyncSection() {
           </div>
           <div>
             <label className="block font-mono text-xs mb-1 text-[var(--color-ink-muted)]">
-              密码 / 应用密码
+              {t('sync.field.password')}
             </label>
             <div className="relative">
               <input
                 ref={passwordRef}
                 type={showPassword ? 'text' : 'password'}
                 defaultValue=""
-                placeholder={isConfigured ? '不修改则留空' : '请输入密码'}
+                placeholder={isConfigured ? t('sync.password.placeholderConfigured') : t('sync.password.placeholder')}
                 className="font-mono text-sm w-full px-3 py-2 pr-20 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none focus:border-[var(--color-border-focus)]"
                 data-testid="sync-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(v => !v)}
-                aria-label="切换密码可见性"
+                aria-label={t('sync.password.toggleAria')}
                 aria-pressed={showPassword}
                 className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors px-1"
               >
-                {showPassword ? '隐藏' : '显示'}
+                {showPassword ? t('sync.hide') : t('sync.show')}
               </button>
             </div>
           </div>
           <div>
             <label className="block font-mono text-xs mb-1 text-[var(--color-ink-muted)]">
-              当前登录密码
+              {t('sync.field.loginPassword')}
             </label>
             <div className="relative">
               <input
                 ref={loginPasswordRef}
                 type={showLoginPassword ? 'text' : 'password'}
                 defaultValue=""
-                placeholder="同步操作时需要验证"
+                placeholder={t('sync.loginPassword.placeholder')}
                 className="font-mono text-sm w-full px-3 py-2 pr-20 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none focus:border-[var(--color-border-focus)]"
                 data-testid="sync-login-password"
               />
               <button
                 type="button"
                 onClick={() => setShowLoginPassword(v => !v)}
-                aria-label="切换登录密码可见性"
+                aria-label={t('sync.loginPassword.toggleAria')}
                 aria-pressed={showLoginPassword}
                 className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] transition-colors px-1"
               >
-                {showLoginPassword ? '隐藏' : '显示'}
+                {showLoginPassword ? t('sync.hide') : t('sync.show')}
               </button>
             </div>
           </div>
           <div>
             <label className="block font-mono text-xs mb-1 text-[var(--color-ink-muted)]">
-              远端目录
+              {t('sync.field.remotePath')}
             </label>
             <input
               type="text"
@@ -428,13 +435,13 @@ export function SyncSection() {
                 <div className="w-9 h-5 rounded-full bg-[var(--color-surface-strong)] border border-[var(--color-border)] peer-checked:bg-[var(--color-solid)] peer-checked:border-[var(--color-solid)] transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-4" />
               </div>
               <span className="font-mono text-sm text-[var(--color-ink)] select-none">
-                定时自动同步
+                {t('sync.auto.enable')}
               </span>
             </label>
             {autoSyncInterval > 0 && (
               <div className="mt-3 pl-11">
                 <label className="block font-mono text-xs mb-1 text-[var(--color-ink-muted)]">
-                  同步间隔
+                  {t('sync.auto.interval')}
                 </label>
                 <select
                   value={autoSyncInterval}
@@ -442,16 +449,16 @@ export function SyncSection() {
                   className="font-mono text-sm w-full px-3 py-2 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none focus:border-[var(--color-border-focus)]"
                   data-testid="sync-auto-interval"
                 >
-                  <option value={30}>每 30 分钟</option>
-                  <option value={60}>每 1 小时</option>
-                  <option value={120}>每 2 小时</option>
-                  <option value={240}>每 4 小时</option>
-                  <option value={360}>每 6 小时</option>
-                  <option value={720}>每 12 小时</option>
-                  <option value={1440}>每 24 小时</option>
+                  <option value={30}>{t('sync.auto.minutes', { count: 30 })}</option>
+                  <option value={60}>{t('sync.auto.hours', { count: 1 })}</option>
+                  <option value={120}>{t('sync.auto.hours', { count: 2 })}</option>
+                  <option value={240}>{t('sync.auto.hours', { count: 4 })}</option>
+                  <option value={360}>{t('sync.auto.hours', { count: 6 })}</option>
+                  <option value={720}>{t('sync.auto.hours', { count: 12 })}</option>
+                  <option value={1440}>{t('sync.auto.hours', { count: 24 })}</option>
                 </select>
                 <p className="mt-1 font-mono text-[10px] text-[var(--color-ink-muted)]">
-                  后台自动将本地数据推送到 WebDAV。遇冲突时会跳过自动同步，需手动处理。
+                  {t('sync.auto.hint')}
                 </p>
               </div>
             )}
@@ -466,7 +473,7 @@ export function SyncSection() {
             className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-solid)] text-[var(--color-solid-text)] hover:bg-[var(--color-solid-hover)] disabled:opacity-50 transition-colors"
             data-testid="sync-save-btn"
           >
-            {saveConfig.isPending ? '保存中...' : '保存配置'}
+            {saveConfig.isPending ? t('common.saving') : t('sync.saveConfig')}
           </button>
           <button
             onClick={handleValidate}
@@ -474,7 +481,7 @@ export function SyncSection() {
             className="font-mono text-sm px-5 py-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-strong)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50 transition-colors"
             data-testid="sync-validate-btn"
           >
-            {validate.isPending ? '测试中...' : '测试连接'}
+            {validate.isPending ? t('sync.testing') : t('sync.testConnection')}
           </button>
           {isConfigured && (
             <>
@@ -484,26 +491,26 @@ export function SyncSection() {
                 className="font-mono text-sm px-5 py-2 rounded-md border border-[var(--color-danger-border)] text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)] disabled:opacity-50 transition-colors"
                 data-testid="sync-delete-btn"
               >
-                {deleteConfig.isPending ? '删除中...' : '删除配置'}
+                {deleteConfig.isPending ? t('common.deleting') : t('sync.deleteConfig')}
               </button>
               {/* 删除确认提示（修复 M10） */}
               {deleteConfirm && (
                 <div className="w-full flex items-center gap-2 p-3 rounded-md border border-[var(--color-danger-border)] bg-[var(--color-danger-bg)]">
-                  <span className="font-mono text-xs text-[var(--color-danger-text)]">确认删除配置？</span>
+                  <span className="font-mono text-xs text-[var(--color-danger-text)]">{t('sync.deleteConfirmText')}</span>
                   <button
                     onClick={handleDelete}
                     disabled={isBusy}
                     className="font-mono text-xs px-3 py-1 rounded-md bg-[var(--color-danger-text)] text-white hover:opacity-90 disabled:opacity-50 transition-colors"
                     data-testid="sync-delete-confirm-btn"
                   >
-                    确认删除
+                    {t('sync.deleteConfirmBtn')}
                   </button>
                   <button
                     onClick={() => setDeleteConfirm(false)}
                     disabled={isBusy}
                     className="font-mono text-xs px-3 py-1 rounded-md border border-[var(--color-border)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50 transition-colors"
                   >
-                    取消
+                    {t('common.cancel')}
                   </button>
                 </div>
               )}
@@ -516,7 +523,7 @@ export function SyncSection() {
           <>
             <div className="border-t border-[var(--color-border)] pt-4 mb-4">
               <p className="font-mono text-xs uppercase tracking-[0.15em] text-[var(--color-ink-muted)] mb-3">
-                同步操作
+                {t('sync.actions')}
               </p>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -525,7 +532,7 @@ export function SyncSection() {
                   className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-surface-strong)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50 transition-colors"
                   data-testid="sync-push-btn"
                 >
-                  {push.isPending ? '推送中...' : '↑ 推送本地到远端'}
+                  {push.isPending ? t('sync.pushing') : t('sync.pushBtn')}
                 </button>
                 <button
                   onClick={handlePull}
@@ -533,7 +540,7 @@ export function SyncSection() {
                   className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-surface-strong)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50 transition-colors"
                   data-testid="sync-pull-btn"
                 >
-                  {pull.isPending ? '拉取中...' : '↓ 从远端拉取'}
+                  {pull.isPending ? t('sync.pulling') : t('sync.pullBtn')}
                 </button>
               </div>
             </div>
@@ -541,10 +548,10 @@ export function SyncSection() {
             {/* 同步状态 */}
             {status && (
               <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 mb-4">
-                <p className="font-mono text-xs uppercase tracking-[0.15em] text-[var(--color-ink-muted)] mb-2">同步状态</p>
+                <p className="font-mono text-xs uppercase tracking-[0.15em] text-[var(--color-ink-muted)] mb-2">{t('sync.status')}</p>
                 <div className="grid grid-cols-2 gap-2 font-mono text-xs text-[var(--color-ink-secondary)]">
-                  <span>上次同步：{formatDateTime(status?.last_sync_at)}</span>
-                  <span>同步方向：{status?.last_direction === 'push' ? '↑ 推送' : status?.last_direction === 'pull' ? '↓ 拉取' : '—'}</span>
+                  <span>{t('sync.lastSync', { time: formatDateTime(status?.last_sync_at, locale, t) })}</span>
+                  <span>{t('sync.direction', { dir: status?.last_direction === 'push' ? t('sync.log.push') : status?.last_direction === 'pull' ? t('sync.log.pull') : '—' })}</span>
                 </div>
               </div>
             )}
@@ -553,7 +560,7 @@ export function SyncSection() {
             {logs.length > 0 && (
               <div>
                 <p className="font-mono text-xs uppercase tracking-[0.15em] text-[var(--color-ink-muted)] mb-2">
-                  近期日志
+                  {t('sync.recentLogs')}
                 </p>
                 <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-1">
                   {logs.slice(0, 10).map((log: { id: number; direction: string; status: string; message: string; created_at: string }) => (
@@ -566,7 +573,7 @@ export function SyncSection() {
         )}
 
         {configQuery.isLoading && (
-          <p role="status" aria-live="polite" className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
+          <p role="status" aria-live="polite" className="font-mono text-sm text-[var(--color-ink-muted)]">{t('common.loading')}</p>
         )}
       </Card>
 

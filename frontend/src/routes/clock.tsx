@@ -4,14 +4,16 @@ import { useAuthGuard } from '../lib/useAuthGuard'
 import { useToast } from '../lib/toast-context'
 import { useState, useEffect } from 'react'
 import { type Attendance } from '../lib/api'
-import { formatTime } from '../lib/date-utils'
+import { formatTime, formatTodayTitle } from '../lib/date-utils'
 import { LoadingScreen } from '../components/LoadingScreen'
+import { useI18n } from '../lib/i18n'
 import { useAttendanceToday, useClockIn, useClockOut, useLeave, useSetOvertime, useSettings } from '../lib/queries'
 
 export const Route = createFileRoute('/clock')({ component: ClockPage })
 
 function ClockPage() {
   const { user, loading } = useAuthGuard()
+  const { t } = useI18n()
 
   if (loading) return <LoadingScreen />
   if (!user) return null
@@ -19,8 +21,8 @@ function ClockPage() {
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
       <PageHeader
-        eyebrow="打卡签到"
-        title={new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
+        eyebrow={t('clock.eyebrow')}
+        title={formatTodayTitle()}
         centered
       />
       <ClockWidget />
@@ -31,6 +33,7 @@ function ClockPage() {
 function ClockWidget() {
   const { data: queryData, isLoading } = useAttendanceToday()
   const { toastError } = useToast()
+  const { t, locale } = useI18n()
   const [localData, setLocalData] = useState<Attendance | null | undefined>(null)
   const [now, setNow] = useState(new Date())
   const [isOvertime, setIsOvertime] = useState(false)
@@ -67,7 +70,7 @@ function ClockWidget() {
     const clockInDate = new Date(data.clock_in)
     if (!isNaN(clockInDate.getTime())) {
       const expected = new Date(clockInDate.getTime() + delay * 60 * 60 * 1000)
-      expectedClockOut = expected.toLocaleTimeString('zh-CN', {
+      expectedClockOut = expected.toLocaleTimeString(locale, {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
@@ -81,7 +84,7 @@ function ClockWidget() {
       setLocalData(res.attendance)
       setTimeout(() => navigate({ to: '/' }), 600)
     } catch (e: unknown) {
-      toastError(e instanceof Error ? e.message : '操作失败')
+      toastError(e instanceof Error ? e.message : t('common.operationFailed'))
     }
   }
 
@@ -91,7 +94,7 @@ function ClockWidget() {
       const res = await setOvertimeMut.mutateAsync({ date: data.date, isOvertime: !data.is_overtime })
       setLocalData(res.attendance)
     } catch (e: unknown) {
-      toastError(e instanceof Error ? e.message : '操作失败')
+      toastError(e instanceof Error ? e.message : t('common.operationFailed'))
     }
   }
 
@@ -100,7 +103,7 @@ function ClockWidget() {
       const res = await clockOutMut.mutateAsync()
       setLocalData(res.attendance)
     } catch (e: unknown) {
-      toastError(e instanceof Error ? e.message : '操作失败')
+      toastError(e instanceof Error ? e.message : t('common.operationFailed'))
     }
   }
 
@@ -109,13 +112,13 @@ function ClockWidget() {
       const res = await leaveMut.mutateAsync()
       setLocalData(res.attendance)
     } catch (e: unknown) {
-      toastError(e instanceof Error ? e.message : '操作失败')
+      toastError(e instanceof Error ? e.message : t('common.operationFailed'))
     }
   }
 
   if (isLoading) return <LoadingScreen />
 
-  const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+  const timeStr = now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 
   return (
     <div className="flex flex-col items-center">
@@ -133,7 +136,7 @@ function ClockWidget() {
               className="w-4 h-4"
             />
             <span className={`font-mono text-sm ${isOvertime ? 'text-red-600' : 'text-[var(--color-ink-muted)]'}`}>
-              今天是加班
+              {t('clock.overtimeToday')}
             </span>
           </label>
           <button
@@ -145,10 +148,10 @@ function ClockWidget() {
               className="w-44 h-44 sm:w-52 sm:h-52 rounded-full flex flex-col items-center justify-center bg-[var(--color-solid)] shadow-[0_4px_24px_rgba(0,0,0,0.15),0_0_0_6px_rgba(0,0,0,0.04)] transition-all duration-200 active:scale-95 disabled:opacity-50"
             >
               <span className="font-mono text-2xl sm:text-3xl font-bold text-[var(--color-solid-text)]">
-                {acting ? '打卡中' : '上班'}
+                {acting ? t('clock.punching') : t('clock.punchIn')}
               </span>
               <span className="font-mono text-sm mt-1 text-[var(--color-solid-text)] opacity-60">
-                点击打卡
+                {t('clock.tapToPunch')}
               </span>
             </div>
           </button>
@@ -158,7 +161,7 @@ function ClockWidget() {
             disabled={acting}
             className="font-mono text-sm px-6 py-2 rounded-full border border-[var(--color-border)] bg-transparent text-[var(--color-ink-muted)] transition-colors active:scale-95 disabled:opacity-50"
           >
-            我今天请假
+            {t('clock.takeLeaveToday')}
           </button>
         </div>
       ) : isLeave ? (
@@ -167,7 +170,7 @@ function ClockWidget() {
             className="w-44 h-44 sm:w-52 sm:h-52 rounded-full flex flex-col items-center justify-center border-2 border-dashed border-[var(--color-border)] bg-[var(--color-surface-strong)]"
           >
             <span className="font-mono text-2xl sm:text-3xl font-bold text-[var(--color-ink-muted)]">
-              已请假
+              {t('clock.onLeave')}
             </span>
           </div>
           <button
@@ -175,7 +178,7 @@ function ClockWidget() {
             disabled={acting}
             className="font-mono text-sm px-6 py-2 rounded-full bg-[var(--color-solid)] text-[var(--color-solid-text)] transition-colors active:scale-95 disabled:opacity-50"
           >
-            取消请假并上班
+            {t('clock.cancelLeaveAndPunchIn')}
           </button>
         </div>
       ) : (
@@ -188,10 +191,10 @@ function ClockWidget() {
             className={`w-44 h-44 sm:w-52 sm:h-52 rounded-full flex flex-col items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.15),0_0_0_6px_rgba(0,0,0,0.04)] transition-all duration-200 active:scale-95 disabled:opacity-50 ${clockedOut ? 'bg-[var(--color-solid-hover)]' : 'bg-[var(--color-solid)]'}`}
           >
             <span className="font-mono text-2xl sm:text-3xl font-bold text-[var(--color-solid-text)]">
-              {acting ? '打卡中' : '下班'}
+              {acting ? t('clock.punching') : t('clock.punchOut')}
             </span>
             <span className="font-mono text-sm mt-1 text-[var(--color-solid-text)] opacity-60">
-              {clockedOut ? '更新时间' : '点击打卡'}
+              {clockedOut ? t('clock.updateTime') : t('clock.tapToPunch')}
             </span>
           </div>
         </button>
@@ -201,19 +204,19 @@ function ClockWidget() {
         className="mt-10 flex items-center gap-4 sm:gap-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] px-4 sm:px-8 py-5"
       >
         <div className="text-center">
-          <p className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">上班</p>
+          <p className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">{t('clock.statIn')}</p>
           <p className="font-mono text-xl font-bold text-[var(--color-ink)]">{isLeave ? '--:--' : formatTime(data?.clock_in)}</p>
         </div>
         <div className="h-10 w-px bg-[var(--color-border)]" />
         <div className="text-center">
-          <p className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">下班</p>
+          <p className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">{t('clock.statOut')}</p>
           <p className="font-mono text-xl font-bold text-[var(--color-ink)]">{isLeave ? '--:--' : formatTime(data?.clock_out)}</p>
         </div>
         {!isLeave && clockedIn && expectedClockOut && (
           <>
             <div className="h-10 w-px bg-[var(--color-border)]" />
             <div className="text-center">
-              <p className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">预计下班</p>
+              <p className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">{t('clock.expectedOut')}</p>
               <p className="font-mono text-xl font-bold text-[var(--color-ink)]">{expectedClockOut}</p>
             </div>
           </>
@@ -222,7 +225,7 @@ function ClockWidget() {
           <>
             <div className="h-10 w-px bg-[var(--color-border)]" />
             <div className="text-center">
-              <p className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">时长</p>
+              <p className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">{t('clock.duration')}</p>
               <p className="font-mono text-xl font-bold text-[var(--color-ink)]">{calcDuration(data.clock_in, data.clock_out)}</p>
             </div>
           </>
@@ -235,18 +238,18 @@ function ClockWidget() {
           disabled={acting}
           className={`mt-4 border border-[var(--color-border)] font-mono text-xs px-4 py-2 rounded-full transition-colors disabled:opacity-50 ${data?.is_overtime ? 'bg-red-100 text-red-600' : 'bg-transparent text-[var(--color-ink-muted)]'}`}
         >
-          {data?.is_overtime ? '✓ 加班已标记（点击取消）' : '标记为加班'}
+          {data?.is_overtime ? t('clock.overtimeMarked') : t('clock.markOvertime')}
         </button>
       )}
 
       {clockedIn && !clockedOut && (
         <p className="mt-4 font-serif text-sm text-[var(--color-ink-faint)]">
-          已上班打卡，下班时请再次打卡
+          {t('clock.hintPunchOutLater')}
         </p>
       )}
       {clockedIn && clockedOut && (
         <p className="mt-4 font-serif text-sm text-[var(--color-ink-faint)]">
-          可再次点击更新下班时间
+          {t('clock.hintUpdateOutTime')}
         </p>
       )}
     </div>

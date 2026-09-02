@@ -7,6 +7,7 @@ import {
 import { type Checklist, type ChecklistItem } from '../../lib/api'
 import { useToast } from '../../lib/toast-context'
 import { useCreateChecklist } from '../../lib/queries'
+import { useI18n } from '../../lib/i18n'
 
 export function ChecklistForm({
   initial,
@@ -17,6 +18,7 @@ export function ChecklistForm({
   onSave: (cl: Checklist | Pick<Checklist, 'title' | 'items'>) => void
   onCancel: () => void
 }) {
+  const { t } = useI18n()
   const [title, setTitle] = useState(initial?.title || '')
   const [items, setItems] = useState<ChecklistItem[]>(
     initial?.items?.length ? initial.items.map(i => ({ ...i })) : [{ text: '' }]
@@ -90,7 +92,7 @@ export function ChecklistForm({
         onSave(checklist)
       }
     } catch (e: unknown) {
-      toastError(e instanceof Error ? e.message : '操作失败')
+      toastError(e instanceof Error ? e.message : t('common.operationFailed'))
     } finally {
       setSaving(false)
     }
@@ -103,12 +105,12 @@ export function ChecklistForm({
         type="text"
         value={title}
         onChange={e => setTitle(e.target.value)}
-        placeholder="清单标题，如：上线前检查、代码评审..."
+        placeholder={t('checklists.form.titlePlaceholder')}
         className="font-mono text-base w-full px-3 py-2 mb-4 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none font-medium"
       />
 
       <p className="font-mono text-xs mb-2 text-[var(--color-ink-muted)]">
-        检查项目：
+        {t('checklists.form.itemsLabel')}
       </p>
 
       <div className="space-y-2 mb-4">
@@ -157,8 +159,8 @@ export function ChecklistForm({
                   setDragOverIdx(null)
                 }}
                 className="font-mono text-sm shrink-0 px-1 select-none transition-colors hover:text-[var(--color-ink)] mt-1.5 text-[var(--color-ink-faint)] cursor-grab touch-none"
-                title="拖动调整顺序"
-                aria-label="拖动手柄"
+                title={t('checklists.form.dragToReorder')}
+                aria-label={t('checklists.form.dragHandle')}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <circle cx="9" cy="5" r="1.6" />
@@ -181,14 +183,14 @@ export function ChecklistForm({
                   value={it.text}
                   onChange={e => updateText(idx, e.target.value)}
                   onKeyDown={e => handleItemKeyDown(e, idx)}
-                  placeholder="输入检查项..."
+                  placeholder={t('checklists.form.itemPlaceholder')}
                   className="font-mono text-sm w-full px-3 py-1.5 bg-[var(--color-surface-strong)] border border-[var(--color-border)] rounded-md outline-none"
                 />
                 <input
                   type="text"
                   value={it.note || ''}
                   onChange={e => updateNote(idx, e.target.value)}
-                  placeholder="备注（可选，将显示在标题下方）"
+                  placeholder={t('checklists.form.notePlaceholder')}
                   className="font-mono text-xs w-full px-3 py-1 bg-[var(--color-surface-strong)] border border-dashed border-[var(--color-border)] rounded-md outline-none text-[var(--color-ink-muted)]"
                 />
               </div>
@@ -198,8 +200,8 @@ export function ChecklistForm({
                     type="button"
                     onClick={() => reorder(idx, idx - 1)}
                     className="font-mono text-xs w-6 h-6 rounded hover:bg-[var(--color-surface-hover)] shrink-0 transition-colors text-[var(--color-ink-faint)]"
-                    title="上移"
-                    aria-label="上移"
+                    title={t('checklists.form.moveUp')}
+                    aria-label={t('checklists.form.moveUp')}
                   >
                     ↑
                   </button>
@@ -209,8 +211,8 @@ export function ChecklistForm({
                     type="button"
                     onClick={() => reorder(idx, idx + 1)}
                     className="font-mono text-xs w-6 h-6 rounded hover:bg-[var(--color-surface-hover)] shrink-0 transition-colors text-[var(--color-ink-faint)]"
-                    title="下移"
-                    aria-label="下移"
+                    title={t('checklists.form.moveDown')}
+                    aria-label={t('checklists.form.moveDown')}
                   >
                     ↓
                   </button>
@@ -234,25 +236,25 @@ export function ChecklistForm({
         onClick={addItem}
         className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] mb-4 border border-dashed border-[var(--color-border)] text-[var(--color-ink-muted)]"
       >
-        + 添加检查项
+        {t('checklists.form.addItem')}
       </button>
 
       <div className="flex items-center gap-2 pt-2 border-t border-t-[var(--color-border)]">
         <button
           onClick={handleSave}
-          disabled={saving || !title.trim() || items.every(t => !t.text.trim())}
+          disabled={saving || !title.trim() || items.every(it => !it.text.trim())}
           className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 bg-[var(--color-solid)]"
         >
-          {saving ? '保存中...' : '保存'}
+          {saving ? t('common.saving') : t('common.save')}
         </button>
         <button
           onClick={onCancel}
           className="font-mono text-sm px-5 py-2 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
         >
-          取消
+          {t('common.cancel')}
         </button>
         <span className="font-mono text-xs text-[var(--color-ink-faint)]">
-          Enter 添加新项 · 拖动⋮⋮ 或 ↑↓ 调整顺序
+          {t('checklists.form.keyboardHint')}
         </span>
       </div>
     </div>

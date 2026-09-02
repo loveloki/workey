@@ -4,6 +4,7 @@ import { useToast } from '../../lib/toast-context'
 import { ChecklistForm } from './ChecklistForm'
 import { parseItems } from './checklist-utils'
 import { useUpdateChecklist, useDeleteChecklist } from '../../lib/queries'
+import { useI18n } from '../../lib/i18n'
 
 export function ChecklistCard({
   checklist,
@@ -16,6 +17,7 @@ export function ChecklistCard({
   onUpdated: (cl: Checklist) => void
   onDeleted: () => void
 }) {
+  const { t } = useI18n()
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const { toastError } = useToast()
@@ -23,7 +25,7 @@ export function ChecklistCard({
   const deleteMut = useDeleteChecklist()
 
   const parsedItems = parseItems(checklist.items)
-  const kindLabel = '手动清单'
+  const kindLabel = t('checklists.kindManual')
 
   const handleEditSave = async (data: Checklist | { title: string; items: string }) => {
     try {
@@ -35,7 +37,7 @@ export function ChecklistCard({
       onUpdated(updated)
       setEditing(false)
     } catch (e: unknown) {
-      toastError(e instanceof Error ? e.message : '保存失败')
+      toastError(e instanceof Error ? e.message : t('common.saveFailed'))
     }
   }
 
@@ -44,7 +46,7 @@ export function ChecklistCard({
       await deleteMut.mutateAsync(checklist.id)
       onDeleted()
     } catch (e: unknown) {
-      toastError(e instanceof Error ? e.message : '操作失败')
+      toastError(e instanceof Error ? e.message : t('common.operationFailed'))
     }
   }
 
@@ -86,7 +88,7 @@ export function ChecklistCard({
           </span>
         </span>
         <span className="font-mono text-xs font-normal text-[var(--color-ink-faint)]">
-          {parsedItems.length} 项
+          {t('checklists.itemCount', { count: parsedItems.length })}
         </span>
       </h3>
 
@@ -109,7 +111,7 @@ export function ChecklistCard({
           ))}
           {parsedItems.length > 4 && (
             <li className="font-mono text-xs text-[var(--color-ink-faint)]">
-              ... 还有 {parsedItems.length - 4} 项
+              {t('checklists.moreItems', { count: parsedItems.length - 4 })}
             </li>
           )}
         </ul>
@@ -120,20 +122,20 @@ export function ChecklistCard({
           onClick={onUse}
           className="font-mono text-xs px-4 py-1.5 rounded-md text-[var(--color-solid-text)] transition-colors bg-[var(--color-solid)]"
         >
-          开始检查
+          {t('checklists.startCheck')}
         </button>
         <button
           onClick={() => setEditing(true)}
           className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
         >
-          编辑
+          {t('common.edit')}
         </button>
         {!confirmDelete ? (
           <button
             onClick={() => setConfirmDelete(true)}
             className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] ml-auto text-[var(--color-danger-text,#c00)]"
           >
-            删除
+            {t('common.delete')}
           </button>
         ) : (
           <div className="flex items-center gap-1 ml-auto">
@@ -141,13 +143,13 @@ export function ChecklistCard({
               onClick={handleDelete}
               className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors bg-[var(--color-danger-text,#c00)] text-white"
             >
-              确认删除
+              {t('checklists.confirmDelete')}
             </button>
             <button
               onClick={() => setConfirmDelete(false)}
               className="font-mono text-xs px-2 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] text-[var(--color-ink-muted)]"
             >
-              取消
+              {t('common.cancel')}
             </button>
           </div>
         )}

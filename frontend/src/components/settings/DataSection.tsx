@@ -5,6 +5,7 @@ import { Card } from '../../components/Card'
 import { useToast } from '../../lib/toast-context'
 import { useQueryClient } from '@tanstack/react-query'
 import { formatDateDisplay, formatTime } from '../../lib/date-utils'
+import { useI18n } from '../../lib/i18n'
 
 interface AttendancePreview {
   date: string
@@ -26,6 +27,7 @@ interface PreviewData {
 }
 
 export function DataSection() {
+  const { t } = useI18n()
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
   const [msg, setMsg] = useState('')
@@ -47,10 +49,10 @@ export function DataSection() {
       a.download = `workey-export-${new Date().toISOString().split('T')[0]}.zip`
       a.click()
       URL.revokeObjectURL(url)
-      setMsg('导出成功')
+      setMsg(t('data.export.success'))
       setIsError(false)
     } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : '导出失败')
+      setMsg(e instanceof Error ? e.message : t('data.export.failed'))
       setIsError(true)
     } finally {
       setExporting(false)
@@ -70,7 +72,7 @@ export function DataSection() {
       const zip = await JSZip.loadAsync(file)
       const dataJson = zip.file('data.json')
       if (!dataJson) {
-        setMsg('ZIP 中未找到 data.json')
+        setMsg(t('data.import.noDataJson'))
         setIsError(true)
         return
       }
@@ -83,7 +85,7 @@ export function DataSection() {
       })
       setPreviewMonth('all')
     } catch (e: unknown) {
-      setMsg(e instanceof Error ? e.message : '解析文件失败')
+      setMsg(e instanceof Error ? e.message : t('data.import.parseFailed'))
       setIsError(true)
     } finally {
       if (fileRef.current) fileRef.current.value = ''
@@ -97,18 +99,18 @@ export function DataSection() {
     try {
       const result = await settings.importData(preview.file)
       const parts = []
-      if (result.attendance_count) parts.push(`${result.attendance_count} 条考勤`)
-      if (result.work_log_count) parts.push(`${result.work_log_count} 条工作日志`)
-      if (result.ticket_issue_count) parts.push(`${result.ticket_issue_count} 条工单问题`)
-      const summary = parts.join('，') || '无新数据'
-      setMsg(`导入成功：${summary}`)
+      if (result.attendance_count) parts.push(t('data.import.attendanceItems', { count: result.attendance_count }))
+      if (result.work_log_count) parts.push(t('data.import.workLogItems', { count: result.work_log_count }))
+      if (result.ticket_issue_count) parts.push(t('data.import.ticketIssueItems', { count: result.ticket_issue_count }))
+      const summary = parts.join(t('data.import.separator')) || t('data.import.noNewData')
+      setMsg(t('data.import.success', { summary }))
       setIsError(false)
       setPreview(null)
       // 导入会引入考勤/工作日志等多类数据，平推刷新所有缓存
       qc.invalidateQueries()
-      toastSuccess(`导入成功：${summary}`)
+      toastSuccess(t('data.import.success', { summary }))
     } catch (e: unknown) {
-      const errMsg = e instanceof Error ? e.message : '导入失败'
+      const errMsg = e instanceof Error ? e.message : t('data.import.failed')
       setMsg(errMsg)
       setIsError(true)
       toastError(errMsg)
@@ -119,9 +121,9 @@ export function DataSection() {
 
   return (
     <>
-      <Card title="数据管理">
+      <Card title={t('data.title')}>
         <p className="text-sm mb-4 font-serif text-[var(--color-ink-muted)]">
-          导出所有考勤、工作日志和待办等数据为 ZIP 压缩包，或从 ZIP 文件导入数据。
+          {t('data.description')}
         </p>
         <div className="flex flex-col sm:flex-row items-start gap-3">
           <button
@@ -129,14 +131,14 @@ export function DataSection() {
             disabled={exporting}
             className="font-mono text-sm px-5 py-2 rounded-md text-[var(--color-solid-text)] transition-colors disabled:opacity-50 bg-[var(--color-solid)]"
           >
-            {exporting ? '导出中...' : '↓ 导出数据'}
+            {exporting ? t('data.export.exporting') : t('data.export.button')}
           </button>
           <button
             onClick={handleImport}
             disabled={importing}
             className="font-mono text-sm px-5 py-2 rounded-md bg-[var(--color-surface-strong)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-50 border border-[var(--color-border)]"
           >
-            {importing ? '导入中...' : '↑ 导入数据'}
+            {importing ? t('data.import.importing') : t('data.import.button')}
           </button>
           <input ref={fileRef} type="file" accept=".zip" onChange={onFileChange} className="hidden" />
         </div>
@@ -179,6 +181,7 @@ function ImportPreviewModal({
   onCancel: () => void
   importing: boolean
 }) {
+  const { t } = useI18n()
   // 按日期合并
   const dateMap = new Map<string, { att?: AttendancePreview; log?: WorkLogPreview }>()
   data.attendance.forEach(a => {
@@ -211,9 +214,9 @@ function ImportPreviewModal({
         {/* 头部 */}
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
           <div>
-            <h2 className="font-serif text-xl text-[var(--color-ink)]">导入数据预览</h2>
+            <h2 className="font-serif text-xl text-[var(--color-ink)]">{t('data.import.previewTitle')}</h2>
             <p className="mt-1 font-mono text-xs text-[var(--color-ink-muted)]">
-              请确认以下数据无误后再导入
+              {t('data.import.previewHint')}
             </p>
           </div>
           <button
@@ -228,16 +231,16 @@ function ImportPreviewModal({
 
         {/* 统计 */}
         <div className="grid grid-cols-2 gap-3 px-6 pt-4 sm:grid-cols-4">
-          <MiniStat label="总天数" value={dateMap.size} />
-          <MiniStat label="考勤" value={data.attendance.length} sub={`${withTime} 有时间`} />
-          <MiniStat label="工作日志" value={data.work_logs.length} />
-          <MiniStat label="加班" value={overtimeCount} />
+          <MiniStat label={t('data.import.statTotalDays')} value={dateMap.size} />
+          <MiniStat label={t('data.import.statAttendance')} value={data.attendance.length} sub={t('data.import.withTime', { count: withTime })} />
+          <MiniStat label={t('data.import.statWorkLogs')} value={data.work_logs.length} />
+          <MiniStat label={t('data.import.statOvertime')} value={overtimeCount} />
         </div>
 
         {/* 月份筛选 */}
         <div className="flex flex-wrap gap-1.5 px-6 pt-3 pb-1 overflow-x-auto">
           <FilterBtn active={month === 'all'} onClick={() => onMonthChange('all')}>
-            全部 ({dateMap.size})
+            {t('data.import.filterAll', { count: dateMap.size })}
           </FilterBtn>
           {months.map(m => {
             const count = [...dateMap.keys()].filter(d => d.startsWith(m)).length
@@ -264,12 +267,12 @@ function ImportPreviewModal({
                   </div>
                   <div className="flex items-center gap-3 font-mono text-xs text-[var(--color-ink-muted)]">
                     {entry.att?.is_overtime && (
-                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-600">加班</span>
+                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-600">{t('data.import.overtimeBadge')}</span>
                     )}
                     {entry.att && (
                       <>
-                        <span>上班 {formatTime(entry.att.clock_in)}</span>
-                        <span>下班 {formatTime(entry.att.clock_out)}</span>
+                        <span>{t('data.import.clockIn', { time: formatTime(entry.att.clock_in) })}</span>
+                        <span>{t('data.import.clockOut', { time: formatTime(entry.att.clock_out) })}</span>
                       </>
                     )}
                   </div>
@@ -295,14 +298,14 @@ function ImportPreviewModal({
             disabled={importing}
             className="rounded-md border border-[var(--color-border)] px-5 py-2 font-mono text-sm text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
           >
-            取消
+            {t('common.cancel')}
           </button>
           <button
             onClick={onConfirm}
             disabled={importing}
             className="rounded-md bg-[var(--color-solid)] px-5 py-2 font-mono text-sm text-[var(--color-solid-text)] transition-colors hover:bg-[var(--color-solid-hover)] disabled:opacity-50"
           >
-            {importing ? '导入中...' : `确认导入 ${dateMap.size} 天数据`}
+            {importing ? t('data.import.importing') : t('data.import.confirmDays', { count: dateMap.size })}
           </button>
         </div>
       </div>

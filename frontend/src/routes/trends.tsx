@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { type Attendance } from '../lib/api'
 import { getDateRange, type RangePreset } from '../lib/date-utils'
 import { useAttendanceRange, useAttendanceStats } from '../lib/queries'
+import { useI18n } from '../lib/i18n'
 
 export const Route = createFileRoute('/trends')({
   component: TrendsPage,
@@ -24,6 +25,7 @@ function minutesToTime(minutes: number): string {
 }
 
 function TrendsPage() {
+  const { t } = useI18n()
   const { user, loading } = useAuthGuard()
   const [preset, setPreset] = useState<RangePreset | 'custom'>('month')
   const [customStart, setCustomStart] = useState('')
@@ -50,19 +52,19 @@ function TrendsPage() {
   }
 
   const presets: { key: RangePreset | 'custom'; label: string }[] = [
-    { key: 'week', label: '本周' },
-    { key: 'month', label: '本月' },
-    { key: 'quarter', label: '本季度' },
-    { key: 'half-year', label: '半年' },
-    { key: 'year', label: '全年' },
-    { key: 'custom', label: '自定义' },
+    { key: 'week', label: t('trends.range.week') },
+    { key: 'month', label: t('trends.range.month') },
+    { key: 'quarter', label: t('trends.range.quarter') },
+    { key: 'half-year', label: t('trends.range.halfYear') },
+    { key: 'year', label: t('trends.range.year') },
+    { key: 'custom', label: t('trends.range.custom') },
   ]
 
   if (loading) return null
 
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
-      <PageHeader eyebrow="趋势" title="上下班时间" />
+      <PageHeader eyebrow={t('trends.eyebrow')} title={t('trends.title')} />
 
       <div className="mb-4 flex flex-wrap gap-2">
         {presets.map(p => (
@@ -88,7 +90,7 @@ function TrendsPage() {
             onChange={e => setCustomStart(e.target.value)}
             className="rounded-lg border px-4 py-3.5 font-mono text-sm focus:outline-none border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] focus:border-[var(--color-border-focus)]"
           />
-          <span className="text-sm font-serif text-[var(--color-ink-muted)]">至</span>
+          <span className="text-sm font-serif text-[var(--color-ink-muted)]">{t('trends.to')}</span>
           <input
             type="date"
             value={customEnd}
@@ -99,7 +101,7 @@ function TrendsPage() {
             onClick={handleCustomSearch}
             className="rounded-md px-5 py-2.5 font-mono text-sm bg-[var(--color-solid)] text-[var(--color-solid-text)] hover:bg-[var(--color-solid-hover)]"
           >
-            查询
+            {t('trends.search')}
           </button>
         </div>
       )}
@@ -110,30 +112,30 @@ function TrendsPage() {
           <TrendChart data={data} loading={fetching} />
         </div>
       ) : fetching ? (
-        <p className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
+        <p className="font-mono text-sm text-[var(--color-ink-muted)]">{t('common.loading')}</p>
       ) : (
         <div className="rounded-lg border p-8 text-center border-[var(--color-border)] bg-[var(--color-surface-strong)]">
-          <p className="text-sm font-serif text-[var(--color-ink-muted)]">暂无打卡数据</p>
+          <p className="text-sm font-serif text-[var(--color-ink-muted)]">{t('trends.noData')}</p>
         </div>
       )}
 
       {/* Stats summary */}
       <div className="mt-4 grid gap-4 sm:grid-cols-4">
         <StatCard
-          label="当前时段平均上班"
+          label={t('trends.avgClockIn')}
           value={data.length > 0 ? avgTime(data.filter(d => d.status !== 'leave').map(d => timeToMinutes(d.clock_in)).filter((v): v is number => v !== null)) : '--:--'}
         />
         <StatCard
-          label="当前时段平均下班"
+          label={t('trends.avgClockOut')}
           value={data.length > 0 ? avgTime(data.filter(d => d.status !== 'leave').map(d => timeToMinutes(d.clock_out)).filter((v): v is number => v !== null)) : '--:--'}
         />
         <StatCard
-          label="当前时段打卡天数"
-          value={data.length > 0 ? `${data.filter(d => d.status !== 'leave').length} 天` : '0 天'}
+          label={t('trends.punchDays')}
+          value={data.length > 0 ? t('trends.days', { count: data.filter(d => d.status !== 'leave').length }) : t('trends.days', { count: 0 })}
         />
         <StatCard
-          label="当前时段请假天数"
-          value={data.length > 0 ? `${data.filter(d => d.status === 'leave').length} 天` : '0 天'}
+          label={t('trends.leaveDays')}
+          value={data.length > 0 ? t('trends.days', { count: data.filter(d => d.status === 'leave').length }) : t('trends.days', { count: 0 })}
         />
       </div>
 
@@ -141,18 +143,18 @@ function TrendsPage() {
       {globalStats && (
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <StatCard
-            label="累计加班天数 (周末)"
-            value={`${globalStats.global_overtime_days} 天`}
+            label={t('trends.overtimeDaysTotal')}
+            value={t('trends.days', { count: globalStats.global_overtime_days })}
             valueColor="var(--color-danger-text)"
           />
           <StatCard
-            label="累计请假天数"
-            value={`${globalStats.global_leave_days} 天`}
+            label={t('trends.leaveDaysTotal')}
+            value={t('trends.days', { count: globalStats.global_leave_days })}
             valueColor="var(--color-ink-muted)"
           />
           <StatCard
-            label="剩余可调休假期"
-            value={`${globalStats.global_remaining} 天`}
+            label={t('trends.remainingDays')}
+            value={t('trends.days', { count: globalStats.global_remaining })}
             valueColor={globalStats.global_remaining > 0 ? '#16a34a' : 'var(--color-ink)'}
           />
         </div>
@@ -177,6 +179,7 @@ function StatCard({ label, value, valueColor = 'var(--color-ink)' }: { label: st
 }
 
 function TrendChart({ data, loading }: { data: Attendance[]; loading: boolean }) {
+  const { t } = useI18n()
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
   // Compute chart data from props
@@ -205,11 +208,11 @@ function TrendChart({ data, loading }: { data: Attendance[]; loading: boolean })
   const selectedIdx = selectedDate !== null ? sorted.findIndex(d => d.date === selectedDate) : -1
 
   if (loading && data.length === 0) {
-    return <p className="font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
+    return <p className="font-mono text-sm text-[var(--color-ink-muted)]">{t('common.loading')}</p>
   }
 
   if (allMinutes.length === 0) {
-    return <p className="text-sm font-serif text-[var(--color-ink-muted)]">暂无打卡数据</p>
+    return <p className="text-sm font-serif text-[var(--color-ink-muted)]">{t('trends.noData')}</p>
   }
 
   const minY = Math.floor(Math.min(...allMinutes) / 60) * 60 - 30
@@ -253,15 +256,15 @@ function TrendChart({ data, loading }: { data: Attendance[]; loading: boolean })
         <div className="flex items-center gap-4 font-mono text-xs">
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2 w-4 rounded-sm bg-[var(--color-ink)]" />
-            上班时间
+            {t('trends.chart.clockInLegend')}
           </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2 w-4 rounded-sm bg-[var(--color-ink-muted)]" />
-            下班时间
+            {t('trends.chart.clockOutLegend')}
           </span>
         </div>
         <div className="flex items-center gap-2 font-mono text-xs">
-          <label className="text-[var(--color-ink-secondary)]">标记日期</label>
+          <label className="text-[var(--color-ink-secondary)]">{t('trends.chart.markDate')}</label>
           <input
             type="date"
             value={selectedDate || ''}
@@ -274,7 +277,7 @@ function TrendChart({ data, loading }: { data: Attendance[]; loading: boolean })
             <button
               onClick={() => setSelectedDate(null)}
               className="rounded px-1.5 py-0.5 text-xs text-[var(--color-ink-muted)]"
-              title="清除选择"
+              title={t('trends.chart.clearSelection')}
             >
               ✕
             </button>
@@ -371,7 +374,7 @@ function TrendChart({ data, loading }: { data: Attendance[]; loading: boolean })
                   textAnchor="middle"
                   fill="#fff" fontSize="11" fontWeight="600"
                 >
-                  请假
+                  {t('trends.chart.leave')}
                 </text>
               </g>
             )
@@ -398,7 +401,7 @@ function TrendChart({ data, loading }: { data: Attendance[]; loading: boolean })
                     fill="var(--color-solid-text, #fff)" fontSize="11" fontWeight="600"
                     fontFamily="ui-monospace, SFMono-Regular, monospace"
                   >
-                    上班 {minutesToTime(inMin)}
+                    {t('trends.chart.clockInAt', { time: minutesToTime(inMin) })}
                   </text>
                 </>
               )}
@@ -420,7 +423,7 @@ function TrendChart({ data, loading }: { data: Attendance[]; loading: boolean })
                     fill="var(--color-solid-text, #fff)" fontSize="11" fontWeight="600"
                     fontFamily="ui-monospace, SFMono-Regular, monospace"
                   >
-                    下班 {minutesToTime(outMin)}
+                    {t('trends.chart.clockOutAt', { time: minutesToTime(outMin) })}
                   </text>
                 </>
               )}
@@ -432,7 +435,11 @@ function TrendChart({ data, loading }: { data: Attendance[]; loading: boolean })
         {sorted.map((d, i) => {
           const inMin = timeToMinutes(d.clock_in)
           const outMin = timeToMinutes(d.clock_out)
-          const tooltip = `${d.date}\n上班: ${inMin !== null ? minutesToTime(inMin) : '--:--'}\n下班: ${outMin !== null ? minutesToTime(outMin) : '--:--'}`
+          const tooltip = t('trends.chart.tooltip', {
+            date: d.date,
+            in: inMin !== null ? minutesToTime(inMin) : '--:--',
+            out: outMin !== null ? minutesToTime(outMin) : '--:--',
+          })
           return (
             <rect key={`hover-${i}`} x={xScale(i) - 15} y={PAD.top} width={30} height={plotH}
               fill="transparent" className="cursor-pointer"

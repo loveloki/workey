@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { formatDayMarkdown } from './report-utils'
+import { setModuleLanguage } from './i18n'
 import type { Todo } from './api'
 
 // 测试 Feature：将一天的工作数据格式化为可复制的 Markdown 文本
@@ -65,5 +66,45 @@ describe('formatDayMarkdown', () => {
       const result = formatDayMarkdown('2026-05-15', leave, '', [], { includeMeta: true })
       expect(result).toBe('## 2026-05-15\n> 请假\n\n（未记录工作内容）')
     })
+  })
+})
+
+// 导出文案跟随语言
+describe('formatDayMarkdown 多语言', () => {
+  const att = {
+    id: 1, user_id: 1, date: '2026-05-15',
+    clock_in: '2026-05-15T09:05:00+08:00',
+    clock_out: '2026-05-15T18:30:00+08:00',
+    status: 'normal', is_overtime: true, created_at: '', updated_at: '',
+  } as never
+
+  afterEach(() => setModuleLanguage('zh-CN'))
+
+  it('通过 lang 选项导出英文元信息', () => {
+    const result = formatDayMarkdown('2026-05-15', att, 'Did A and B', [], { includeMeta: true, lang: 'en-US' })
+    expect(result).toMatch(/^## 2026-05-15\n> In \d{2}:\d{2} · Out \d{2}:\d{2} · Overtime\n\nDid A and B$/)
+  })
+
+  it('英文下的请假与空内容提示', () => {
+    const leave = { ...(att as object), status: 'leave' } as never
+    const result = formatDayMarkdown('2026-05-15', leave, '', [], { includeMeta: true, lang: 'en-US' })
+    expect(result).toBe('## 2026-05-15\n> On leave\n\n(No work recorded)')
+  })
+
+  it('未传 lang 时跟随当前界面语言', () => {
+    setModuleLanguage('en-US')
+    const result = formatDayMarkdown('2026-05-15', null, '', [], { includeMeta: true })
+    expect(result).toBe('## 2026-05-15\n\n(No work recorded)')
+
+    setModuleLanguage('zh-CN')
+    const zhResult = formatDayMarkdown('2026-05-15', null, '', [], { includeMeta: true })
+    expect(zhResult).toBe('## 2026-05-15\n\n（未记录工作内容）')
+  })
+
+  it('不含元信息时输出与语言无关', () => {
+    const todos = [{ id: 1, user_id: 1, content: 'task1', url: '', done: true, created_at: '', updated_at: '' } as Todo]
+    expect(formatDayMarkdown('2026-05-15', att, 'log', todos, { lang: 'en-US' })).toBe(
+      formatDayMarkdown('2026-05-15', att, 'log', todos, { lang: 'zh-CN' }),
+    )
   })
 })

@@ -18,6 +18,7 @@ import {
 } from '../lib/queries'
 import { useAuthGuard } from '../lib/useAuthGuard'
 import { useToast } from '../lib/toast-context'
+import { useI18n } from '../lib/i18n'
 
 export const Route = createFileRoute('/ticket-issues')({ component: TicketIssuesPage })
 
@@ -37,6 +38,7 @@ const emptyIssue = (): TicketIssueInput => ({
 })
 
 function TicketIssuesPage() {
+  const { t } = useI18n()
   const { user, loading } = useAuthGuard()
   const [preset, setPreset] = useState<DatePreset>('all')
   const [customStart, setCustomStart] = useState('')
@@ -85,14 +87,14 @@ function TicketIssuesPage() {
   return (
     <main className="mx-auto max-w-5xl px-4 pb-8 pt-8">
       <PageHeader
-        eyebrow="复查"
-        title="工单问题记录"
+        eyebrow={t('ticketIssues.eyebrow')}
+        title={t('ticketIssues.title')}
         actions={(
           <button
             onClick={startCreate}
             className="rounded-md bg-[var(--color-solid)] px-4 py-2 font-mono text-sm text-[var(--color-solid-text)] hover:bg-[var(--color-solid-hover)]"
           >
-            + 记录问题
+            {t('ticketIssues.add')}
           </button>
         )}
       />
@@ -110,12 +112,12 @@ function TicketIssuesPage() {
       <section className="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-4">
         <div className="flex flex-wrap gap-2">
           {([
-            ['all', '全部'],
-            ['month', '本月'],
-            ['quarter', '本季度'],
-            ['year', '本年'],
-            ['custom', '自定义'],
-          ] as const).map(([key, label]) => (
+            ['all', 'ticketIssues.filter.all'],
+            ['month', 'ticketIssues.filter.month'],
+            ['quarter', 'ticketIssues.filter.quarter'],
+            ['year', 'ticketIssues.filter.year'],
+            ['custom', 'ticketIssues.filter.custom'],
+          ] as const).map(([key, labelKey]) => (
             <button
               key={key}
               onClick={() => setPreset(key)}
@@ -125,7 +127,7 @@ function TicketIssuesPage() {
                   : 'border-[var(--color-border)] text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]'
               }`}
             >
-              {label}
+              {t(labelKey)}
             </button>
           ))}
         </div>
@@ -138,7 +140,7 @@ function TicketIssuesPage() {
               onChange={event => setCustomStart(event.target.value)}
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-mono text-sm text-[var(--color-ink)] outline-none"
             />
-            <span className="font-serif text-sm text-[var(--color-ink-muted)]">至</span>
+            <span className="font-serif text-sm text-[var(--color-ink-muted)]">{t('ticketIssues.dateTo')}</span>
             <input
               type="date"
               value={customEnd}
@@ -150,7 +152,7 @@ function TicketIssuesPage() {
               disabled={!customStart || !customEnd || customStart > customEnd}
               className="rounded-md bg-[var(--color-solid)] px-4 py-2 font-mono text-xs text-[var(--color-solid-text)] disabled:opacity-50"
             >
-              应用日期
+              {t('ticketIssues.applyDate')}
             </button>
           </div>
         )}
@@ -161,35 +163,35 @@ function TicketIssuesPage() {
             onChange={event => setCauseType(event.target.value as TicketCauseType | '')}
             className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-mono text-sm text-[var(--color-ink)] outline-none"
           >
-            <option value="">全部原因</option>
-            <option value="code">代码问题</option>
-            <option value="operation">操作问题</option>
+            <option value="">{t('ticketIssues.causeAll')}</option>
+            <option value="code">{t('ticketIssues.cause.code')}</option>
+            <option value="operation">{t('ticketIssues.cause.operation')}</option>
           </select>
           <input
             type="search"
             value={searchText}
             onChange={event => setSearchText(event.target.value)}
             onKeyDown={event => event.key === 'Enter' && setKeyword(searchText.trim())}
-            placeholder="搜索工单号、标题、现象、根因或复盘..."
+            placeholder={t('ticketIssues.searchPlaceholder')}
             className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-mono text-sm text-[var(--color-ink)] outline-none"
           />
           <button
             onClick={() => setKeyword(searchText.trim())}
             className="rounded-md border border-[var(--color-border)] px-4 py-2 font-mono text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]"
           >
-            搜索
+            {t('ticketIssues.search')}
           </button>
         </div>
         <p className="mt-3 font-mono text-xs text-[var(--color-ink-faint)]">
-          原因统计跟随日期与关键词；原因分类仅筛选下方记录。
+          {t('ticketIssues.filterHint')}
         </p>
       </section>
 
       {isFetching && issues.length === 0 ? (
-        <p className="py-8 text-center font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
+        <p className="py-8 text-center font-mono text-sm text-[var(--color-ink-muted)]">{t('common.loading')}</p>
       ) : issues.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[var(--color-border)] py-12 text-center">
-          <p className="font-mono text-sm text-[var(--color-ink-faint)]">暂无符合条件的工单问题记录</p>
+          <p className="font-mono text-sm text-[var(--color-ink-faint)]">{t('ticketIssues.empty')}</p>
         </div>
       ) : (
         <div className={`space-y-3 transition-opacity ${isFetching ? 'opacity-60' : 'opacity-100'}`}>
@@ -203,14 +205,15 @@ function TicketIssuesPage() {
 }
 
 function StatsPanel({ stats }: { stats: { total_count: number; code_count: number; operation_count: number } }) {
+  const { t } = useI18n()
   const codePercent = stats.total_count ? Math.round(stats.code_count / stats.total_count * 100) : 0
   const operationPercent = stats.total_count ? Math.round(stats.operation_count / stats.total_count * 100) : 0
 
   return (
     <section className="mb-4 grid gap-3 sm:grid-cols-3">
-      <StatCard label="问题工单" value={`${stats.total_count}`} note="当前统计范围" />
-      <StatCard label="代码问题" value={`${stats.code_count}`} note={`${codePercent}%`} percent={codePercent} />
-      <StatCard label="操作问题" value={`${stats.operation_count}`} note={`${operationPercent}%`} percent={operationPercent} />
+      <StatCard label={t('ticketIssues.stats.total')} value={`${stats.total_count}`} note={t('ticketIssues.stats.range')} />
+      <StatCard label={t('ticketIssues.cause.code')} value={`${stats.code_count}`} note={`${codePercent}%`} percent={codePercent} />
+      <StatCard label={t('ticketIssues.cause.operation')} value={`${stats.operation_count}`} note={`${operationPercent}%`} percent={operationPercent} />
     </section>
   )
 }
@@ -233,6 +236,7 @@ function StatCard({ label, value, note, percent }: { label: string; value: strin
 }
 
 function TicketIssueForm({ issue, onClose }: { issue: TicketIssue | null; onClose: () => void }) {
+  const { t } = useI18n()
   const [form, setForm] = useState<TicketIssueInput>(() => issue ? issueToInput(issue) : emptyIssue())
   const createMut = useCreateTicketIssue()
   const updateMut = useUpdateTicketIssue()
@@ -246,7 +250,7 @@ function TicketIssueForm({ issue, onClose }: { issue: TicketIssue | null; onClos
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!form.ticket_no.trim() || !form.problem_description.trim() || !form.cause_detail.trim()) {
-      toastError('请填写工单编号、问题现象和根因说明')
+      toastError(t('ticketIssues.form.required'))
       return
     }
     try {
@@ -261,71 +265,71 @@ function TicketIssueForm({ issue, onClose }: { issue: TicketIssue | null; onClos
       }
       if (issue) {
         await updateMut.mutateAsync({ id: issue.id, data })
-        toastSuccess('工单问题记录已更新')
+        toastSuccess(t('ticketIssues.updated'))
       } else {
         await createMut.mutateAsync(data)
-        toastSuccess('工单问题记录已保存')
+        toastSuccess(t('ticketIssues.saved'))
       }
       onClose()
     } catch (error: unknown) {
-      toastError(error instanceof Error ? error.message : '保存失败')
+      toastError(error instanceof Error ? error.message : t('common.saveFailed'))
     }
   }
 
   return (
     <form onSubmit={submit} className="mb-4 rounded-lg border-2 border-[var(--color-border-strong)] bg-[var(--color-surface-strong)] p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="font-serif text-xl text-[var(--color-ink)]">{issue ? `编辑 ${issue.ticket_no}` : '记录工单问题'}</h2>
-        <button type="button" onClick={onClose} className="font-mono text-sm text-[var(--color-ink-muted)]">关闭 ✕</button>
+        <h2 className="font-serif text-xl text-[var(--color-ink)]">{issue ? t('ticketIssues.form.editTitle', { no: issue.ticket_no }) : t('ticketIssues.form.createTitle')}</h2>
+        <button type="button" onClick={onClose} className="font-mono text-sm text-[var(--color-ink-muted)]">{t('ticketIssues.form.close')}</button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="工单编号 *">
-          <input value={form.ticket_no} onChange={event => update('ticket_no', event.target.value)} required className={issueInputClass} placeholder="例如 WO-12345" />
+        <Field label={t('ticketIssues.form.ticketNo')}>
+          <input value={form.ticket_no} onChange={event => update('ticket_no', event.target.value)} required className={issueInputClass} placeholder={t('ticketIssues.form.ticketNoPlaceholder')} />
         </Field>
-        <Field label="发生日期 *">
+        <Field label={t('ticketIssues.form.occurredOn')}>
           <input type="date" value={form.occurred_on} onChange={event => update('occurred_on', event.target.value)} required className={issueInputClass} />
         </Field>
-        <Field label="工单标题">
-          <input value={form.ticket_title} onChange={event => update('ticket_title', event.target.value)} className={issueInputClass} placeholder="简要标题" />
+        <Field label={t('ticketIssues.form.ticketTitle')}>
+          <input value={form.ticket_title} onChange={event => update('ticket_title', event.target.value)} className={issueInputClass} placeholder={t('ticketIssues.form.ticketTitlePlaceholder')} />
         </Field>
-        <Field label="工单链接">
+        <Field label={t('ticketIssues.form.ticketUrl')}>
           <input type="url" value={form.ticket_url} onChange={event => update('ticket_url', event.target.value)} className={issueInputClass} placeholder="https://..." />
         </Field>
       </div>
 
       <fieldset className="mt-4">
-        <legend className="mb-2 font-mono text-xs text-[var(--color-ink-muted)]">问题归因 *</legend>
+        <legend className="mb-2 font-mono text-xs text-[var(--color-ink-muted)]">{t('ticketIssues.form.causeLegend')}</legend>
         <div className="flex gap-2">
           {([
-            ['code', '代码问题'],
-            ['operation', '操作问题'],
-          ] as const).map(([value, label]) => (
+            ['code', 'ticketIssues.cause.code'],
+            ['operation', 'ticketIssues.cause.operation'],
+          ] as const).map(([value, labelKey]) => (
             <label key={value} className={`cursor-pointer rounded-md border px-4 py-2 font-mono text-sm ${form.cause_type === value ? 'border-[var(--color-border-strong)] bg-[var(--color-surface-hover)] text-[var(--color-ink)]' : 'border-[var(--color-border)] text-[var(--color-ink-muted)]'}`}>
               <input type="radio" name="cause" value={value} checked={form.cause_type === value} onChange={() => update('cause_type', value)} className="sr-only" />
-              {label}
+              {t(labelKey)}
             </label>
           ))}
         </div>
       </fieldset>
 
       <div className="mt-4 grid gap-3">
-        <Field label="问题现象 *">
-          <textarea value={form.problem_description} onChange={event => update('problem_description', event.target.value)} required rows={3} className={`${issueInputClass} resize-y`} placeholder="工单反馈了什么问题，影响是什么..." />
+        <Field label={t('ticketIssues.form.problem')}>
+          <textarea value={form.problem_description} onChange={event => update('problem_description', event.target.value)} required rows={3} className={`${issueInputClass} resize-y`} placeholder={t('ticketIssues.form.problemPlaceholder')} />
         </Field>
-        <Field label="根因说明 *">
-          <textarea value={form.cause_detail} onChange={event => update('cause_detail', event.target.value)} required rows={3} className={`${issueInputClass} resize-y`} placeholder="为什么会发生，判断为代码或操作问题的依据..." />
+        <Field label={t('ticketIssues.form.cause')}>
+          <textarea value={form.cause_detail} onChange={event => update('cause_detail', event.target.value)} required rows={3} className={`${issueInputClass} resize-y`} placeholder={t('ticketIssues.form.causePlaceholder')} />
         </Field>
-        <Field label="处理与复盘">
-          <textarea value={form.resolution} onChange={event => update('resolution', event.target.value)} rows={3} className={`${issueInputClass} resize-y`} placeholder="如何修复、后续如何避免、需要补充哪些测试或流程..." />
+        <Field label={t('ticketIssues.form.resolution')}>
+          <textarea value={form.resolution} onChange={event => update('resolution', event.target.value)} rows={3} className={`${issueInputClass} resize-y`} placeholder={t('ticketIssues.form.resolutionPlaceholder')} />
         </Field>
       </div>
 
       <div className="mt-4 flex gap-2">
         <button type="submit" disabled={pending} className="rounded-md bg-[var(--color-solid)] px-5 py-2.5 font-mono text-sm text-[var(--color-solid-text)] disabled:opacity-50">
-          {pending ? '保存中...' : issue ? '保存修改' : '保存记录'}
+          {pending ? t('common.saving') : issue ? t('ticketIssues.form.saveEdit') : t('ticketIssues.form.saveNew')}
         </button>
-        <button type="button" onClick={onClose} className="rounded-md border border-[var(--color-border)] px-5 py-2.5 font-mono text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]">取消</button>
+        <button type="button" onClick={onClose} className="rounded-md border border-[var(--color-border)] px-5 py-2.5 font-mono text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]">{t('common.cancel')}</button>
       </div>
     </form>
   )
@@ -341,17 +345,18 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function TicketIssueCard({ issue, onEdit }: { issue: TicketIssue; onEdit: () => void }) {
+  const { t } = useI18n()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const deleteMut = useDeleteTicketIssue()
   const { toastError, toastSuccess } = useToast()
-  const causeLabel = issue.cause_type === 'code' ? '代码问题' : '操作问题'
+  const causeLabel = issue.cause_type === 'code' ? t('ticketIssues.cause.code') : t('ticketIssues.cause.operation')
 
   const remove = async () => {
     try {
       await deleteMut.mutateAsync(issue.id)
-      toastSuccess('工单问题记录已删除')
+      toastSuccess(t('ticketIssues.deleted'))
     } catch (error: unknown) {
-      toastError(error instanceof Error ? error.message : '删除失败')
+      toastError(error instanceof Error ? error.message : t('common.deleteFailed'))
     }
   }
 
@@ -369,27 +374,27 @@ function TicketIssueCard({ issue, onEdit }: { issue: TicketIssue; onEdit: () => 
           {issue.ticket_title && <h2 className="mt-2 font-serif text-xl text-[var(--color-ink)]">{issue.ticket_title}</h2>}
           {issue.ticket_url && (
             <a href={issue.ticket_url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block max-w-full truncate font-mono text-xs text-[var(--color-ink-muted)] underline underline-offset-2">
-              打开工单 ↗
+              {t('ticketIssues.openTicket')}
             </a>
           )}
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={onEdit} className="rounded px-2.5 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]">编辑</button>
+          <button onClick={onEdit} className="rounded px-2.5 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]">{t('common.edit')}</button>
           {confirmingDelete ? (
             <>
-              <button onClick={remove} disabled={deleteMut.isPending} className="rounded bg-[var(--color-danger-bg)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-danger-text)] disabled:opacity-50">确认删除</button>
-              <button onClick={() => setConfirmingDelete(false)} className="rounded px-2 py-1.5 font-mono text-xs text-[var(--color-ink-muted)]">取消</button>
+              <button onClick={remove} disabled={deleteMut.isPending} className="rounded bg-[var(--color-danger-bg)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-danger-text)] disabled:opacity-50">{t('ticketIssues.confirmDelete')}</button>
+              <button onClick={() => setConfirmingDelete(false)} className="rounded px-2 py-1.5 font-mono text-xs text-[var(--color-ink-muted)]">{t('common.cancel')}</button>
             </>
           ) : (
-            <button onClick={() => setConfirmingDelete(true)} className="rounded px-2.5 py-1.5 font-mono text-xs text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)]">删除</button>
+            <button onClick={() => setConfirmingDelete(true)} className="rounded px-2.5 py-1.5 font-mono text-xs text-[var(--color-danger-text)] hover:bg-[var(--color-danger-bg)]">{t('common.delete')}</button>
           )}
         </div>
       </div>
 
       <div className="mt-4 grid gap-4 border-t border-[var(--color-border)] pt-4 md:grid-cols-3">
-        <ReviewBlock label="问题现象" content={issue.problem_description} />
-        <ReviewBlock label="根因说明" content={issue.cause_detail} />
-        <ReviewBlock label="处理与复盘" content={issue.resolution || '尚未填写'} muted={!issue.resolution} />
+        <ReviewBlock label={t('ticketIssues.block.problem')} content={issue.problem_description} />
+        <ReviewBlock label={t('ticketIssues.block.cause')} content={issue.cause_detail} />
+        <ReviewBlock label={t('ticketIssues.block.resolution')} content={issue.resolution || t('ticketIssues.noResolution')} muted={!issue.resolution} />
       </div>
     </article>
   )

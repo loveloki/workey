@@ -6,18 +6,20 @@ import { useState, useRef } from 'react'
 import { type Todo } from '../lib/api'
 import { LoadingScreen } from '../components/LoadingScreen'
 import { useSettings, useTodoList, useCreateTodo, useUpdateTodo, useDeleteTodo } from '../lib/queries'
+import { useI18n } from '../lib/i18n'
 
 export const Route = createFileRoute('/todos')({ component: TodosPage })
 
 function TodosPage() {
   const { user, loading } = useAuthGuard()
+  const { t } = useI18n()
 
   if (loading) return <LoadingScreen />
   if (!user) return null
 
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
-      <PageHeader eyebrow="待办" title="待办事项" actions={<KanbanLink />} />
+      <PageHeader eyebrow={t('todos.eyebrow')} title={t('todos.title')} actions={<KanbanLink />} />
 
       <TodoList />
     </main>
@@ -28,6 +30,7 @@ function TodosPage() {
 
 function KanbanLink() {
   const { data } = useSettings()
+  const { t } = useI18n()
   const url = data?.kanban_url || 'https://www.fizzy.do/'
 
   if (!data) return null
@@ -45,7 +48,7 @@ function KanbanLink() {
         <rect x="3" y="14" width="7" height="7" />
         <rect x="14" y="14" width="7" height="7" />
       </svg>
-      看板 ↗
+      {t('todos.kanban')}
     </a>
   )
 }
@@ -58,6 +61,7 @@ function TodoList() {
   const [newUrl, setNewUrl] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const { toastError } = useToast()
+  const { t } = useI18n()
 
   const { data, isLoading } = useTodoList(showAll)
   const createMut = useCreateTodo()
@@ -75,7 +79,7 @@ function TodoList() {
       setNewUrl('')
       inputRef.current?.focus()
     } catch (e: unknown) {
-      toastError(e instanceof Error ? e.message : '添加失败')
+      toastError(e instanceof Error ? e.message : t('todos.addFailed'))
     }
   }
 
@@ -105,7 +109,7 @@ function TodoList() {
               type="text"
               value={newContent}
               onChange={e => setNewContent(e.target.value)}
-              placeholder="输入待办内容..."
+              placeholder={t('todos.contentPlaceholder')}
               className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-strong)] px-3 py-2 font-mono text-sm outline-none"
             />
             <button
@@ -113,14 +117,14 @@ function TodoList() {
               disabled={createMut.isPending || (!newContent.trim() && !newUrl.trim())}
               className="shrink-0 rounded-md bg-[var(--color-solid)] px-5 py-2 font-mono text-sm text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
             >
-              {createMut.isPending ? '添加中...' : '+ 添加'}
+              {createMut.isPending ? t('todos.adding') : t('todos.add')}
             </button>
           </div>
           <input
             type="url"
             value={newUrl}
             onChange={e => setNewUrl(e.target.value)}
-            placeholder="相关链接（可选）"
+            placeholder={t('todos.urlPlaceholder')}
             className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-strong)] px-3 py-2 font-mono text-sm outline-none"
           />
         </div>
@@ -135,20 +139,20 @@ function TodoList() {
             onChange={e => setShowAll(e.target.checked)}
             className="accent-[var(--color-ink)]"
           />
-          显示已完成
+          {t('todos.showDone')}
         </label>
         <span className="font-mono text-xs text-[var(--color-ink-faint)]">
-          {items.length} 条待办
+          {t('todos.count', { count: items.length })}
         </span>
       </div>
 
       {/* List */}
       {isLoading ? (
-        <p className="py-8 text-center font-mono text-sm text-[var(--color-ink-muted)]">加载中...</p>
+        <p className="py-8 text-center font-mono text-sm text-[var(--color-ink-muted)]">{t('common.loading')}</p>
       ) : items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[var(--color-border)] py-12 text-center">
-          <p className="font-mono text-sm text-[var(--color-ink-faint)]">暂无待办事项</p>
-          <p className="mt-1 font-serif text-sm text-[var(--color-ink-faint)]">在上方输入内容快速添加</p>
+          <p className="font-mono text-sm text-[var(--color-ink-faint)]">{t('todos.empty')}</p>
+          <p className="mt-1 font-serif text-sm text-[var(--color-ink-faint)]">{t('todos.emptyHint')}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -186,6 +190,7 @@ function TodoItem({
   const [saving, setSaving] = useState(false)
   const contentRef = useRef<HTMLInputElement>(null)
   const { toastError } = useToast()
+  const { t } = useI18n()
 
   const startEdit = () => {
     setEditContent(todo.content)
@@ -205,7 +210,7 @@ function TodoItem({
       await onUpdate({ content: editContent.trim(), url: editUrl.trim() })
       setEditing(false)
     } catch (e: unknown) {
-      toastError(e instanceof Error ? e.message : '保存失败')
+      toastError(e instanceof Error ? e.message : t('common.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -230,7 +235,7 @@ function TodoItem({
             value={editContent}
             onChange={e => setEditContent(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="待办内容..."
+            placeholder={t('todos.editContentPlaceholder')}
             className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-strong)] px-3 py-2 font-mono text-sm outline-none"
           />
           <input
@@ -238,7 +243,7 @@ function TodoItem({
             value={editUrl}
             onChange={e => setEditUrl(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="相关链接（可选）"
+            placeholder={t('todos.urlPlaceholder')}
             className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-strong)] px-3 py-2 font-mono text-sm outline-none"
           />
           <div className="flex items-center gap-2 mt-1">
@@ -247,15 +252,15 @@ function TodoItem({
               disabled={saving || (!editContent.trim() && !editUrl.trim())}
               className="rounded-md bg-[var(--color-solid)] px-4 py-1.5 font-mono text-xs text-[var(--color-solid-text)] transition-colors disabled:opacity-50"
             >
-              {saving ? '保存中...' : '保存'}
+              {saving ? t('common.saving') : t('common.save')}
             </button>
             <button
               onClick={cancelEdit}
               className="rounded-md border border-[var(--color-border)] px-4 py-1.5 font-mono text-xs text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-hover)]"
             >
-              取消
+              {t('common.cancel')}
             </button>
-            <span className="font-mono text-xs text-[var(--color-ink-faint)]">Enter 保存 · Esc 取消</span>
+            <span className="font-mono text-xs text-[var(--color-ink-faint)]">{t('todos.editHint')}</span>
           </div>
         </div>
       </div>
@@ -283,7 +288,7 @@ function TodoItem({
         <p
           className={`font-mono text-sm break-words text-[var(--color-ink)] ${todo.done ? 'line-through' : ''}`}
         >
-          {todo.content || <span className="text-[var(--color-ink-faint)]">(无内容)</span>}
+          {todo.content || <span className="text-[var(--color-ink-faint)]">{t('common.empty')}</span>}
         </p>
         {todo.url && (
           <a
@@ -302,7 +307,7 @@ function TodoItem({
       <button
         onClick={startEdit}
         className="shrink-0 rounded px-2 py-1 font-mono text-xs text-[var(--color-ink-muted)] opacity-0 transition-opacity hover:bg-[var(--color-surface-hover)] group-hover:opacity-100"
-        title="编辑"
+        title={t('common.edit')}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -314,11 +319,12 @@ function TodoItem({
       <button
         onClick={onDelete}
         className="shrink-0 rounded px-2 py-1 font-mono text-xs text-[var(--color-danger-text)] opacity-0 transition-opacity hover:bg-[var(--color-danger-bg)] group-hover:opacity-100"
-        title="删除"
+        title={t('common.delete')}
       >
         ✕
       </button>
     </div>
   )
 }
+
 

@@ -1,27 +1,29 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useCompletedTodosToday } from '../../lib/queries'
+import { useI18n } from '../../lib/i18n'
 
 export function CompletedTodosSection() {
   const navigate = useNavigate()
+  const { t } = useI18n()
   const { data, isLoading } = useCompletedTodosToday()
   const items = data?.todos ?? []
 
   return (
     <div className="px-6 py-5">
       <div className="flex items-center justify-between mb-4">
-        <p className="font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">§ 已完成待办 §</p>
+        <p className="font-mono text-sm uppercase tracking-[0.3em] text-[var(--color-ink-secondary)]">{t('dashboard.completedTodos.title')}</p>
         <button
           onClick={() => navigate({ to: '/todos' })}
           className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-ink-muted)]"
         >
-          查看全部 →
+          {t('common.viewAll')}
         </button>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-[var(--color-ink-muted)] font-serif">加载中...</p>
+        <p className="text-sm text-[var(--color-ink-muted)] font-serif">{t('common.loading')}</p>
       ) : items.length === 0 ? (
-        <p className="text-sm text-[var(--color-ink-faint)] font-serif">今天还没有完成的待办事项</p>
+        <p className="text-sm text-[var(--color-ink-faint)] font-serif">{t('dashboard.completedTodos.empty')}</p>
       ) : (
         <div className="space-y-1">
           {items.map(todo => (
@@ -41,7 +43,7 @@ export function CompletedTodosSection() {
                 <p
                   className="text-sm text-[var(--color-ink-muted)] font-serif break-words"
                 >
-                  {todo.content || <span className="text-[var(--color-ink-faint)]">(无内容)</span>}
+                  {todo.content || <span className="text-[var(--color-ink-faint)]">{t('common.empty')}</span>}
                 </p>
                 {todo.url && (
                   <a
