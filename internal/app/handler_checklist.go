@@ -8,6 +8,8 @@ import (
 
 // 检查清单及快照 handler
 
+const checklistKindManual = "manual"
+
 func handleChecklists(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -25,13 +27,9 @@ func handleChecklists(w http.ResponseWriter, r *http.Request) {
 
 func handleGetChecklists(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
-	if err := ensureReminderChecklists(userID); err != nil {
-		jsonError(w, "Failed to initialize reminder checklists", http.StatusInternalServerError)
-		return
-	}
 
 	rows, err := db.Query(
-		"SELECT id, user_id, title, items, kind, created_at, updated_at FROM checklists WHERE user_id = ? ORDER BY CASE kind WHEN 'daily_start' THEN 0 WHEN 'iteration_end' THEN 1 ELSE 2 END, updated_at DESC",
+		"SELECT id, user_id, title, items, kind, created_at, updated_at FROM checklists WHERE user_id = ? AND kind = 'manual' ORDER BY updated_at DESC",
 		userID,
 	)
 	if err != nil {
@@ -113,7 +111,7 @@ func handleUpdateChecklist(w http.ResponseWriter, r *http.Request) {
 
 	var existing Checklist
 	err := db.QueryRow(
-		"SELECT id, user_id, title, items, kind, created_at, updated_at FROM checklists WHERE id = ? AND user_id = ?",
+		"SELECT id, user_id, title, items, kind, created_at, updated_at FROM checklists WHERE id = ? AND user_id = ? AND kind = 'manual'",
 		id, userID,
 	).Scan(&existing.ID, &existing.UserID, &existing.Title, &existing.Items, &existing.Kind, &existing.CreatedAt, &existing.UpdatedAt)
 	if err != nil {
@@ -157,11 +155,11 @@ func handleDeleteChecklist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if kind != checklistKindManual {
-		jsonError(w, "Reminder checklist cannot be deleted", http.StatusBadRequest)
+		jsonError(w, "Checklist not found", http.StatusNotFound)
 		return
 	}
 
-	result, err := db.Exec("DELETE FROM checklists WHERE id = ? AND user_id = ?", id, userID)
+	result, err := db.Exec("DELETE FROM checklists WHERE id = ? AND user_id = ? AND kind = 'manual'", id, userID)
 	if err != nil {
 		jsonError(w, "Failed to delete checklist", http.StatusInternalServerError)
 		return
@@ -233,7 +231,7 @@ func handleCreateChecklistSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var owner int64
-	if err := db.QueryRow("SELECT user_id FROM checklists WHERE id = ?", req.ChecklistID).Scan(&owner); err != nil || owner != userID {
+	if err := db.QueryRow("SELECT user_id FROM checklists WHERE id = ? AND kind = 'manual'", req.ChecklistID).Scan(&owner); err != nil || owner != userID {
 		jsonError(w, "Checklist not found", http.StatusNotFound)
 		return
 	}

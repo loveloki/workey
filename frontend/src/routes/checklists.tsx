@@ -52,9 +52,9 @@ function ChecklistManager() {
   return (
     <div>
       <div className="rounded-lg px-4 py-3 mb-5 bg-[var(--color-surface-strong)] border border-[var(--color-border)]">
-        <p className="font-mono text-sm text-[var(--color-ink)]">自动提醒清单</p>
+        <p className="font-mono text-sm text-[var(--color-ink)]">自定义检查清单</p>
         <p className="font-serif text-sm mt-1 text-[var(--color-ink-muted)]">
-          「每日上班」会在打卡后显示于今日 Dashboard；「Iteration 结束」会在当前 Iteration 的最后 3 天追加收尾提醒。两份清单都可按需编辑。
+          创建可重复使用的检查清单，记录每次执行时的备注并保存历史快照。
         </p>
       </div>
 

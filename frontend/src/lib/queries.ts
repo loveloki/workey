@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  attendance, workLogs, todos, ticketIssues, checklists, checklistSnapshots, checklistReminders,
+  attendance, workLogs, todos, ticketIssues, checklists, checklistSnapshots,
   settings, iterations, iterationOverrides, holidayCalendar, passkeys, system, history, sync,
   type Attendance, type WorkLog, type Todo, type Checklist,
   type ChecklistItem, type SnapshotData, type AttendanceStats,
-  type TicketIssueInput, type TicketIssueFilters, type SyncConfigInput, type ChecklistRunInput,
+  type TicketIssueInput, type TicketIssueFilters, type SyncConfigInput,
   type SettingsUpdateRequest, type HolidayCalendarImportRequest,
 } from './api'
 
@@ -36,9 +36,6 @@ export const queryKeys = {
   },
   checklistSnapshots: {
     list: (checklistId: number) => ['checklistSnapshots', checklistId] as const,
-  },
-  checklistReminders: {
-    list: (date: string) => ['checklistReminders', date] as const,
   },
   settings: ['settings'] as const,
   iterations: ['iterations'] as const,
@@ -329,24 +326,6 @@ export function useDeleteSnapshot() {
       checklistSnapshots.delete(id),
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: queryKeys.checklistSnapshots.list(vars.checklistId) })
-    },
-  })
-}
-
-export function useChecklistReminders(date: string, enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.checklistReminders.list(date),
-    queryFn: () => checklistReminders.list(date),
-    enabled: enabled && !!date,
-  })
-}
-
-export function useSaveChecklistRun() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (data: ChecklistRunInput) => checklistReminders.save(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['checklistReminders'] })
     },
   })
 }

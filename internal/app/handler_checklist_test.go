@@ -32,6 +32,7 @@ func TestHandleChecklists_CRUD(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 		assert.Equal(t, "每日检查", resp.Checklist.Title)
 		checklistID = resp.Checklist.ID
+		db.Exec("INSERT INTO checklists (user_id, title, items, kind) VALUES (?, '旧每日清单', '[]', 'daily_start')", userID)
 	})
 
 	t.Run("获取检查清单列表", func(t *testing.T) {
@@ -44,10 +45,10 @@ func TestHandleChecklists_CRUD(t *testing.T) {
 
 		var resp ChecklistListResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Len(t, resp.Checklists, 3)
+		assert.Len(t, resp.Checklists, 1)
 		assert.Contains(t, resp.Checklists, Checklist{
 			ID: checklistID, UserID: userID, Title: "每日检查", Items: `[{"text":"item1","checked":false}]`,
-			Kind: checklistKindManual, CreatedAt: resp.Checklists[2].CreatedAt, UpdatedAt: resp.Checklists[2].UpdatedAt,
+			Kind: checklistKindManual, CreatedAt: resp.Checklists[0].CreatedAt, UpdatedAt: resp.Checklists[0].UpdatedAt,
 		})
 	})
 

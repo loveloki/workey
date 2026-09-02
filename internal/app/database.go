@@ -220,9 +220,20 @@ func migrateDB() {
 				log.Fatalf("Failed to add checklist kind column: %v", err)
 			}
 		}
-		if _, err = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_checklists_user_system_kind
-			ON checklists(user_id, kind) WHERE kind IN ('daily_start', 'iteration_end')`); err != nil {
-			log.Fatalf("Failed to create checklist kind index: %v", err)
+		// 清理已移除的每日与周期提醒清单，避免旧数据继续出现在导出或同步数据中。
+		if tableExists("checklist_runs") {
+			if _, err = db.Exec("DELETE FROM checklist_runs WHERE kind IN ('daily_start', 'iteration_end')"); err != nil {
+				log.Fatalf("Failed to remove legacy checklist runs: %v", err)
+			}
+		}
+		if tableExists("checklist_snapshots") {
+			if _, err = db.Exec(`DELETE FROM checklist_snapshots
+				WHERE checklist_id IN (SELECT id FROM checklists WHERE kind IN ('daily_start', 'iteration_end'))`); err != nil {
+				log.Fatalf("Failed to remove legacy checklist snapshots: %v", err)
+			}
+		}
+		if _, err = db.Exec("DELETE FROM checklists WHERE kind IN ('daily_start', 'iteration_end')"); err != nil {
+			log.Fatalf("Failed to remove legacy checklists: %v", err)
 		}
 	}
 

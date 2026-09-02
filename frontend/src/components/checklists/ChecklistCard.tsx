@@ -23,12 +23,7 @@ export function ChecklistCard({
   const deleteMut = useDeleteChecklist()
 
   const parsedItems = parseItems(checklist.items)
-  const isReminder = checklist.kind === 'daily_start' || checklist.kind === 'iteration_end'
-  const kindLabel = checklist.kind === 'daily_start'
-    ? '每日上班'
-    : checklist.kind === 'iteration_end'
-      ? 'Iteration 结束'
-      : '手动清单'
+  const kindLabel = '手动清单'
 
   const handleEditSave = async (data: Checklist | { title: string; items: string }) => {
     try {
@@ -86,7 +81,7 @@ export function ChecklistCard({
           <span>
             {checklist.title}
             <span className="block font-mono text-[10px] font-normal mt-0.5 text-[var(--color-ink-faint)]">
-              {kindLabel}{isReminder ? ' · Dashboard 自动提醒' : ''}
+              {kindLabel}
             </span>
           </span>
         </span>
@@ -125,7 +120,7 @@ export function ChecklistCard({
           onClick={onUse}
           className="font-mono text-xs px-4 py-1.5 rounded-md text-[var(--color-solid-text)] transition-colors bg-[var(--color-solid)]"
         >
-          {isReminder ? '预览检查' : '开始检查'}
+          开始检查
         </button>
         <button
           onClick={() => setEditing(true)}
@@ -133,11 +128,7 @@ export function ChecklistCard({
         >
           编辑
         </button>
-        {isReminder ? (
-          <span className="font-mono text-[10px] ml-auto text-[var(--color-ink-faint)]">
-            系统提醒清单不可删除
-          </span>
-        ) : !confirmDelete ? (
+        {!confirmDelete ? (
           <button
             onClick={() => setConfirmDelete(true)}
             className="font-mono text-xs px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--color-surface-hover)] ml-auto text-[var(--color-danger-text,#c00)]"

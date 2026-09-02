@@ -76,7 +76,7 @@ func TestBuildAndDecryptSnapshot(t *testing.T) {
 	assert.Equal(t, len(data.Attendance), len(decrypted.Attendance))
 	assert.Equal(t, len(data.WorkLogs), len(decrypted.WorkLogs))
 	assert.Equal(t, len(data.TicketIssues), len(decrypted.TicketIssues))
-	assert.Equal(t, len(data.ChecklistRuns), len(decrypted.ChecklistRuns))
+	assert.Equal(t, len(data.Checklists), len(decrypted.Checklists))
 
 	// 验证 hash 一致
 	decryptedHash, err := computeDataHash(decrypted)
@@ -135,10 +135,6 @@ func TestReplaceImportDataNoduplicates(t *testing.T) {
 	var ticketIssueCnt int
 	db.QueryRow("SELECT COUNT(*) FROM ticket_issues WHERE user_id = ?", userID).Scan(&ticketIssueCnt)
 	assert.Equal(t, len(data.TicketIssues), ticketIssueCnt, "ticket_issues 不应重复")
-
-	var checklistRunCnt int
-	db.QueryRow("SELECT COUNT(*) FROM checklist_runs WHERE user_id = ?", userID).Scan(&checklistRunCnt)
-	assert.Equal(t, len(data.ChecklistRuns), checklistRunCnt, "checklist_runs 不应重复")
 }
 
 // TestReplaceImportDataRollbackOnError 导入失败应 rollback（M3：修复逻辑缺陷）
@@ -199,13 +195,10 @@ func makeTestExportData() *ExportData {
 			{ID: 1, UserID: 1, TicketNo: "WO-1", TicketTitle: "Login failed", OccurredOn: "2024-01-01", CauseType: "code", ProblemDescription: "Users cannot login", CauseDetail: "Nil pointer", Resolution: "Add validation", CreatedAt: "2024-01-01 11:00:00", UpdatedAt: "2024-01-01 12:00:00"},
 		},
 		Checklists: []Checklist{
-			{ID: 1, UserID: 1, Title: "Daily", Items: `["task1"]`, Kind: checklistKindDailyStart, CreatedAt: "2024-01-01 08:00:00", UpdatedAt: "2024-01-01 08:00:00"},
-		},
-		ChecklistRuns: []ChecklistRun{
-			{ID: 1, UserID: 1, ChecklistID: 1, Kind: checklistKindDailyStart, OccurrenceKey: "2024-01-01", Title: "Daily", Items: `["task1"]`, Data: `{"checked":[true],"notes":[""]}`, Completed: true, CreatedAt: "2024-01-01 09:00:00", UpdatedAt: "2024-01-01 09:00:00"},
+			{ID: 1, UserID: 1, Title: "自定义清单", Items: `["task1"]`, Kind: checklistKindManual, CreatedAt: "2024-01-01 08:00:00", UpdatedAt: "2024-01-01 08:00:00"},
 		},
 		ChecklistSnapshots: []ChecklistSnapshot{
-			{ID: 1, UserID: 1, ChecklistID: 1, Title: "Daily", ItemsHash: "abc", Data: `{"checked":[true]}`, CreatedAt: "2024-01-01 20:00:00"},
+			{ID: 1, UserID: 1, ChecklistID: 1, Title: "自定义清单", ItemsHash: "abc", Data: `{"checked":[true]}`, CreatedAt: "2024-01-01 20:00:00"},
 		},
 		IterationOverrides: []IterationOverride{},
 		UserSettings:       map[string]string{"timezone": "Asia/Shanghai"},

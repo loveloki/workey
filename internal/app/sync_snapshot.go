@@ -92,7 +92,7 @@ func buildExportData(ctx context.Context, tx *sql.Tx, userID int64) (*ExportData
 
 	checklistsList := []Checklist{}
 	rows4, err := tx.QueryContext(ctx,
-		"SELECT id, user_id, title, items, kind, created_at, updated_at FROM checklists WHERE user_id = ? ORDER BY id",
+		"SELECT id, user_id, title, items, kind, created_at, updated_at FROM checklists WHERE user_id = ? AND kind = 'manual' ORDER BY id",
 		userID,
 	)
 	if err != nil {
@@ -105,26 +105,6 @@ func buildExportData(ctx context.Context, tx *sql.Tx, userID int64) (*ExportData
 			return nil, fmt.Errorf("scan checklists: %w", err)
 		}
 		checklistsList = append(checklistsList, c)
-	}
-
-	checklistRunsList := []ChecklistRun{}
-	runRows, err := tx.QueryContext(ctx, `SELECT id, user_id, checklist_id, kind, occurrence_key,
-		iteration_number, title, items, data, completed, completed_at, created_at, updated_at
-		FROM checklist_runs WHERE user_id = ? ORDER BY id`, userID)
-	if err != nil {
-		return nil, fmt.Errorf("query checklist_runs: %w", err)
-	}
-	defer runRows.Close()
-	for runRows.Next() {
-		var run ChecklistRun
-		var completed int
-		if err := runRows.Scan(&run.ID, &run.UserID, &run.ChecklistID, &run.Kind, &run.OccurrenceKey,
-			&run.IterationNumber, &run.Title, &run.Items, &run.Data, &completed,
-			&run.CompletedAt, &run.CreatedAt, &run.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scan checklist_runs: %w", err)
-		}
-		run.Completed = completed != 0
-		checklistRunsList = append(checklistRunsList, run)
 	}
 
 	snapshotsList := []ChecklistSnapshot{}
@@ -199,7 +179,6 @@ func buildExportData(ctx context.Context, tx *sql.Tx, userID int64) (*ExportData
 		Todos:              todosList,
 		TicketIssues:       ticketIssuesList,
 		Checklists:         checklistsList,
-		ChecklistRuns:      checklistRunsList,
 		ChecklistSnapshots: snapshotsList,
 		UserSettings:       userSettings,
 		IterationOverrides: overridesList,
@@ -254,20 +233,6 @@ type hashChecklist struct {
 	Kind      string `json:"kind"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
-}
-
-type hashChecklistRun struct {
-	ChecklistID     int64   `json:"checklist_id"`
-	Kind            string  `json:"kind"`
-	OccurrenceKey   string  `json:"occurrence_key"`
-	IterationNumber *int64  `json:"iteration_number"`
-	Title           string  `json:"title"`
-	Items           string  `json:"items"`
-	Data            string  `json:"data"`
-	Completed       bool    `json:"completed"`
-	CompletedAt     *string `json:"completed_at"`
-	CreatedAt       string  `json:"created_at"`
-	UpdatedAt       string  `json:"updated_at"`
 }
 
 type hashChecklistSnapshot struct {
@@ -333,18 +298,10 @@ func computeDataHash(data *ExportData) (string, error) {
 	hChecklists := make([]hashChecklist, len(data.Checklists))
 	for i, c := range data.Checklists {
 		kind := c.Kind
-		if kind != checklistKindDailyStart && kind != checklistKindIterationEnd {
+		if kind != checklistKindManual {
 			kind = checklistKindManual
 		}
 		hChecklists[i] = hashChecklist{Title: c.Title, Items: c.Items, Kind: kind, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
-	}
-	hRuns := make([]hashChecklistRun, len(data.ChecklistRuns))
-	for i, run := range data.ChecklistRuns {
-		hRuns[i] = hashChecklistRun{
-			ChecklistID: run.ChecklistID, Kind: run.Kind, OccurrenceKey: run.OccurrenceKey,
-			IterationNumber: run.IterationNumber, Title: run.Title, Items: run.Items, Data: run.Data,
-			Completed: run.Completed, CompletedAt: run.CompletedAt, CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt,
-		}
 	}
 	hSnapshots := make([]hashChecklistSnapshot, len(data.ChecklistSnapshots))
 	for i, s := range data.ChecklistSnapshots {
@@ -366,7 +323,6 @@ func computeDataHash(data *ExportData) (string, error) {
 		Todos              []hashTodo               `json:"todos"`
 		TicketIssues       []hashTicketIssue        `json:"ticket_issues,omitempty"`
 		Checklists         []hashChecklist          `json:"checklists"`
-		ChecklistRuns      []hashChecklistRun       `json:"checklist_runs"`
 		ChecklistSnapshots []hashChecklistSnapshot  `json:"checklist_snapshots"`
 		UserSettings       [][2]string              `json:"user_settings"`
 		IterationOverrides []hashIterationOverride  `json:"iteration_overrides"`
@@ -377,7 +333,6 @@ func computeDataHash(data *ExportData) (string, error) {
 		Todos:              hTodos,
 		TicketIssues:       hTicketIssues,
 		Checklists:         hChecklists,
-		ChecklistRuns:      hRuns,
 		ChecklistSnapshots: hSnapshots,
 		UserSettings:       orderedSettings,
 		IterationOverrides: hOverrides,
@@ -485,7 +440,7 @@ func decryptSnapshot(ctx context.Context, encrypted, encKey []byte) (*ExportData
 // replaceImportData 在事务内删除当前用户所有数据并插入远端快照数据
 // 实现替换式导入，防止重复数据（m2: 添加 context 参数）
 func replaceImportData(ctx context.Context, tx *sql.Tx, userID int64, data *ExportData) error {
-	// 删除当前用户所有数据
+	// 删除当前用户所有数据，兼容保留在旧数据库中的检查进度表。
 	tables := []string{
 		"checklist_runs",
 		"checklist_snapshots",
@@ -584,45 +539,22 @@ func replaceImportData(ctx context.Context, tx *sql.Tx, userID int64, data *Expo
 	// 插入 checklists，并建立旧 ID 到新 ID 的映射
 	checklistIDMap := map[int64]int64{}
 	for _, c := range data.Checklists {
+		if c.Kind != "" && c.Kind != checklistKindManual {
+			continue
+		}
 		items := c.Items
 		if items == "" {
 			items = "[]"
 		}
-		kind := c.Kind
-		if kind != checklistKindDailyStart && kind != checklistKindIterationEnd {
-			kind = checklistKindManual
-		}
 		result, err := tx.Exec(
 			"INSERT INTO checklists (user_id, title, items, kind, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-			userID, c.Title, items, kind, c.CreatedAt, c.UpdatedAt,
+			userID, c.Title, items, checklistKindManual, c.CreatedAt, c.UpdatedAt,
 		)
 		if err != nil {
 			return fmt.Errorf("insert checklist '%s': %w", c.Title, err)
 		}
 		newID, _ := result.LastInsertId()
 		checklistIDMap[c.ID] = newID
-	}
-
-	// 插入每日与 Iteration 检查进度
-	for _, run := range data.ChecklistRuns {
-		newChecklistID, ok := checklistIDMap[run.ChecklistID]
-		if !ok {
-			log.Printf("WARNING: checklist_run %d references missing checklist %d, skipping", run.ID, run.ChecklistID)
-			continue
-		}
-		completed := 0
-		if run.Completed {
-			completed = 1
-		}
-		_, err := tx.Exec(`INSERT INTO checklist_runs (
-			user_id, checklist_id, kind, occurrence_key, iteration_number, title, items, data,
-			completed, completed_at, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			userID, newChecklistID, run.Kind, run.OccurrenceKey, run.IterationNumber,
-			run.Title, run.Items, run.Data, completed, run.CompletedAt, run.CreatedAt, run.UpdatedAt)
-		if err != nil {
-			return fmt.Errorf("insert checklist_run: %w", err)
-		}
 	}
 
 	// 插入 checklist_snapshots
