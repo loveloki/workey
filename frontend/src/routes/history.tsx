@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { PageHeader } from '../components/PageHeader'
 import { useAuthGuard } from '../lib/useAuthGuard'
 import { useToast } from '../lib/toast-context'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { type Todo, type Attendance, type WorkLog } from '../lib/api'
 import { getDateRange, formatDate, formatDateDisplay, formatTime, type RangePreset, getIterationNumber, getIterationRange, getCurrentIteration, makeIterationConfig, type IterationConfig, type IterationOverrideMap } from '../lib/date-utils'
 import {
@@ -21,6 +21,9 @@ export const Route = createFileRoute('/history')({
 
 
 const WINDOW_RADIUS = 3 // show ±3 iterations around selected
+const AUTO_SAVE_DELAY = 800
+
+type AutoSaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 function IterationSelector({
   selectedIter,
@@ -435,22 +438,64 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
   const { t } = useI18n()
   const [isEditing, setIsEditing] = useState(false)
   const [logContent, setLogContent] = useState('')
+  const [hasEdited, setHasEdited] = useState(false)
+  const [autoSaveState, setAutoSaveState] = useState<AutoSaveState>('idle')
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveVersionRef = useRef(0)
   const saveLogMut = useSaveWorkLog()
-  const { toastError } = useToast()
+  const saveMutateAsyncRef = useRef(saveLogMut.mutateAsync)
+  saveMutateAsyncRef.current = saveLogMut.mutateAsync
+  const { toastError, toastSuccess } = useToast()
 
   const handleEdit = () => {
     setLogContent((entry.log?.content || '').replace(/^\s+/, ''))
+    setHasEdited(false)
+    setAutoSaveState('idle')
     setIsEditing(true)
   }
 
-  const handleSave = async () => {
-    try {
-      await saveLogMut.mutateAsync({ date, content: logContent })
-      setIsEditing(false)
-    } catch (e: unknown) {
-      toastError(t('history.saveFailedWith', { error: e instanceof Error ? e.message : t('common.unknownError') }))
+  useEffect(() => {
+    if (!isEditing || !hasEdited) return
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    const version = ++saveVersionRef.current
+    setAutoSaveState('idle')
+
+    saveTimerRef.current = setTimeout(async () => {
+      setAutoSaveState('saving')
+      try {
+        await saveMutateAsyncRef.current({ date, content: logContent })
+        if (version === saveVersionRef.current) {
+          setAutoSaveState('saved')
+          toastSuccess(t('common.saved'))
+        }
+      } catch (e: unknown) {
+        if (version === saveVersionRef.current) {
+          setAutoSaveState('error')
+          toastError(t('history.saveFailedWith', { error: e instanceof Error ? e.message : t('common.unknownError') }))
+        }
+      }
+    }, AUTO_SAVE_DELAY)
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     }
+  }, [date, isEditing, hasEdited, logContent, t, toastError, toastSuccess])
+
+  const statusMessage = autoSaveState === 'saving'
+    ? t('common.saving')
+    : autoSaveState === 'saved'
+      ? t('common.savedCheck')
+      : autoSaveState === 'error'
+        ? t('common.saveFailed')
+        : null
+
+  const handleCancel = () => {
+    setIsEditing(false)
+    setHasEdited(false)
+    setAutoSaveState('idle')
   }
+
 
   return (
     <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-strong)] p-5">
@@ -492,21 +537,22 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
             <p className="mb-2 font-mono text-xs uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">{t('history.workContent')}</p>
             <MarkdownEditor
               value={logContent}
-              onChange={setLogContent}
+              onChange={nextContent => {
+                setLogContent(nextContent)
+                setHasEdited(true)
+              }}
               placeholder={t('history.workContentPlaceholder')}
               rows={8}
             />
           </div>
           <div className="flex items-center gap-3 pt-2">
+            {statusMessage && (
+              <p aria-live="polite" className={`text-sm font-serif ${autoSaveState === 'error' ? 'text-[var(--color-danger-text)]' : 'text-[var(--color-ink-muted)]'}`}>
+                {statusMessage}
+              </p>
+            )}
             <button
-              onClick={handleSave}
-              disabled={saveLogMut.isPending}
-              className="rounded-md bg-[var(--color-solid)] px-5 py-2 font-mono text-sm text-[var(--color-solid-text)] hover:bg-[var(--color-solid-hover)] disabled:opacity-50"
-            >
-              {saveLogMut.isPending ? t('common.saving') : t('history.saveChanges')}
-            </button>
-            <button
-              onClick={() => setIsEditing(false)}
+              onClick={handleCancel}
               disabled={saveLogMut.isPending}
               className="rounded-md border border-[var(--color-border)] px-5 py-2 font-mono text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
             >
