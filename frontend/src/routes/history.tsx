@@ -216,11 +216,12 @@ function HistoryPage() {
 
   // ── 用计算出的范围查询数据 ──
   const rangeEnabled = !!user && !!currentFetchRange.start && !!currentFetchRange.end
-  const { data: logsData, isFetching: fetchingLogs } = useWorkLogRange(currentFetchRange.start, currentFetchRange.end, rangeEnabled)
-  const { data: attData, isFetching: fetchingAtt } = useAttendanceRange(currentFetchRange.start, currentFetchRange.end, rangeEnabled)
-  const { data: todosData, isFetching: fetchingTodos } = useCompletedTodosRange(currentFetchRange.start, currentFetchRange.end, rangeEnabled)
+  const { data: logsData, isLoading: loadingLogs } = useWorkLogRange(currentFetchRange.start, currentFetchRange.end, rangeEnabled)
+  const { data: attData, isLoading: loadingAtt } = useAttendanceRange(currentFetchRange.start, currentFetchRange.end, rangeEnabled)
+  const { data: todosData, isLoading: loadingTodos } = useCompletedTodosRange(currentFetchRange.start, currentFetchRange.end, rangeEnabled)
 
-  const fetching = fetchingLogs || fetchingAtt || fetchingTodos
+  // 后台刷新时保留已有结果，避免自动保存触发查询失效后卸载编辑器
+  const fetching = loadingLogs || loadingAtt || loadingTodos
   const logs: WorkLog[] = logsData?.work_logs ?? []
   const attendances: Attendance[] = attData?.attendances ?? []
   const completedTodos: Todo[] = todosData?.todos ?? []
@@ -445,7 +446,6 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
   const saveLogMut = useSaveWorkLog()
   const saveMutateAsyncRef = useRef(saveLogMut.mutateAsync)
   saveMutateAsyncRef.current = saveLogMut.mutateAsync
-  const { toastError, toastSuccess } = useToast()
 
   const handleEdit = () => {
     setLogContent((entry.log?.content || '').replace(/^\s+/, ''))
@@ -467,12 +467,10 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
         await saveMutateAsyncRef.current({ date, content: logContent })
         if (version === saveVersionRef.current) {
           setAutoSaveState('saved')
-          toastSuccess(t('common.saved'))
         }
-      } catch (e: unknown) {
+      } catch {
         if (version === saveVersionRef.current) {
           setAutoSaveState('error')
-          toastError(t('history.saveFailedWith', { error: e instanceof Error ? e.message : t('common.unknownError') }))
         }
       }
     }, AUTO_SAVE_DELAY)
@@ -480,7 +478,7 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     }
-  }, [date, isEditing, hasEdited, logContent, t, toastError, toastSuccess])
+  }, [date, isEditing, hasEdited, logContent, t])
 
   const statusMessage = autoSaveState === 'saving'
     ? t('common.saving')

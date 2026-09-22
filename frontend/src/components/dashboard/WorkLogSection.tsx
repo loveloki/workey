@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { getToday } from '../../lib/date-utils'
-import { useToast } from '../../lib/toast-context'
 import { MarkdownEditor } from '../../lib/markdown-editor'
 import { useWorkLogToday, useSaveWorkLog } from '../../lib/queries'
 import { useI18n } from '../../lib/i18n'
@@ -20,7 +19,6 @@ export function WorkLogSection({ toolbarExtra }: { toolbarExtra?: React.ReactNod
   const saveMut = useSaveWorkLog()
   const saveMutateAsyncRef = useRef(saveMut.mutateAsync)
   saveMutateAsyncRef.current = saveMut.mutateAsync
-  const { toastError, toastSuccess } = useToast()
 
   useEffect(() => {
     if (data?.work_log && !hasEdited) {
@@ -41,12 +39,10 @@ export function WorkLogSection({ toolbarExtra }: { toolbarExtra?: React.ReactNod
         await saveMutateAsyncRef.current({ date: getToday(), content })
         if (version === saveVersionRef.current) {
           setAutoSaveState('saved')
-          toastSuccess(t('common.saved'))
         }
-      } catch (e: unknown) {
+      } catch {
         if (version === saveVersionRef.current) {
           setAutoSaveState('error')
-          toastError(e instanceof Error ? e.message : t('common.saveFailed'))
         }
       }
     }, AUTO_SAVE_DELAY)
@@ -54,7 +50,7 @@ export function WorkLogSection({ toolbarExtra }: { toolbarExtra?: React.ReactNod
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     }
-  }, [content, hasEdited, t, toastError, toastSuccess])
+  }, [content, hasEdited, t])
 
   const statusMessage = autoSaveState === 'saving'
     ? t('common.saving')
