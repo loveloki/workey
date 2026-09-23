@@ -519,10 +519,17 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
                 date={date}
                 isOvertime={!!entry.attendance.is_overtime}
                 isLeave={entry.attendance.status === 'leave'}
+                isBusinessTrip={entry.attendance.status === 'business_trip'}
                 onChanged={() => {}}
               />
-              <span>{t('history.clockInAt', { time: formatTime(entry.attendance.clock_in) })}</span>
-              <span>{t('history.clockOutAt', { time: formatTime(entry.attendance.clock_out) })}</span>
+              {entry.attendance.status === 'business_trip' ? (
+                <span>{t('history.businessTrip')}</span>
+              ) : (
+                <>
+                  <span>{t('history.clockInAt', { time: formatTime(entry.attendance.clock_in) })}</span>
+                  <span>{t('history.clockOutAt', { time: formatTime(entry.attendance.clock_out) })}</span>
+                </>
+              )}
             </div>
           )}
           <CopyButton getText={() => getDayMarkdown(date)} className="hidden sm:flex" />
@@ -612,11 +619,11 @@ function HistoryEntry({ date, entry, getDayMarkdown }: { date: string, entry: Hi
   )
 }
 
-function OvertimeBadge({ date, isOvertime, isLeave }: { date: string, isOvertime: boolean, isLeave: boolean, onChanged?: () => void }) {
+function OvertimeBadge({ date, isOvertime, isLeave, isBusinessTrip }: { date: string, isOvertime: boolean, isLeave: boolean, isBusinessTrip: boolean, onChanged?: () => void }) {
   const { t } = useI18n()
   const overtimeMut = useSetOvertime()
   const { toastError } = useToast()
-  if (isLeave) return null
+  if (isLeave || isBusinessTrip) return null
   const toggle = async () => {
     if (overtimeMut.isPending) return
     try {

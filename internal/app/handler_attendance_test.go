@@ -288,6 +288,45 @@ func TestHandleClockInWithOvertime(t *testing.T) {
 	})
 }
 
+func TestHandleClockInBusinessTrip(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	userID := createTestUser(t, "business-trip-user", "password123")
+
+	req := createAuthenticatedRequest(t, "POST", "/api/attendance/clock-in", `{"status":"business_trip"}`, userID)
+	rr := httptest.NewRecorder()
+	handleClockIn(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	var resp AttendanceResponse
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+	require.NotNil(t, resp.Attendance)
+	assert.Equal(t, "business_trip", resp.Attendance.Status)
+	assert.NotNil(t, resp.Attendance.ClockIn)
+	assert.Nil(t, resp.Attendance.ClockOut)
+	var reminderCount int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM pending_reminders WHERE user_id = ?", userID).Scan(&reminderCount))
+	assert.Equal(t, 0, reminderCount)
+
+	clockOutReq := createAuthenticatedRequest(t, "POST", "/api/attendance/clock-out", "", userID)
+	clockOutRR := httptest.NewRecorder()
+	handleClockOut(clockOutRR, clockOutReq)
+	assert.Equal(t, http.StatusBadRequest, clockOutRR.Code)
+}
+
+func TestHandleClockInRejectsUnknownStatus(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	userID := createTestUser(t, "invalid-attendance-status", "password123")
+	req := createAuthenticatedRequest(t, "POST", "/api/attendance/clock-in", `{"status":"unknown"}`, userID)
+	rr := httptest.NewRecorder()
+	handleClockIn(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
 func TestHandleClockIn_MethodNotAllowed(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()

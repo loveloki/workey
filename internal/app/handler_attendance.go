@@ -22,7 +22,8 @@ func handleClockIn(w http.ResponseWriter, r *http.Request) {
 	date, nowStr, now := nowAll()
 
 	var req struct {
-		IsOvertime *bool `json:"is_overtime"`
+		IsOvertime *bool  `json:"is_overtime"`
+		Status     string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
 		jsonError(w, "Invalid request body", http.StatusBadRequest)
@@ -31,6 +32,14 @@ func handleClockIn(w http.ResponseWriter, r *http.Request) {
 	overtime := 0
 	if req.IsOvertime != nil && *req.IsOvertime {
 		overtime = 1
+	}
+	status := req.Status
+	if status == "" {
+		status = "normal"
+	}
+	if status != "normal" && status != "business_trip" {
+		jsonError(w, "Invalid attendance status", http.StatusBadRequest)
+		return
 	}
 
 	var existingID int64
@@ -43,8 +52,8 @@ func handleClockIn(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_, err = db.Exec(
-			"UPDATE attendance SET clock_in = ?, status = 'normal', is_overtime = ?, updated_at = ? WHERE id = ?",
-			nowStr, overtime, nowStr, existingID,
+			"UPDATE attendance SET clock_in = ?, clock_out = NULL, status = ?, is_overtime = ?, updated_at = ? WHERE id = ?",
+			nowStr, status, overtime, nowStr, existingID,
 		)
 		if err != nil {
 			jsonError(w, "Failed to clock in", http.StatusInternalServerError)
@@ -52,8 +61,8 @@ func handleClockIn(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if err == sql.ErrNoRows {
 		_, err = db.Exec(
-			"INSERT INTO attendance (user_id, date, clock_in, status, is_overtime, created_at, updated_at) VALUES (?, ?, ?, 'normal', ?, ?, ?)",
-			userID, date, nowStr, overtime, nowStr, nowStr,
+			"INSERT INTO attendance (user_id, date, clock_in, status, is_overtime, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			userID, date, nowStr, status, overtime, nowStr, nowStr,
 		)
 		if err != nil {
 			jsonError(w, "Failed to clock in", http.StatusInternalServerError)
@@ -64,7 +73,9 @@ func handleClockIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scheduleReminder(userID, now)
+	if status == "normal" {
+		scheduleReminder(userID, now)
+	}
 
 	attendance, err := getAttendance(userID, date)
 	if err != nil {
@@ -206,9 +217,23 @@ func handleClockOut(w http.ResponseWriter, r *http.Request) {
 	date, nowStr, _ := nowAll()
 
 	var existingID int64
-	err := db.QueryRow("SELECT id FROM attendance WHERE user_id = ? AND date = ?", userID, date).Scan(&existingID)
+	var status string
+	var clockIn *string
+	err := db.QueryRow("SELECT id, status, clock_in FROM attendance WHERE user_id = ? AND date = ?", userID, date).Scan(&existingID, &status, &clockIn)
 	if err == sql.ErrNoRows {
 		jsonError(w, "Not clocked in today", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		jsonError(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	if clockIn == nil {
+		jsonError(w, "Not clocked in today", http.StatusBadRequest)
+		return
+	}
+	if status == "business_trip" {
+		jsonError(w, "Business trip only requires clock-in", http.StatusBadRequest)
 		return
 	}
 

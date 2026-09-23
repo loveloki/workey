@@ -5,7 +5,7 @@ import {
   type Attendance, type WorkLog, type Todo, type Checklist,
   type ChecklistItem, type SnapshotData, type AttendanceStats,
   type TicketIssueInput, type TicketIssueFilters, type SyncConfigInput,
-  type SettingsUpdateRequest, type HolidayCalendarImportRequest,
+  type SettingsUpdateRequest, type HolidayCalendarImportRequest, type AttendanceStatus,
 } from './api'
 
 // ─── Query Keys ──────────────────────────────────────────────────
@@ -82,7 +82,8 @@ export function useAttendanceStats(enabled = true) {
 export function useClockIn() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (isOvertime?: boolean) => attendance.clockIn(isOvertime),
+    mutationFn: ({ isOvertime, status }: { isOvertime?: boolean; status?: AttendanceStatus } = {}) =>
+      attendance.clockIn(isOvertime, status),
     onSuccess: () => { qc.invalidateQueries({ queryKey: queryKeys.attendance.today }) },
   })
 }

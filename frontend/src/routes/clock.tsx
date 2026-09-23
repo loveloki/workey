@@ -3,7 +3,7 @@ import { PageHeader } from '../components/PageHeader'
 import { useAuthGuard } from '../lib/useAuthGuard'
 import { useToast } from '../lib/toast-context'
 import { useState, useEffect } from 'react'
-import { type Attendance } from '../lib/api'
+import { type Attendance, type AttendanceStatus } from '../lib/api'
 import { formatTime, formatTodayTitle } from '../lib/date-utils'
 import { LoadingScreen } from '../components/LoadingScreen'
 import { useI18n } from '../lib/i18n'
@@ -37,6 +37,7 @@ function ClockWidget() {
   const [localData, setLocalData] = useState<Attendance | null | undefined>(null)
   const [now, setNow] = useState(new Date())
   const [isOvertime, setIsOvertime] = useState(false)
+  const [attendanceType, setAttendanceType] = useState<AttendanceStatus>('normal')
   const navigate = useNavigate()
 
   const clockInMut = useClockIn()
@@ -62,10 +63,11 @@ function ClockWidget() {
   const clockedIn = !!data?.clock_in
   const clockedOut = !!data?.clock_out
   const isLeave = data?.status === 'leave'
+  const isBusinessTrip = data?.status === 'business_trip'
 
   // 计算预计下班时间：上班打卡时间 + 提醒延迟小时数
   let expectedClockOut: string | null = null
-  if (clockedIn && !clockedOut && !isLeave && data?.clock_in && settingsData) {
+  if (clockedIn && !clockedOut && !isLeave && !isBusinessTrip && data?.clock_in && settingsData) {
     const delay = parseInt(settingsData.reminder_delay || '9', 10)
     const clockInDate = new Date(data.clock_in)
     if (!isNaN(clockInDate.getTime())) {
@@ -78,9 +80,9 @@ function ClockWidget() {
     }
   }
 
-  const clockIn = async (overtime?: boolean) => {
+  const clockIn = async (overtime?: boolean, status: AttendanceStatus = attendanceType) => {
     try {
-      const res = await clockInMut.mutateAsync(overtime ?? isOvertime)
+      const res = await clockInMut.mutateAsync({ isOvertime: overtime ?? isOvertime, status })
       setLocalData(res.attendance)
       setTimeout(() => navigate({ to: '/' }), 600)
     } catch (e: unknown) {
@@ -128,19 +130,36 @@ function ClockWidget() {
 
       {!clockedIn && !isLeave ? (
         <div className="flex flex-col items-center gap-6">
-          <label className={`flex items-center gap-2 cursor-pointer select-none px-4 py-2 rounded-full border border-[var(--color-border)] ${isOvertime ? 'bg-[var(--color-surface-strong)]' : 'bg-transparent'}`}>
-            <input
-              type="checkbox"
-              checked={isOvertime}
-              onChange={e => setIsOvertime(e.target.checked)}
-              className="w-4 h-4"
-            />
-            <span className={`font-mono text-sm ${isOvertime ? 'text-red-600' : 'text-[var(--color-ink-muted)]'}`}>
-              {t('clock.overtimeToday')}
-            </span>
-          </label>
+          <div className="flex rounded-full border border-[var(--color-border)] p-1">
+            {(['normal', 'business_trip'] as const).map(type => (
+              <button
+                key={type}
+                onClick={() => setAttendanceType(type)}
+                className={`rounded-full px-4 py-2 font-mono text-sm transition-colors ${
+                  attendanceType === type
+                    ? 'bg-[var(--color-solid)] text-[var(--color-solid-text)]'
+                    : 'text-[var(--color-ink-muted)]'
+                }`}
+              >
+                {type === 'normal' ? t('clock.normalType') : t('clock.businessTripType')}
+              </button>
+            ))}
+          </div>
+          {attendanceType === 'normal' && (
+            <label className={`flex items-center gap-2 cursor-pointer select-none px-4 py-2 rounded-full border border-[var(--color-border)] ${isOvertime ? 'bg-[var(--color-surface-strong)]' : 'bg-transparent'}`}>
+              <input
+                type="checkbox"
+                checked={isOvertime}
+                onChange={e => setIsOvertime(e.target.checked)}
+                className="w-4 h-4"
+              />
+              <span className={`font-mono text-sm ${isOvertime ? 'text-red-600' : 'text-[var(--color-ink-muted)]'}`}>
+                {t('clock.overtimeToday')}
+              </span>
+            </label>
+          )}
           <button
-            onClick={() => clockIn()}
+            onClick={() => clockIn(undefined, attendanceType)}
             disabled={acting}
             className="group relative outline-none"
           >
@@ -148,7 +167,7 @@ function ClockWidget() {
               className="w-44 h-44 sm:w-52 sm:h-52 rounded-full flex flex-col items-center justify-center bg-[var(--color-solid)] shadow-[0_4px_24px_rgba(0,0,0,0.15),0_0_0_6px_rgba(0,0,0,0.04)] transition-all duration-200 active:scale-95 disabled:opacity-50"
             >
               <span className="font-mono text-2xl sm:text-3xl font-bold text-[var(--color-solid-text)]">
-                {acting ? t('clock.punching') : t('clock.punchIn')}
+                {acting ? t('clock.punching') : attendanceType === 'business_trip' ? t('clock.businessTripPunchIn') : t('clock.punchIn')}
               </span>
               <span className="font-mono text-sm mt-1 text-[var(--color-solid-text)] opacity-60">
                 {t('clock.tapToPunch')}
@@ -181,6 +200,17 @@ function ClockWidget() {
             {t('clock.cancelLeaveAndPunchIn')}
           </button>
         </div>
+      ) : isBusinessTrip ? (
+        <div className="flex flex-col items-center gap-6">
+          <div className="w-44 h-44 sm:w-52 sm:h-52 rounded-full flex flex-col items-center justify-center border-2 border-dashed border-[var(--color-border)] bg-[var(--color-surface-strong)]">
+            <span className="font-mono text-2xl sm:text-3xl font-bold text-[var(--color-ink-muted)]">
+              {t('clock.businessTripDone')}
+            </span>
+            <span className="font-mono text-sm mt-1 text-[var(--color-ink-faint)]">
+              {t('clock.businessTripOnlyOnce')}
+            </span>
+          </div>
+        </div>
       ) : (
         <button
           onClick={clockOut}
@@ -212,7 +242,7 @@ function ClockWidget() {
           <p className="font-mono text-xs uppercase tracking-wide text-[var(--color-ink-muted)] mb-1">{t('clock.statOut')}</p>
           <p className="font-mono text-xl font-bold text-[var(--color-ink)]">{isLeave ? '--:--' : formatTime(data?.clock_out)}</p>
         </div>
-        {!isLeave && clockedIn && expectedClockOut && (
+        {!isLeave && !isBusinessTrip && clockedIn && expectedClockOut && (
           <>
             <div className="h-10 w-px bg-[var(--color-border)]" />
             <div className="text-center">
@@ -221,7 +251,7 @@ function ClockWidget() {
             </div>
           </>
         )}
-        {!isLeave && clockedIn && data?.clock_in && data?.clock_out && (
+        {!isLeave && !isBusinessTrip && clockedIn && data?.clock_in && data?.clock_out && (
           <>
             <div className="h-10 w-px bg-[var(--color-border)]" />
             <div className="text-center">
@@ -232,7 +262,7 @@ function ClockWidget() {
         )}
       </div>
 
-      {clockedIn && !isLeave && (
+      {clockedIn && !isLeave && !isBusinessTrip && (
         <button
           onClick={toggleTodayOvertime}
           disabled={acting}
@@ -242,12 +272,12 @@ function ClockWidget() {
         </button>
       )}
 
-      {clockedIn && !clockedOut && (
+      {clockedIn && !clockedOut && !isBusinessTrip && (
         <p className="mt-4 font-serif text-sm text-[var(--color-ink-faint)]">
           {t('clock.hintPunchOutLater')}
         </p>
       )}
-      {clockedIn && clockedOut && (
+      {clockedIn && clockedOut && !isBusinessTrip && (
         <p className="mt-4 font-serif text-sm text-[var(--color-ink-faint)]">
           {t('clock.hintUpdateOutTime')}
         </p>

@@ -27,6 +27,8 @@ export function formatDayMarkdown(
       const parts: string[] = []
       if (att.status === 'leave') {
         parts.push(tr('report.leave'))
+      } else if (att.status === 'business_trip') {
+        parts.push(tr('report.businessTrip'))
       } else {
         if (att.clock_in) parts.push(`${tr('report.clockIn')} ${formatTime(att.clock_in, lang)}`)
         if (att.clock_out) parts.push(`${tr('report.clockOut')} ${formatTime(att.clock_out, lang)}`)

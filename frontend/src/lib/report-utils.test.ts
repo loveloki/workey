@@ -66,6 +66,12 @@ describe('formatDayMarkdown', () => {
       const result = formatDayMarkdown('2026-05-15', leave, '', [], { includeMeta: true })
       expect(result).toBe('## 2026-05-15\n> 请假\n\n（未记录工作内容）')
     })
+
+    it('出差显示出差标记', () => {
+      const businessTrip = { ...(att as object), status: 'business_trip', clock_out: null } as never
+      const result = formatDayMarkdown('2026-05-15', businessTrip, '', [], { includeMeta: true })
+      expect(result).toBe('## 2026-05-15\n> 出差\n\n（未记录工作内容）')
+    })
   })
 })
 

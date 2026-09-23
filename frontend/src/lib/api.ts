@@ -16,6 +16,8 @@ import type {
   SyncOperationResponse, SyncValidateResponse, SyncLogListResponse,
 } from './models.gen'
 
+export type AttendanceStatus = 'normal' | 'business_trip'
+
 export type {
   Attendance, WorkLog, Todo, TicketIssue, Checklist, ChecklistSnapshot,
   IterationOverride, HolidayCalendarDay, IterationRange, Passkey, AttendanceStatsResponse as AttendanceStats,
@@ -112,9 +114,9 @@ export const auth = {
 // ─── Attendance ─────────────────────────────────────────────────
 
 export const attendance = {
-  clockIn: (isOvertime?: boolean) => request<AttendanceResponse>('/api/attendance/clock-in', {
+  clockIn: (isOvertime?: boolean, status: AttendanceStatus = 'normal') => request<AttendanceResponse>('/api/attendance/clock-in', {
     method: 'POST',
-    body: JSON.stringify({ is_overtime: !!isOvertime }),
+    body: JSON.stringify({ is_overtime: !!isOvertime, status }),
   }),
   setOvertime: (date: string, is_overtime: boolean) => request<AttendanceResponse>('/api/attendance/overtime', {
     method: 'POST',
