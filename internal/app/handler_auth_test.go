@@ -29,6 +29,12 @@ func TestHandleRegister(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 		assert.NotEmpty(t, resp.Token)
 		assert.Equal(t, "newuser", resp.User.Username)
+		assert.Positive(t, resp.User.ID)
+		assert.NotEmpty(t, resp.User.CreatedAt)
+		tokenUserID, _, err := validateJWT(resp.Token)
+		require.NoError(t, err)
+		assert.Equal(t, resp.User.ID, tokenUserID)
+		assert.NotContains(t, rr.Body.String(), "password")
 	})
 
 	t.Run("用户名重复", func(t *testing.T) {
@@ -61,6 +67,18 @@ func TestHandleRegister(t *testing.T) {
 
 		handleRegister(rr, req)
 
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("PB密码字段校验失败", func(t *testing.T) {
+		body, err := json.Marshal(struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}{Username: "toolongpassword", Password: strings.Repeat("a", 100)})
+		require.NoError(t, err)
+		req := httptest.NewRequest("POST", "/api/auth/register", strings.NewReader(string(body)))
+		rr := httptest.NewRecorder()
+		handleRegister(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
@@ -116,6 +134,36 @@ func TestHandleLogin(t *testing.T) {
 
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
+
+	t.Run("用户名不能注入查询", func(t *testing.T) {
+		for _, username := range []string{`loginuser' OR 1=1 --`, `loginuser" || username != "" || username = "`} {
+			body, err := json.Marshal(struct {
+				Username string `json:"username"`
+				Password string `json:"password"`
+			}{Username: username, Password: "correctpass"})
+			require.NoError(t, err)
+			req := httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(string(body)))
+			rr := httptest.NewRecorder()
+			handleLogin(rr, req)
+			assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		}
+	})
+
+	t.Run("缺少身份字段", func(t *testing.T) {
+		for _, body := range []string{`{"username":"","password":"correctpass"}`, `{"username":"loginuser","password":""}`} {
+			req := httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(body))
+			rr := httptest.NewRecorder()
+			handleLogin(rr, req)
+			assert.Equal(t, http.StatusBadRequest, rr.Code)
+		}
+	})
+
+	t.Run("GET方法不允许", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/auth/login", nil)
+		rr := httptest.NewRecorder()
+		handleLogin(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
 }
 
 func TestHandleMe(t *testing.T) {
@@ -147,16 +195,33 @@ func TestHandleChangePassword(t *testing.T) {
 	t.Run("成功修改密码", func(t *testing.T) {
 		body := `{"old_password":"oldpassword","new_password":"newpassword"}`
 		req := createAuthenticatedRequest(t, "POST", "/api/auth/change-password", body, userID)
+		oldToken := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
 		rr := httptest.NewRecorder()
 
-		handleChangePassword(rr, req)
+		authMiddleware(handleChangePassword)(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		// 验证新密码可以登录
-		var hash string
-		db.QueryRow("SELECT password_hash FROM users WHERE id = ?", userID).Scan(&hash)
-		assert.True(t, checkPassword("newpassword", hash))
+		valid, err := validateUserPassword(userID, "newpassword")
+		require.NoError(t, err)
+		assert.True(t, valid)
+		valid, err = validateUserPassword(userID, "oldpassword")
+		require.NoError(t, err)
+		assert.False(t, valid)
+		_, _, err = validateJWT(oldToken)
+		assert.ErrorIs(t, err, errInvalidToken)
+		newToken := rr.Header().Get("X-New-Token")
+		require.NotEmpty(t, newToken)
+		assert.NotEqual(t, oldToken, newToken)
+		tokenUserID, _, err := validateJWT(newToken)
+		require.NoError(t, err)
+		assert.Equal(t, userID, tokenUserID)
+
+		meReq := httptest.NewRequest("GET", "/api/auth/me", nil)
+		meReq.Header.Set("Authorization", "Bearer "+newToken)
+		meRecorder := httptest.NewRecorder()
+		authMiddleware(handleMe)(meRecorder, meReq)
+		assert.Equal(t, http.StatusOK, meRecorder.Code)
 	})
 
 	t.Run("旧密码错误", func(t *testing.T) {
@@ -177,6 +242,21 @@ func TestHandleChangePassword(t *testing.T) {
 		handleChangePassword(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("PB新密码校验失败不吊销原token", func(t *testing.T) {
+		body, err := json.Marshal(struct {
+			OldPassword string `json:"old_password"`
+			NewPassword string `json:"new_password"`
+		}{OldPassword: "newpassword", NewPassword: strings.Repeat("a", 100)})
+		require.NoError(t, err)
+		req := createAuthenticatedRequest(t, "POST", "/api/auth/change-password", string(body), userID)
+		token := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
+		rr := httptest.NewRecorder()
+		handleChangePassword(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		_, _, err = validateJWT(token)
+		require.NoError(t, err)
 	})
 
 	t.Run("缺少密码字段", func(t *testing.T) {
@@ -237,4 +317,19 @@ func TestHandleRegister_InvalidJSON(t *testing.T) {
 	handleRegister(rr, req)
 
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
+}
+
+func TestHandleRegister_ProfileDatabaseFailure(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+	_, err := db.Exec(`CREATE TRIGGER reject_registration_profile BEFORE INSERT ON workey_profiles
+		BEGIN SELECT RAISE(ABORT, 'profile write failed'); END`)
+	require.NoError(t, err)
+	req := httptest.NewRequest("POST", "/api/auth/register", strings.NewReader(`{"username":"failedregistration","password":"password123"}`))
+	rr := httptest.NewRecorder()
+	handleRegister(rr, req)
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	var count int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM workey_accounts").Scan(&count))
+	assert.Zero(t, count)
 }

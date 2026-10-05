@@ -4,10 +4,12 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN corepack enable && pnpm config set dangerouslyAllowAllBuilds true && pnpm install --frozen-lockfile
 COPY frontend/ ./
+ARG VITE_API_BASE_URL=https://pockethost.exe.xyz
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN pnpm build
 
 # ── Stage 2: Build Go binary ──────────────────────────────
-FROM golang:1.25-alpine AS backend
+FROM golang:1.27.1-alpine AS backend
 RUN apk add --no-cache git
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -25,7 +27,7 @@ COPY --from=backend /app/version.json .
 COPY --from=frontend /app/frontend/dist ./frontend/dist/
 
 EXPOSE 8000
-VOLUME /app/data
-ENV WORKEY_DATA=/app/data
+VOLUME /app/pb_data
+ENV WORKEY_DATA=/app/pb_data
 
-CMD ["./workey"]
+CMD ["./workey", "serve", "--http=0.0.0.0:8000"]

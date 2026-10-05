@@ -2,77 +2,46 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
-
-	_ "modernc.org/sqlite"
 )
 
-// setupTestDB 创建内存中的 SQLite 测试数据库并初始化所有表
+// setupTestDB 使用真实 PocketBase 临时目录验证迁移、记录认证与业务查询。
 func setupTestDB(t *testing.T) func() {
 	t.Helper()
-
-	var err error
-	db, err = sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("failed to open test db: %v", err)
+	previousApp, previousDB, previousDir, previousSecret := pbApp, db, dataDir, dataEncryptionSecret
+	pb := New(t.TempDir())
+	if err := pb.Bootstrap(); err != nil {
+		t.Fatalf("bootstrap PocketBase: %v", err)
 	}
-
-	db.Exec("PRAGMA journal_mode=WAL")
-	db.Exec("PRAGMA foreign_keys=ON")
-
-	initDB()
-	initPasskeyDB()
-	initSyncDB()
-
-	jwtSecret = []byte("test-jwt-secret-for-unit-tests")
-
 	return func() {
-		db.Close()
+		if err := pb.ClearBootstrap(); err != nil {
+			t.Errorf("clear PocketBase: %v", err)
+		}
+		pbApp, db, dataDir, dataEncryptionSecret = previousApp, previousDB, previousDir, previousSecret
 	}
 }
 
-// createTestUser 在测试数据库中创建一个测试用户，返回用户 ID
 func createTestUser(t *testing.T, username, password string) int64 {
 	t.Helper()
-	hash, err := hashPassword(password)
+	user, err := createAccount(username, password)
 	if err != nil {
-		t.Fatalf("failed to hash password: %v", err)
+		t.Fatalf("create PocketBase account: %v", err)
 	}
-	result, err := db.Exec("INSERT INTO users (username, password_hash) VALUES (?, ?)", username, hash)
-	if err != nil {
-		t.Fatalf("failed to create test user: %v", err)
-	}
-	id, _ := result.LastInsertId()
-	return id
+	return user.ID
 }
 
-// createAuthenticatedRequest 创建带有用户 ID context 的 HTTP 请求
 func createAuthenticatedRequest(t *testing.T, method, url string, body string, userID int64) *http.Request {
 	t.Helper()
-	var req *http.Request
-	if body != "" {
-		req = httptest.NewRequest(method, url, strings.NewReader(body))
-	} else {
-		req = httptest.NewRequest(method, url, nil)
-	}
+	req := httptest.NewRequest(method, url, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-
 	token, err := createJWT(userID)
 	if err != nil {
-		t.Fatalf("failed to create JWT: %v", err)
+		t.Fatalf("create PocketBase auth token: %v", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	ctx := context.WithValue(req.Context(), userIDKey, userID)
 	return req.WithContext(ctx)
-}
-
-func init() {
-	if os.Getenv("WORKEY_DATA") == "" {
-		dataDir = os.TempDir()
-	}
 }

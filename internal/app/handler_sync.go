@@ -27,22 +27,22 @@ func lockUserSync(userID int64) func() {
 // 加密配置时使用的 AAD标识
 const aadWebDAVPassword = "webdav_password"
 
-// getEncKey 获取用于配置加密的 AES key（基于 jwtSecret 派生，使用 PBKDF2 增强）
+// getEncKey 获取用于配置加密的 AES key（基于 dataEncryptionSecret 派生，使用 PBKDF2 增强）
 // 使用 userID 作为盐的一部分，确保不同用户的配置加密密钥不同（M1）
 func getEncKey(userID int64) []byte {
 	salt := []byte(fmt.Sprintf("workey-sync-config-%d", userID))
-	return deriveKey(jwtSecret, salt)
+	return deriveKey(dataEncryptionSecret, salt)
 }
 
 // getSnapshotKey 获取用于快照加密的全局 AES key
 // 不使用 userID 做盐，因为快照需要跨会话可解密（同一应用实例的同一用户）
 func getSnapshotKey() []byte {
-	return deriveKey(jwtSecret, []byte("workey-snapshot"))
+	return deriveKey(dataEncryptionSecret, []byte("workey-snapshot"))
 }
 
-// storeMasterKeyLocally 用 jwtSecret 加密主密钥后存入本地数据库
+// storeMasterKeyLocally 用 dataEncryptionSecret 加密主密钥后存入本地数据库
 func storeMasterKeyLocally(userID int64, masterKey []byte) error {
-	localKey := deriveKey(jwtSecret, []byte("workey-local-master-store"))
+	localKey := deriveKey(dataEncryptionSecret, []byte("workey-local-master-store"))
 	nonceCiphertext, err := aesGCMEncrypt(localKey, masterKey, []byte("workey-local-key"))
 	if err != nil {
 		return err
@@ -68,59 +68,18 @@ func loadMasterKeyLocally(userID int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	localKey := deriveKey(jwtSecret, []byte("workey-local-master-store"))
+	localKey := deriveKey(dataEncryptionSecret, []byte("workey-local-master-store"))
 	return aesGCMDecrypt(localKey, data, []byte("workey-local-key"))
 }
 
 // getEffectiveEncKey 获取用于快照加密的密钥
-// 优先使用用户的主密钥（可跨服务器迁移），否则回退到全局 jwtSecret 派生
+// 优先使用用户的主密钥（可跨服务器迁移），否则回退到全局 dataEncryptionSecret 派生
 func getEffectiveEncKey(userID int64) ([]byte, error) {
 	masterKey, err := loadMasterKeyLocally(userID)
 	if err == nil && masterKey != nil {
 		return masterKey, nil
 	}
 	return getSnapshotKey(), nil
-}
-
-// initSyncDB 创建同步相关数据表
-func initSyncDB() {
-	// 迁移：尝试添加 auto_sync_interval_minutes 列（兼容已有数据库）
-	db.Exec("ALTER TABLE sync_config ADD COLUMN auto_sync_interval_minutes INTEGER NOT NULL DEFAULT 0")
-
-	queries := []string{
-		`CREATE TABLE IF NOT EXISTS sync_config (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
-			webdav_url TEXT NOT NULL,
-			webdav_username TEXT NOT NULL,
-			webdav_password_enc TEXT NOT NULL,
-			remote_path TEXT NOT NULL DEFAULT '',
-			auto_sync_interval_minutes INTEGER NOT NULL DEFAULT 0,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS sync_state (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
-			last_local_hash TEXT NOT NULL DEFAULT '',
-			last_remote_hash TEXT NOT NULL DEFAULT '',
-			last_sync_at DATETIME NOT NULL,
-			direction TEXT NOT NULL DEFAULT ''
-		)`,
-		`CREATE TABLE IF NOT EXISTS sync_log (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL REFERENCES users(id),
-			direction TEXT NOT NULL,
-			status TEXT NOT NULL,
-			message TEXT NOT NULL DEFAULT '',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-	}
-	for _, q := range queries {
-		if _, err := db.Exec(q); err != nil {
-			log.Printf("Warning: failed to create sync table: %v", err)
-		}
-	}
 }
 
 // --- 辅助函数 ---
@@ -193,14 +152,14 @@ func writeSyncLog(userID int64, direction, status, message string) {
 
 // getAutoSyncUsers 获取所有开启了自动同步的用户配置
 func getAutoSyncUsers() ([]struct {
-	UserID     int64
+	UserID int64
 	SyncConfig
 }, error) {
 	rows, err := db.Query(
 		"SELECT sc.user_id, sc.webdav_url, sc.webdav_username, sc.webdav_password_enc," +
-		"       sc.remote_path, sc.auto_sync_interval_minutes" +
-		" FROM sync_config sc" +
-		" WHERE sc.auto_sync_interval_minutes > 0",
+			"       sc.remote_path, sc.auto_sync_interval_minutes" +
+			" FROM sync_config sc" +
+			" WHERE sc.auto_sync_interval_minutes > 0",
 	)
 	if err != nil {
 		return nil, err
@@ -222,17 +181,16 @@ func getAutoSyncUsers() ([]struct {
 			continue
 		}
 		key := getEncKey(u.UserID)
-	pass, err := decryptField(key, passEnc, aadWebDAVPassword)
-	if err != nil {
-		log.Printf("[sync] user %d: failed to decrypt webdav password, skipping auto-sync: %v", u.UserID, err)
-		continue
-	}
+		pass, err := decryptField(key, passEnc, aadWebDAVPassword)
+		if err != nil {
+			log.Printf("[sync] user %d: failed to decrypt webdav password, skipping auto-sync: %v", u.UserID, err)
+			continue
+		}
 		u.WebDAVPassword = pass
 		users = append(users, u)
 	}
 	return users, rows.Err()
 }
-
 
 // --- Handlers ---
 
@@ -249,13 +207,13 @@ func handleSyncConfigGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, SyncConfigResponse{
-		Configured:               true,
-		WebDAVURL:                cfg.WebDAVURL,
-		WebDAVUsername:           cfg.WebDAVUsername,
-		RemotePath:               cfg.RemotePath,
-		AutoSyncIntervalMinutes:  cfg.AutoSyncIntervalMinutes,
-		CreatedAt:                cfg.CreatedAt,
-		UpdatedAt:                cfg.UpdatedAt,
+		Configured:              true,
+		WebDAVURL:               cfg.WebDAVURL,
+		WebDAVUsername:          cfg.WebDAVUsername,
+		RemotePath:              cfg.RemotePath,
+		AutoSyncIntervalMinutes: cfg.AutoSyncIntervalMinutes,
+		CreatedAt:               cfg.CreatedAt,
+		UpdatedAt:               cfg.UpdatedAt,
 	})
 }
 
@@ -264,12 +222,12 @@ func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
 	userID := getUserID(r)
 
 	var req struct {
-		WebDAVURL                string `json:"webdav_url"`
-		WebDAVUsername           string `json:"webdav_username"`
-		WebDAVPassword           string `json:"webdav_password"`
-		RemotePath               string `json:"remote_path"`
-		AutoSyncIntervalMinutes  int    `json:"auto_sync_interval_minutes"`
-		LoginPassword            string `json:"login_password"`
+		WebDAVURL               string `json:"webdav_url"`
+		WebDAVUsername          string `json:"webdav_username"`
+		WebDAVPassword          string `json:"webdav_password"`
+		RemotePath              string `json:"remote_path"`
+		AutoSyncIntervalMinutes int    `json:"auto_sync_interval_minutes"`
+		LoginPassword           string `json:"login_password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "Invalid request body", http.StatusBadRequest)
@@ -309,13 +267,11 @@ func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	// 如果有登录密码，生成主密钥并存储
 	var warning string
 	if req.LoginPassword != "" {
-		var passwordHash string
-		phErr := db.QueryRow("SELECT password_hash FROM users WHERE id = ?", userID).Scan(&passwordHash)
-		if phErr == nil && checkPassword(req.LoginPassword, passwordHash) {
+		passwordValid, phErr := validateUserPassword(userID, req.LoginPassword)
+		if phErr == nil && passwordValid {
 			if mk, kgErr := generateMasterKey(); kgErr == nil {
 				// 本地存储
 				if storeErr := storeMasterKeyLocally(userID, mk); storeErr == nil {
@@ -343,7 +299,7 @@ func handleSyncConfigPost(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, SyncConfigResponse{
 		Configured:              true,
 		WebDAVURL:               req.WebDAVURL,
-		WebDAVUsername:           req.WebDAVUsername,
+		WebDAVUsername:          req.WebDAVUsername,
 		RemotePath:              req.RemotePath,
 		AutoSyncIntervalMinutes: req.AutoSyncIntervalMinutes,
 		CreatedAt:               now,

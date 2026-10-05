@@ -110,6 +110,21 @@ describe('AuthProvider', () => {
     expect(screen.getByTestId('no-user')).toBeInTheDocument()
     expect(localStorage.getItem('token')).toBeNull()
   })
+
+  it.each([200, 401])('代理 HTML 登录页（%i）不能清除 Workey token', async status => {
+    setToken('valid-token')
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response('<html>Proxy sign-in</html>', {
+      status,
+      headers: { 'Content-Type': 'text/html', 'X-New-Token': 'proxy-token' },
+    }))
+
+    render(<AuthProvider><TestConsumer /></AuthProvider>)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('no-user')).toBeInTheDocument()
+    })
+    expect(localStorage.getItem('token')).toBe('valid-token')
+  })
 })
 
 describe('useAuth outside provider', () => {

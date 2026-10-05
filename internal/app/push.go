@@ -3,6 +3,7 @@ package app
 import (
 	"database/sql"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/SherClockHolmes/webpush-go"
@@ -12,7 +13,10 @@ const pushScanInterval = 1 * time.Minute
 const maxRetryAttempts = 3
 
 type Notifier struct {
-	stopCh chan struct{}
+	stopCh    chan struct{}
+	startOnce sync.Once
+	stopOnce  sync.Once
+	workers   sync.WaitGroup
 }
 
 func NewNotifier() *Notifier {
@@ -22,12 +26,19 @@ func NewNotifier() *Notifier {
 }
 
 func (n *Notifier) Start() {
-	go n.loop()
-	log.Println("[push] Notifier started (check interval: 1m)")
+	n.startOnce.Do(func() {
+		n.workers.Add(1)
+		go func() {
+			defer n.workers.Done()
+			n.loop()
+		}()
+		log.Println("[push] Notifier started (check interval: 1m)")
+	})
 }
 
 func (n *Notifier) Stop() {
-	close(n.stopCh)
+	n.stopOnce.Do(func() { close(n.stopCh) })
+	n.workers.Wait()
 }
 
 func (n *Notifier) loop() {

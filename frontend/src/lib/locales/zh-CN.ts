@@ -1,5 +1,10 @@
 /** 中文（简体）文案。key 由此文件定义，en-US 必须保持完全一致的 key 集合。 */
 export const zhCN = {
+  "api.connectionFailed": "无法连接 Workey API（{url}）。请先在浏览器中打开该地址完成 exe.dev 代理登录后重试；若仍失败，请检查网络、后端 CORS 来源配置及浏览器 Cookie 限制。",
+  "api.invalidResponse": "API 返回了无效数据，请确认服务已部署 Workey PocketBase 扩展。",
+  "api.loginPage": "API 返回了登录 HTML 页面而非 Workey 数据。请先在浏览器中打开 {url} 完成 exe.dev 代理登录后重试，并确认服务已部署 Workey PocketBase 扩展。",
+  "api.requestFailed": "请求失败",
+  "api.unauthorized": "登录已过期，请重新登录",
   "attendance.clockIn": "上班",
   "attendance.clockOut": "下班",
   "attendance.businessTrip": "出差",

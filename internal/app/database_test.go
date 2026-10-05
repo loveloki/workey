@@ -1,110 +1,79 @@
 package app
 
 import (
-	"database/sql"
 	"testing"
 
+	"github.com/pocketbase/pocketbase"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	_ "modernc.org/sqlite"
 )
 
-func TestInitDB(t *testing.T) {
-	var err error
-	db, err = sql.Open("sqlite", ":memory:")
+func TestPocketBaseSchemaDoesNotAdoptExistingTables(t *testing.T) {
+	pb := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
+	require.NoError(t, pb.Bootstrap())
+	defer pb.ClearBootstrap()
+	_, err := pb.DB().NewQuery("CREATE TABLE todos (id TEXT PRIMARY KEY, content TEXT)").Execute()
 	require.NoError(t, err)
-	defer db.Close()
+	_, err = pb.DB().NewQuery("INSERT INTO todos VALUES ('external', 'unrelated data')").Execute()
+	require.NoError(t, err)
+	err = pb.RunAppMigrations()
+	require.ErrorContains(t, err, `conflicts with existing table "todos"`)
+	var content string
+	require.NoError(t, pb.DB().NewQuery("SELECT content FROM todos WHERE id = 'external'").Row(&content))
+	assert.Equal(t, "unrelated data", content)
+	assert.False(t, pb.HasTable("workey_profiles"))
+	_, err = pb.FindCollectionByNameOrId("workey_accounts")
+	assert.Error(t, err)
+}
 
-	db.Exec("PRAGMA foreign_keys=ON")
-
-	// initDB 不应 panic
-	initDB()
-
-	// 验证所有表都已创建
-	tables := []string{"settings", "user_settings", "users", "attendance", "work_logs",
-		"checklists", "checklist_snapshots", "todos", "ticket_issues", "iteration_overrides"}
-
-	for _, table := range tables {
-		var name string
-		err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", table).Scan(&name)
-		assert.NoError(t, err, "表 %s 应该存在", table)
+func TestPocketBaseSchema(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+	for _, table := range []string{"settings", "user_settings", "workey_profiles", "attendance", "work_logs",
+		"checklists", "checklist_snapshots", "todos", "ticket_issues", "iteration_overrides",
+		"holiday_calendar_days", "passkeys", "user_keys", "push_subscriptions", "pending_reminders",
+		"sync_config", "sync_state", "sync_log"} {
+		assert.True(t, pbApp.HasTable(table), "missing table %s", table)
 	}
+	accounts, err := pbApp.FindCollectionByNameOrId("workey_accounts")
+	require.NoError(t, err)
+	assert.True(t, accounts.IsAuth())
+	assert.Equal(t, []string{"username"}, accounts.PasswordAuth.IdentityFields)
+	assert.Nil(t, accounts.CreateRule)
+	assert.Nil(t, accounts.ListRule)
+	assert.True(t, pbApp.HasTable("users"), "PocketBase 默认 users 集合不能被业务映射表覆盖")
+	columns, err := pbApp.TableColumns("workey_profiles")
+	require.NoError(t, err)
+	assert.NotContains(t, columns, "password_hash")
+	assert.Contains(t, columns, "record_id")
 }
 
-func TestInitPasskeyDB(t *testing.T) {
-	var err error
-	db, err = sql.Open("sqlite", ":memory:")
+func TestEncryptionSecret(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+	secret, err := getOrCreateEncryptionSecret()
 	require.NoError(t, err)
-	defer db.Close()
-
-	initPasskeyDB()
-
-	var name string
-	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='passkeys'").Scan(&name)
-	assert.NoError(t, err, "passkeys 表应该存在")
+	assert.NotEmpty(t, secret)
+	second, err := getOrCreateEncryptionSecret()
+	require.NoError(t, err)
+	assert.Equal(t, secret, second)
 }
 
-func TestGetOrCreateJWTSecret(t *testing.T) {
-	var err error
-	db, err = sql.Open("sqlite", ":memory:")
+func TestPocketBaseSchemaReopen(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+	userID := createTestUser(t, "persisted", "password123")
+	_, err := db.Exec("INSERT INTO todos (user_id, content) VALUES (?, ?)", userID, "preserved")
 	require.NoError(t, err)
-	defer db.Close()
-
-	db.Exec("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-
-	// 首次调用应创建密钥
-	secret1 := getOrCreateJWTSecret()
-	assert.NotEmpty(t, secret1)
-
-	// 再次调用应返回同一密钥
-	secret2 := getOrCreateJWTSecret()
-	assert.Equal(t, secret1, secret2)
-}
-
-func TestMigrateDB(t *testing.T) {
-	var err error
-	db, err = sql.Open("sqlite", ":memory:")
+	directory := dataDir
+	require.NoError(t, pbApp.ClearBootstrap())
+	pb := New(directory)
+	require.NoError(t, pb.Bootstrap())
+	defer pb.ClearBootstrap()
+	var content string
+	require.NoError(t, db.QueryRow("SELECT content FROM todos WHERE user_id = ?", userID).Scan(&content))
+	assert.Equal(t, "preserved", content)
+	record, err := accountForUser(userID)
 	require.NoError(t, err)
-	defer db.Close()
-
-	db.Exec("PRAGMA foreign_keys=ON")
-
-	// 创建不带 status 和 is_overtime 列的旧版 attendance 表
-	db.Exec(`CREATE TABLE users (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		username TEXT UNIQUE NOT NULL,
-		password_hash TEXT NOT NULL
-	)`)
-	db.Exec(`CREATE TABLE attendance (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user_id INTEGER NOT NULL,
-		date TEXT NOT NULL,
-		clock_in DATETIME,
-		clock_out DATETIME,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(user_id, date)
-	)`)
-
-	// 迁移应成功添加列
-	migrateDB()
-
-	// 验证 status 列存在
-	rows, err := db.Query("PRAGMA table_info(attendance)")
-	require.NoError(t, err)
-	defer rows.Close()
-
-	columns := map[string]bool{}
-	for rows.Next() {
-		var cid int
-		var name, ctype string
-		var notnull int
-		var dflt *string
-		var pk int
-		rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk)
-		columns[name] = true
-	}
-
-	assert.True(t, columns["status"], "应该有 status 列")
-	assert.True(t, columns["is_overtime"], "应该有 is_overtime 列")
+	assert.True(t, record.ValidatePassword("password123"))
 }

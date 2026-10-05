@@ -1,7 +1,12 @@
 package main
 
-import "workey/internal/app"
+import (
+	"log"
+	"workey/internal/app"
+)
 
 func main() {
-	app.Run()
+	if err := app.Run(); err != nil {
+		log.Fatal(err)
+	}
 }

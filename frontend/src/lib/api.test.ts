@@ -1,5 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { setToken, clearToken, isLoggedIn, base64urlToBuffer, push, ticketIssues } from './api'
+import { apiUrl, auth, ApiError, setToken, clearToken, isLoggedIn, base64urlToBuffer, passkeys, push, settings, ticketIssues } from './api'
+import { setModuleLanguage, t } from './i18n'
+
+beforeEach(() => {
+  vi.stubEnv('VITE_API_BASE_URL', undefined)
+  setModuleLanguage('zh-CN')
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
+  setModuleLanguage('zh-CN')
+})
 
 // ─── Token 管理 ─────────────────────────────────────────────────
 // 测试 Feature：用户认证凭证的本地持久化
@@ -82,8 +94,9 @@ describe('request behavior', () => {
     await auth.me()
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/auth/me',
+      'https://pockethost.exe.xyz/api/auth/me',
       expect.objectContaining({
+        credentials: 'include',
         headers: expect.objectContaining({
           'Authorization': 'Bearer my-jwt',
         }),
@@ -91,11 +104,11 @@ describe('request behavior', () => {
     )
   })
 
-  it('401 响应抛出 Unauthorized 错误', async () => {
+  it('Workey 401 响应抛出本地化认证错误', async () => {
     await checkRequest({
       mockResponse: { status: 401 },
       token: 'expired-token',
-      expectError: { message: 'Unauthorized' },
+      expectError: { message: t('api.unauthorized') },
     })
   })
 
@@ -130,7 +143,7 @@ describe('request behavior', () => {
     })
 
     const { auth } = await import('./api')
-    await expect(auth.me()).rejects.toThrow('Invalid response format')
+    await expect(auth.me()).rejects.toThrow(t('api.invalidResponse'))
   })
 })
 
@@ -164,8 +177,8 @@ describe('push API', () => {
 
     expect(result.public_key).toBe('test-public-key')
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/push/vapid-key',
-      expect.any(Object),
+      'https://pockethost.exe.xyz/api/push/vapid-key',
+      expect.objectContaining({ credentials: 'include' }),
     )
   })
 
@@ -181,8 +194,9 @@ describe('push API', () => {
 
     expect(result.message).toBe('ok')
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/push/subscribe',
+      'https://pockethost.exe.xyz/api/push/subscribe',
       expect.objectContaining({
+        credentials: 'include',
         method: 'POST',
         body: JSON.stringify({ endpoint: 'https://push.example.com', p256dh: 'abc', auth: 'def' }),
       }),
@@ -197,8 +211,9 @@ describe('push API', () => {
 
     expect(result.message).toBe('ok')
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/push/subscribe',
+      'https://pockethost.exe.xyz/api/push/subscribe',
       expect.objectContaining({
+        credentials: 'include',
         method: 'DELETE',
         body: JSON.stringify({ endpoint: 'https://push.example.com' }),
       }),
@@ -213,8 +228,9 @@ describe('push API', () => {
 
     expect(result.message).toBe('ok')
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/push/subscribe',
+      'https://pockethost.exe.xyz/api/push/subscribe',
       expect.objectContaining({
+        credentials: 'include',
         method: 'DELETE',
         body: '{}',
       }),
@@ -274,7 +290,7 @@ describe('ticket issues API', () => {
     })
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/ticket-issues?start=2025-01-01&end=2025-01-31&cause_type=code&q=%E7%99%BB%E5%BD%95+%E5%A4%B1%E8%B4%A5',
+      'https://pockethost.exe.xyz/api/ticket-issues?start=2025-01-01&end=2025-01-31&cause_type=code&q=%E7%99%BB%E5%BD%95+%E5%A4%B1%E8%B4%A5',
       expect.any(Object),
     )
   })
@@ -283,7 +299,7 @@ describe('ticket issues API', () => {
     await ticketIssues.stats({ cause_type: 'operation', q: '配置' })
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/ticket-issues/stats?q=%E9%85%8D%E7%BD%AE',
+      'https://pockethost.exe.xyz/api/ticket-issues/stats?q=%E9%85%8D%E7%BD%AE',
       expect.any(Object),
     )
   })
@@ -302,8 +318,197 @@ describe('ticket issues API', () => {
     await ticketIssues.create(input)
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/ticket-issues',
+      'https://pockethost.exe.xyz/api/ticket-issues',
       expect.objectContaining({ method: 'POST', body: JSON.stringify(input) }),
     )
+  })
+})
+
+describe('API URL configuration', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() =>
+      Promise.resolve(new Response('{"user":{"id":1,"username":"test"}}')),
+    ))
+  })
+
+  it('未配置时默认远程，旧 token 不发送到本地 legacy API', async () => {
+    setToken('legacy-token')
+    await auth.me()
+
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      'https://pockethost.exe.xyz/api/auth/me',
+      expect.objectContaining({
+        credentials: 'include',
+        headers: expect.objectContaining({ Authorization: 'Bearer legacy-token' }),
+      }),
+    )
+  })
+
+  it('显式空字符串使用同源 API', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '')
+    await auth.me()
+
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      '/api/auth/me',
+      expect.objectContaining({ credentials: 'include' }),
+    )
+  })
+
+  it.each([
+    ['https://api.example.com/', '/api/auth/me', 'https://api.example.com/api/auth/me'],
+    [' https://api.example.com/prefix/// ', 'api/auth/me', 'https://api.example.com/prefix/api/auth/me'],
+    ['https://api.example.com/prefix/', '//api/todos?all=1', 'https://api.example.com/prefix/api/todos?all=1'],
+    ['', 'api/auth/me', '/api/auth/me'],
+  ])('路径拼接保留前缀和 query，规范化斜杠：%s + %s', (base, path, expected) => {
+    vi.stubEnv('VITE_API_BASE_URL', base)
+    expect(apiUrl(path)).toBe(expected)
+  })
+})
+
+describe('proxy login and response errors', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    setToken('keep-token')
+  })
+
+  it.each([200, 401, 403])('HTML 登录页（%i）不是 Workey 认证失败且不能刷新 token', async status => {
+    const response = new Response('<!doctype html><html>Sign in</html>', {
+      status,
+      headers: { 'Content-Type': 'text/html', 'X-New-Token': 'proxy-token' },
+    })
+    Object.defineProperty(response, 'redirected', { value: true })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response))
+
+    const error = await auth.me().catch(error => error)
+
+    expect(error).not.toBeInstanceOf(ApiError)
+    expect(error.message).toBe(t('api.loginPage', { url: 'https://pockethost.exe.xyz/' }))
+    expect(localStorage.getItem('token')).toBe('keep-token')
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('没有 HTML Content-Type 也能识别登录页', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response('<html><body>Sign in</body></html>', { headers: { 'Content-Type': 'text/plain' } }),
+    ))
+
+    await expect(auth.me()).rejects.toThrow(t('api.loginPage', { url: 'https://pockethost.exe.xyz/' }))
+  })
+
+  it('成功状态的非 JSON 数据也必须失败', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not JSON')))
+    await expect(auth.me()).rejects.toThrow(t('api.invalidResponse'))
+  })
+
+  it('无效数据使用当前英文语言', async () => {
+    setModuleLanguage('en-US')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not JSON')))
+    await expect(auth.me()).rejects.toThrow('The API returned invalid data.')
+  })
+
+  it('网络/CORS 故障给出本地化提示且不回退本地 API', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+    await expect(auth.me()).rejects.toThrow(t('api.connectionFailed', { url: 'https://pockethost.exe.xyz/' }))
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(localStorage.getItem('token')).toBe('keep-token')
+  })
+
+  it('英文网络错误也提示先在浏览器访问远端代理登录', async () => {
+    setModuleLanguage('en-US')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+    await expect(auth.me()).rejects.toThrow('Open this address in your browser and sign in to the exe.dev proxy')
+  })
+
+  it('Workey JSON 错误保留状态码和响应数据', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{"error":"conflict","count":2}', { status: 409 })))
+    await expect(auth.me()).rejects.toMatchObject({
+      status: 409, message: 'conflict', data: { error: 'conflict', count: 2 },
+    })
+  })
+})
+
+describe('export, import and passkey requests', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    setToken('user-token')
+  })
+
+  it.each([undefined, ''])('导出 ZIP 使用统一地址、认证与 cookie（base=%s）', async base => {
+    vi.stubEnv('VITE_API_BASE_URL', base)
+    const zip = new Blob(['PK\u0003\u0004zip-content'], { type: 'application/zip' })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(zip, {
+      headers: { 'Content-Type': 'application/zip', 'X-New-Token': 'refreshed-token' },
+    })))
+
+    const result = await settings.exportData()
+
+    expect(await result.text()).toBe(await zip.text())
+    expect(result.type).toBe('application/zip')
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      `${base === '' ? '' : 'https://pockethost.exe.xyz'}/api/data/export`,
+      expect.objectContaining({
+        credentials: 'include',
+        headers: expect.objectContaining({ Authorization: 'Bearer user-token' }),
+      }),
+    )
+    expect(localStorage.getItem('token')).toBe('refreshed-token')
+  })
+
+  it('导入使用统一地址，不设置 multipart Content-Type 边界', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.com/prefix/')
+    const file = new File(['zip-content'], 'workey.zip', { type: 'application/zip' })
+    const response = { message: 'ok', counts: {} }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(response))))
+
+    await expect(settings.importData(file)).resolves.toEqual(response)
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      'https://api.example.com/prefix/api/data/import',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        headers: expect.objectContaining({ Authorization: 'Bearer user-token' }),
+        body: expect.any(FormData),
+      }),
+    )
+    const [, options] = vi.mocked(fetch).mock.calls[0]
+    expect(new Headers(options?.headers).has('Content-Type')).toBe(false)
+    expect((options?.body as FormData).get('file')).toBe(file)
+  })
+
+  it.each(['export', 'import'] as const)('%s 也拒绝代理登录页', async operation => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response('<!doctype html><html>Sign in</html>', { headers: { 'Content-Type': 'text/plain' } }),
+    ))
+    const result = operation === 'export'
+      ? settings.exportData()
+      : settings.importData(new File(['zip'], 'workey.zip'))
+
+    await expect(result).rejects.toThrow(t('api.loginPage', { url: 'https://pockethost.exe.xyz/' }))
+    expect(localStorage.getItem('token')).toBe('user-token')
+  })
+
+  it('导出和导入的 JSON 失败保留 Workey 错误', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() =>
+      Promise.resolve(new Response('{"error":"forbidden"}', { status: 403 })),
+    ))
+
+    await expect(settings.exportData()).rejects.toMatchObject({ status: 403, message: 'forbidden' })
+    await expect(settings.importData(new File(['zip'], 'workey.zip'))).rejects.toMatchObject({ status: 403, message: 'forbidden' })
+  })
+
+  it.each([
+    ['registerBegin', '/api/passkeys/register/begin', { rp: { id: window.location.hostname, name: 'Workey' } }],
+    ['authBegin', '/api/passkeys/auth/begin', { rpId: window.location.hostname }],
+  ] as const)('Passkey %s 使用远程 API，保留按页面 Origin 返回的 RP', async (method, path, options) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(options))))
+
+    await expect(passkeys[method]()).resolves.toEqual(options)
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      `https://pockethost.exe.xyz${path}`,
+      expect.objectContaining({ method: 'POST', credentials: 'include' }),
+    )
+    const headers = new Headers(vi.mocked(fetch).mock.calls[0][1]?.headers)
+    expect(headers.has('Origin')).toBe(false)
   })
 })

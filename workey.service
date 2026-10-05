@@ -1,15 +1,17 @@
 [Unit]
-Description=Workey Work Logger
+Description=Workey PocketBase 扩展服务
 After=network.target
 
 [Service]
 Type=simple
 User=exedev
 WorkingDirectory=/home/exedev/workey
-ExecStart=/home/exedev/workey/workey
+ExecStart=/home/exedev/workey/workey serve --http=0.0.0.0:8000
 Restart=always
 RestartSec=3
 Environment=HOME=/home/exedev
+Environment=WORKEY_DATA=/home/exedev/workey/pb_data
+Environment=WORKEY_ALLOWED_ORIGINS=https://workey.exe.xyz,https://pockethost.exe.xyz
 
 [Install]
 WantedBy=multi-user.target

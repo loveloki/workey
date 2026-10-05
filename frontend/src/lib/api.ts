@@ -14,7 +14,9 @@ import type {
   PasskeyListResponse, DataImportResponse, DataDeleteResponse,
   SyncConfigResponse, SyncStatusResponse, SyncCheckResponse,
   SyncOperationResponse, SyncValidateResponse, SyncLogListResponse,
+  VapidKeyResponse, PushSubscribeRequest,
 } from './models.gen'
+import { t } from './i18n'
 
 export type AttendanceStatus = 'normal' | 'business_trip'
 
@@ -22,9 +24,14 @@ export type {
   Attendance, WorkLog, Todo, TicketIssue, Checklist, ChecklistSnapshot,
   IterationOverride, HolidayCalendarDay, IterationRange, Passkey, AttendanceStatsResponse as AttendanceStats,
   TicketIssueStatsResponse as TicketIssueStats, SettingsUpdateRequest, HolidayCalendarImportRequest,
+  VapidKeyResponse, PushSubscribeRequest,
 } from './models.gen'
 
-const API_BASE = ''
+export function apiUrl(path: string): string {
+  const base = (import.meta.env.VITE_API_BASE_URL ?? 'https://pockethost.exe.xyz')
+    .trim().replace(/\/+$/, '')
+  return `${base}/${path.replace(/^\/+/, '')}`
+}
 
 // ─── API 错误类型 ───────────────────────────────────────────────
 
@@ -59,40 +66,65 @@ export function isLoggedIn(): boolean {
 
 // ─── 通用请求函数 ───────────────────────────────────────────────
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken()
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...((options.headers as Record<string, string>) || {}),
+function rejectHtml(res: Response, text = '') {
+  const contentType = res.headers.get('Content-Type')?.toLowerCase() ?? ''
+  if (contentType.includes('html') || /^\s*<(?:!doctype\s+html|html|head|body|form)\b/i.test(text)) {
+    // 代理登录页不是 Workey 的 401，不能因此清除应用 token。
+    throw new Error(t('api.loginPage', { url: apiUrl('') }))
   }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
-  
+}
+
+function refreshToken(res: Response) {
   const newToken = res.headers.get('X-New-Token')
-  if (newToken) {
-    setToken(newToken)
-  }
+  if (newToken) setToken(newToken)
+}
 
-  if (res.status === 401) {
-    throw new ApiError('Unauthorized', 401)
+async function fetchResponse(path: string, options: RequestInit = {}): Promise<Response> {
+  const token = getToken()
+  const headers = Object.fromEntries(new Headers(options.headers).entries())
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  let res: Response
+  try {
+    res = await fetch(apiUrl(path), { ...options, headers, credentials: 'include' })
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(t('api.connectionFailed', { url: apiUrl('') }))
+    }
+    throw error
   }
+  rejectHtml(res)
+  return res
+}
 
+async function readJsonResponse<T>(res: Response): Promise<T> {
   const text = await res.text()
+  rejectHtml(res, text)
   let data: Record<string, unknown> = {}
   if (text) {
     try {
       data = JSON.parse(text)
+      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error()
     } catch {
-      data = { error: 'Invalid response format' }
+      throw new Error(t(res.redirected ? 'api.loginPage' : 'api.invalidResponse', { url: apiUrl('') }))
     }
   }
 
-  if (!res.ok) {
-    throw new ApiError((data.error as string) || 'Request failed', res.status, data)
+  if (res.status === 401) {
+    throw new ApiError(t('api.unauthorized'), 401, data)
   }
+  if (!res.ok) {
+    throw new ApiError((data.error as string) || t('api.requestFailed'), res.status, data)
+  }
+  refreshToken(res)
   return data as T
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers = new Headers(options.headers)
+  if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+  return readJsonResponse<T>(await fetchResponse(path, { ...options, headers }))
 }
 
 // ─── Auth ───────────────────────────────────────────────────────
@@ -442,26 +474,16 @@ export const history = {
 
 // ─── Push Notifications ─────────────────────────────────────────
 
-export interface VapidKeyResponse {
-  public_key: string
-}
-
-export interface PushSubscribeRequest {
-  endpoint: string
-  p256dh: string
-  auth: string
-}
-
 export const push = {
   getVapidKey: () =>
     request<VapidKeyResponse>('/api/push/vapid-key'),
   subscribe: (data: PushSubscribeRequest) =>
-    request<{ message: string }>('/api/push/subscribe', {
+    request<MessageResponse>('/api/push/subscribe', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   unsubscribe: (endpoint?: string) =>
-    request<{ message: string }>('/api/push/subscribe', {
+    request<MessageResponse>('/api/push/subscribe', {
       method: 'DELETE',
       body: JSON.stringify({ endpoint }),
     }),
@@ -482,15 +504,12 @@ export const settings = {
       body: JSON.stringify({ old_password, new_password }),
     }),
   exportData: async (): Promise<Blob> => {
-    const token = getToken()
-    const res = await fetch('/api/data/export', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-    if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.error || 'Export failed')
-    }
-    return res.blob()
+    const res = await fetchResponse('/api/data/export')
+    if (!res.ok) await readJsonResponse(res)
+    const blob = await res.blob()
+    rejectHtml(res, await blob.slice(0, 512).text())
+    refreshToken(res)
+    return blob
   },
   deleteData: (password: string) =>
     request<DataDeleteResponse>('/api/data/delete', {
@@ -498,16 +517,11 @@ export const settings = {
       body: JSON.stringify({ password }),
     }),
   importData: async (file: File): Promise<DataImportResponse> => {
-    const token = getToken()
     const form = new FormData()
     form.append('file', file)
-    const res = await fetch('/api/data/import', {
+    return request<DataImportResponse>('/api/data/import', {
       method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
     })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Import failed')
-    return data
   },
 }

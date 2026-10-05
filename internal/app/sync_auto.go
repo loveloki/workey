@@ -2,6 +2,7 @@ package app
 
 import (
 	"log"
+	"sync"
 	"time"
 )
 
@@ -11,7 +12,10 @@ const syncManagerCheckInterval = 1 * time.Minute
 // SyncManager 后台定时同步管理器
 // 每分钟轮询所有开启了自动同步的用户，检查是否需要执行 push
 type SyncManager struct {
-	stopCh chan struct{}
+	stopCh    chan struct{}
+	startOnce sync.Once
+	stopOnce  sync.Once
+	workers   sync.WaitGroup
 }
 
 // NewSyncManager 创建后台同步管理器
@@ -23,13 +27,20 @@ func NewSyncManager() *SyncManager {
 
 // Start 启动后台轮询 goroutine
 func (sm *SyncManager) Start() {
-	go sm.loop()
-	log.Println("[sync] Auto-sync manager started (check interval: 1m)")
+	sm.startOnce.Do(func() {
+		sm.workers.Add(1)
+		go func() {
+			defer sm.workers.Done()
+			sm.loop()
+		}()
+		log.Println("[sync] Auto-sync manager started (check interval: 1m)")
+	})
 }
 
 // Stop 停止后台 goroutine
 func (sm *SyncManager) Stop() {
-	close(sm.stopCh)
+	sm.stopOnce.Do(func() { close(sm.stopCh) })
+	sm.workers.Wait()
 }
 
 // loop 是后台轮询主循环

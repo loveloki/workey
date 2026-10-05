@@ -12,6 +12,9 @@ import (
 
 func handleSPA(w http.ResponseWriter, r *http.Request) {
 	distDir := "./frontend/dist"
+	if configured := os.Getenv("WORKEY_FRONTEND_DIST"); configured != "" {
+		distDir = configured
+	}
 
 	path := filepath.Join(distDir, filepath.Clean(r.URL.Path))
 

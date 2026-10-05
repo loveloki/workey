@@ -82,7 +82,7 @@ func insertTestAttendance(t *testing.T, userID int64, date string) {
 func TestHandleSyncConfigGet_NotConfigured(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 
 	req := createAuthenticatedRequest(t, "GET", "/api/sync/config", "", userID)
 	w := httptest.NewRecorder()
@@ -97,7 +97,7 @@ func TestHandleSyncConfigGet_NotConfigured(t *testing.T) {
 func TestHandleSyncConfigGet_Configured(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 	saveSyncConfigDirect(t, userID, "https://dav.example.com", "alice", "s3cr3t")
 
 	req := createAuthenticatedRequest(t, "GET", "/api/sync/config", "", userID)
@@ -119,7 +119,7 @@ func TestHandleSyncConfigGet_Configured(t *testing.T) {
 func TestHandleSyncConfigPost_OK(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 
 	body := `{"webdav_url":"https://dav.test","webdav_username":"bob","webdav_password":"pw123","remote_path":"/workey"}`
 	req := createAuthenticatedRequest(t, "POST", "/api/sync/config", body, userID)
@@ -148,7 +148,7 @@ func TestHandleSyncConfigPost_OK(t *testing.T) {
 func TestHandleSyncConfigPost_MissingFields(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 
 	body := `{"webdav_url":"https://dav.test"}`
 	req := createAuthenticatedRequest(t, "POST", "/api/sync/config", body, userID)
@@ -162,7 +162,7 @@ func TestHandleSyncConfigPost_MissingFields(t *testing.T) {
 func TestHandleSyncConfigDelete(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 	saveSyncConfigDirect(t, userID, "https://dav.test", "u", "p")
 
 	req := createAuthenticatedRequest(t, "DELETE", "/api/sync/config", "", userID)
@@ -180,7 +180,7 @@ func TestHandleSyncConfigDelete(t *testing.T) {
 func TestHandleSyncStatus_NoConfig(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 
 	req := createAuthenticatedRequest(t, "GET", "/api/sync/status", "", userID)
 	w := httptest.NewRecorder()
@@ -195,7 +195,7 @@ func TestHandleSyncStatus_NoConfig(t *testing.T) {
 func TestHandleSyncStatus_WithState(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 	saveSyncConfigDirect(t, userID, "https://dav.test", "u", "p")
 	upsertSyncState(userID, "localhash", "remotehash", "push")
 
@@ -217,7 +217,7 @@ func TestHandleSyncStatus_WithState(t *testing.T) {
 func TestHandleSyncPush_FirstSync(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 	ts, files := fakeWebDAV(t)
 	saveSyncConfigDirect(t, userID, ts.URL, "u", "p")
 	insertTestAttendance(t, userID, "2024-01-10")
@@ -249,7 +249,7 @@ func TestHandleSyncPush_FirstSync(t *testing.T) {
 func TestHandleSyncPush_Conflict_Returns409(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 	ts, files := fakeWebDAV(t)
 	saveSyncConfigDirect(t, userID, ts.URL, "u", "p")
 	insertTestAttendance(t, userID, "2024-01-10")
@@ -286,7 +286,7 @@ func TestHandleSyncPush_Conflict_Returns409(t *testing.T) {
 func TestHandleSyncPush_ForcePush_OverwritesRemote(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 	ts, files := fakeWebDAV(t)
 	saveSyncConfigDirect(t, userID, ts.URL, "u", "p")
 	insertTestAttendance(t, userID, "2024-01-10")
@@ -323,7 +323,7 @@ func TestHandleSyncPush_ForcePush_OverwritesRemote(t *testing.T) {
 func TestHandleSyncPull_NoRemoteData(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 	ts, _ := fakeWebDAV(t)
 	saveSyncConfigDirect(t, userID, ts.URL, "u", "p")
 
@@ -338,7 +338,7 @@ func TestHandleSyncPull_Success(t *testing.T) {
 	defer cleanup()
 
 	// userA push 数据
-	userA := createTestUser(t, "userA", "pass")
+	userA := createTestUser(t, "userA", "password123")
 	ts, _ := fakeWebDAV(t)
 	saveSyncConfigDirect(t, userA, ts.URL, "u", "p")
 	insertTestAttendance(t, userA, "2024-03-01")
@@ -353,7 +353,7 @@ func TestHandleSyncPull_Success(t *testing.T) {
 	json.NewDecoder(wPush.Body).Decode(&pushResp)
 
 	// userB 用同一台 WebDAV pull
-	userB := createTestUser(t, "userB", "pass")
+	userB := createTestUser(t, "userB", "password123")
 	saveSyncConfigDirect(t, userB, ts.URL, "u", "p")
 
 	// pull 前 userB 无数据
@@ -382,7 +382,7 @@ func TestHandleSyncPull_SameSnapshotMultipleTimes_NoduplicateData(t *testing.T) 
 	cleanup := setupTestDB(t)
 	defer cleanup()
 
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 	ts, _ := fakeWebDAV(t)
 	saveSyncConfigDirect(t, userID, ts.URL, "u", "p")
 	insertTestAttendance(t, userID, "2024-04-01")
@@ -413,7 +413,7 @@ func TestHandleSyncPull_Conflict_Returns409(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 	ts, _ := fakeWebDAV(t)
 	saveSyncConfigDirect(t, userID, ts.URL, "u", "p")
 	insertTestAttendance(t, userID, "2024-05-01")
@@ -450,7 +450,7 @@ func TestHandleSyncPull_ForcePull_CreatesBackup(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 	ts, files := fakeWebDAV(t)
 	saveSyncConfigDirect(t, userID, ts.URL, "u", "p")
 	insertTestAttendance(t, userID, "2024-06-01")
@@ -486,7 +486,7 @@ func TestHandleSyncPull_ForcePull_CreatesBackup(t *testing.T) {
 func TestHandleSyncCheck_NoConfig(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 
 	req := createAuthenticatedRequest(t, "POST", "/api/sync/check", "", userID)
 	w := httptest.NewRecorder()
@@ -501,7 +501,7 @@ func TestHandleSyncCheck_NoConfig(t *testing.T) {
 func TestHandleSyncCheck_FirstSync(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 	ts, _ := fakeWebDAV(t)
 	saveSyncConfigDirect(t, userID, ts.URL, "u", "p")
 
@@ -517,7 +517,7 @@ func TestHandleSyncCheck_FirstSync(t *testing.T) {
 func TestHandleSyncCheck_Conflict(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 	ts, _ := fakeWebDAV(t)
 	saveSyncConfigDirect(t, userID, ts.URL, "u", "p")
 	insertTestAttendance(t, userID, "2024-07-01")
@@ -551,7 +551,7 @@ func TestHandleSyncCheck_Conflict(t *testing.T) {
 func TestHandleSyncLogs_Empty(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 
 	req := createAuthenticatedRequest(t, "GET", "/api/sync/logs", "", userID)
 	w := httptest.NewRecorder()
@@ -566,7 +566,7 @@ func TestHandleSyncLogs_Empty(t *testing.T) {
 func TestHandleSyncLogs_RecordsFailure(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 
 	// 模拟一次失败 push（无配置）
 	req := createAuthenticatedRequest(t, "POST", "/api/sync/push", `{}`, userID)
@@ -591,7 +591,7 @@ func TestHandleSyncLogs_RecordsFailure(t *testing.T) {
 func TestHandleSyncLogs_AutoRecordsOnPushFail(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 
 	// 配置一个不存在的 WebDAV URL（会触发网络错误并写日志）
 	saveSyncConfigDirect(t, userID, "http://127.0.0.1:19999", "u", "p")
@@ -618,7 +618,7 @@ func TestHandleSyncLogs_AutoRecordsOnPushFail(t *testing.T) {
 func TestSyncConfigPasswordNotLeakedInResponse(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
-	userID := createTestUser(t, "u1", "pass")
+	userID := createTestUser(t, "u1", "password123")
 
 	body := `{"webdav_url":"https://dav.test","webdav_username":"alice","webdav_password":"SuperSecretPwd!","remote_path":""}`
 	req := createAuthenticatedRequest(t, "POST", "/api/sync/config", body, userID)

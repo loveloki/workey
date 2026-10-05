@@ -6,7 +6,7 @@ Workey 是一个全栈个人工作管理系统，**几乎完全由 AI 生成**�
 
 | 层 | 技术栈 |
 |---|---|
-| 后端 | Go 1.25+ · 标准库 net/http · SQLite (modernc.org/sqlite) |
+| 后端 | Go 1.27.1+ · PocketBase Go 扩展 · SQLite（PocketBase 管理） |
 | 前端 | React 19 · TanStack Router · TanStack Query · Tailwind CSS v4 · Vite 6 |
 | 类型同步 | tygo（Go struct → TypeScript interface 自动生成） |
 | 测试 | Go testing + testify · Vitest + Testing Library |
@@ -110,17 +110,27 @@ frontend/src/
 ```
 cmd/workey/main.go         — 程序入口
 internal/app/
-├── app.go                 — 服务启动与路由注册
+├── app.go                 — PocketBase 生命周期与自定义路由注册
 ├── models.go              — 数据模型定义
 ├── responses.go           — API 响应类型定义
 ├── handler_*.go           — 按功能分组的 API handler
 ├── middleware.go          — 中间件（CORS、认证、jsonOK/jsonError）
-├── database.go            — 数据库初始化和迁移
-├── auth.go                — JWT / 密码哈希
+├── database.go            — PocketBase auth collection / 自定义业务表的 Go migration
+├── database_adapter.go    — core.App.DB() / dbx 查询与已有事务模块的适配
+├── auth.go                — PocketBase 认证记录、原生 auth token 与数字用户 ID 映射
 ├── passkey.go             — WebAuthn / Passkey
 ├── helpers.go             — 通用工具函数
 └── spa.go                 — SPA 前端静态文件服务
 ```
+
+### PocketBase 集成
+
+- `workey_accounts` 为原生 auth collection；密码验证与 token 签发/吊销必须使用 PocketBase API，禁止自签 JWT 或复制密码哈希。
+- 业务数字 ID 保留以兼容旧备份，通过 `workey_profiles` 映射到 auth record ID。
+- 业务自定义 SQL 表都在 PocketBase 的 `data.db` 内，经 `core.App.DB()` / dbx 管理；禁止另行打开 `workey.db` 或初始化 SQLite 连接池。
+- schema 变更通过 Go migrations，普通 HTTP handler 通过官方 `apis.WrapStdHandler` 挂载。
+- React 默认连接 `https://pockethost.exe.xyz`，该服务需部署本项目的 Go 扩展二进制；本地同源开发显式设置 `VITE_API_BASE_URL=`。
+- 旧版迁移仅支持 ZIP 导出/导入；不自动搬迁账号、Passkey、WebDAV 凭据或旧数据库文件。
 
 ### Handler 模式
 
@@ -160,7 +170,7 @@ mise install                    # 安装 Go + Node
 # 后端
 go build ./cmd/workey            # 编译
 go test -v ./...                 # 运行测试
-go run ./cmd/workey              # 启动服务 :8000
+go run ./cmd/workey serve --http=0.0.0.0:8000 # 启动 PocketBase 扩展服务
 
 # 前端
 cd frontend && pnpm install     # 安装依赖

@@ -2,61 +2,65 @@ package app
 
 import (
 	"database/sql"
-	"log"
+	"fmt"
+	"strings"
+
+	"github.com/pocketbase/pocketbase/core"
+	m "github.com/pocketbase/pocketbase/migrations"
 )
 
-// 数据库初始化与迁移
-
-func initDB() {
-	queries := []string{
-		`CREATE TABLE IF NOT EXISTS users (
+// 数字业务 ID 保持旧版 API 与备份格式不变，所有表由 PocketBase 的 data.db 管理。
+var workeySchema = []string{
+	`CREATE TABLE IF NOT EXISTS workey_profiles (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			username TEXT UNIQUE NOT NULL,
-			password_hash TEXT NOT NULL,
+			record_id TEXT NOT NULL UNIQUE REFERENCES workey_accounts(id) ON DELETE CASCADE,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
-		`CREATE TABLE IF NOT EXISTS settings (
+	`CREATE TABLE IF NOT EXISTS settings (
 			key TEXT PRIMARY KEY,
 			value TEXT NOT NULL
 		)`,
-		`CREATE TABLE IF NOT EXISTS user_settings (
+	`CREATE TABLE IF NOT EXISTS user_settings (
 			user_id INTEGER NOT NULL,
 			key TEXT NOT NULL,
 			value TEXT NOT NULL,
 			PRIMARY KEY(user_id, key),
-			FOREIGN KEY(user_id) REFERENCES users(id)
+			FOREIGN KEY(user_id) REFERENCES workey_profiles(id) ON DELETE CASCADE
 		)`,
-		`CREATE TABLE IF NOT EXISTS attendance (
+	`CREATE TABLE IF NOT EXISTS attendance (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL REFERENCES users(id),
+			user_id INTEGER NOT NULL REFERENCES workey_profiles(id) ON DELETE CASCADE,
 			date TEXT NOT NULL,
 			clock_in DATETIME,
 			clock_out DATETIME,
+			status TEXT NOT NULL DEFAULT 'normal',
+			is_overtime INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(user_id, date)
 		)`,
-		`CREATE TABLE IF NOT EXISTS work_logs (
+	`CREATE TABLE IF NOT EXISTS work_logs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL REFERENCES users(id),
+			user_id INTEGER NOT NULL REFERENCES workey_profiles(id) ON DELETE CASCADE,
 			date TEXT NOT NULL,
 			content TEXT NOT NULL DEFAULT '',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(user_id, date)
 		)`,
-		`CREATE TABLE IF NOT EXISTS checklists (
+	`CREATE TABLE IF NOT EXISTS checklists (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL REFERENCES users(id),
+			user_id INTEGER NOT NULL REFERENCES workey_profiles(id) ON DELETE CASCADE,
 			title TEXT NOT NULL DEFAULT '',
 			items TEXT NOT NULL DEFAULT '[]',
 			kind TEXT NOT NULL DEFAULT 'manual',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
-		`CREATE TABLE IF NOT EXISTS checklist_runs (
+	`CREATE TABLE IF NOT EXISTS checklist_runs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL REFERENCES users(id),
+			user_id INTEGER NOT NULL REFERENCES workey_profiles(id) ON DELETE CASCADE,
 			checklist_id INTEGER NOT NULL REFERENCES checklists(id),
 			kind TEXT NOT NULL,
 			occurrence_key TEXT NOT NULL,
@@ -70,27 +74,27 @@ func initDB() {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(user_id, kind, occurrence_key)
 		)`,
-		`CREATE TABLE IF NOT EXISTS checklist_snapshots (
+	`CREATE TABLE IF NOT EXISTS checklist_snapshots (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL REFERENCES users(id),
+			user_id INTEGER NOT NULL REFERENCES workey_profiles(id) ON DELETE CASCADE,
 			checklist_id INTEGER NOT NULL,
 			title TEXT NOT NULL DEFAULT '',
 			items_hash TEXT NOT NULL DEFAULT '',
 			data TEXT NOT NULL DEFAULT '{}',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
-		`CREATE TABLE IF NOT EXISTS todos (
+	`CREATE TABLE IF NOT EXISTS todos (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL REFERENCES users(id),
+			user_id INTEGER NOT NULL REFERENCES workey_profiles(id) ON DELETE CASCADE,
 			content TEXT NOT NULL DEFAULT '',
 			url TEXT NOT NULL DEFAULT '',
 			done INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
-		`CREATE TABLE IF NOT EXISTS ticket_issues (
+	`CREATE TABLE IF NOT EXISTS ticket_issues (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL REFERENCES users(id),
+			user_id INTEGER NOT NULL REFERENCES workey_profiles(id) ON DELETE CASCADE,
 			ticket_no TEXT NOT NULL,
 			ticket_title TEXT NOT NULL DEFAULT '',
 			ticket_url TEXT NOT NULL DEFAULT '',
@@ -102,11 +106,11 @@ func initDB() {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_ticket_issues_user_date ON ticket_issues(user_id, occurred_on DESC)`,
-		`CREATE INDEX IF NOT EXISTS idx_ticket_issues_user_cause ON ticket_issues(user_id, cause_type)`,
-		`CREATE TABLE IF NOT EXISTS iteration_overrides (
+	`CREATE INDEX IF NOT EXISTS idx_ticket_issues_user_date ON ticket_issues(user_id, occurred_on DESC)`,
+	`CREATE INDEX IF NOT EXISTS idx_ticket_issues_user_cause ON ticket_issues(user_id, cause_type)`,
+	`CREATE TABLE IF NOT EXISTS iteration_overrides (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL REFERENCES users(id),
+			user_id INTEGER NOT NULL REFERENCES workey_profiles(id) ON DELETE CASCADE,
 			iteration_number INTEGER NOT NULL,
 			start_date TEXT NOT NULL,
 			end_date TEXT NOT NULL,
@@ -114,9 +118,9 @@ func initDB() {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(user_id, iteration_number)
 		)`,
-		`CREATE TABLE IF NOT EXISTS holiday_calendar_days (
+	`CREATE TABLE IF NOT EXISTS holiday_calendar_days (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL REFERENCES users(id),
+			user_id INTEGER NOT NULL REFERENCES workey_profiles(id) ON DELETE CASCADE,
 			date TEXT NOT NULL,
 			is_workday INTEGER NOT NULL,
 			name TEXT NOT NULL DEFAULT '',
@@ -125,197 +129,131 @@ func initDB() {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(user_id, date)
 		)`,
-		`CREATE INDEX IF NOT EXISTS idx_holiday_calendar_user_date ON holiday_calendar_days(user_id, date)`,
-		`CREATE TABLE IF NOT EXISTS pending_reminders (
+	`CREATE INDEX IF NOT EXISTS idx_holiday_calendar_user_date ON holiday_calendar_days(user_id, date)`,
+	`CREATE TABLE IF NOT EXISTS pending_reminders (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL REFERENCES users(id),
+			user_id INTEGER NOT NULL REFERENCES workey_profiles(id) ON DELETE CASCADE,
 			send_at DATETIME NOT NULL,
 			attempts INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
-		`CREATE TABLE IF NOT EXISTS push_subscriptions (
+	`CREATE TABLE IF NOT EXISTS push_subscriptions (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL REFERENCES users(id),
+			user_id INTEGER NOT NULL REFERENCES workey_profiles(id) ON DELETE CASCADE,
 			endpoint TEXT NOT NULL,
 			p256dh TEXT NOT NULL,
 			auth TEXT NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(user_id, endpoint)
 		)`,
-	}
-	for _, q := range queries {
-		if _, err := db.Exec(q); err != nil {
-			log.Fatalf("Failed to init DB: %v\nQuery: %s", err, q)
-		}
-	}
-
-	migrateDB()
-}
-
-func migrateDB() {
-	// 检查 attendance 表是否存在 status 列
-	rows, err := db.Query("PRAGMA table_info(attendance)")
-	if err != nil {
-		log.Fatalf("Failed to get table info: %v", err)
-	}
-	defer rows.Close()
-
-	hasStatus := false
-	for rows.Next() {
-		var cid int
-		var name, ctype string
-		var notnull int
-		var dflt_value *string
-		var pk int
-		err = rows.Scan(&cid, &name, &ctype, &notnull, &dflt_value, &pk)
-		if err == nil && name == "status" {
-			hasStatus = true
-			break
-		}
-	}
-
-	if !hasStatus {
-		_, err = db.Exec("ALTER TABLE attendance ADD COLUMN status TEXT NOT NULL DEFAULT 'normal'")
-		if err != nil {
-			log.Fatalf("Failed to add status column to attendance: %v", err)
-		}
-	}
-
-	// 迁移：添加 is_overtime 列
-	rows2, err := db.Query("PRAGMA table_info(attendance)")
-	if err != nil {
-		log.Fatalf("Failed to get table info: %v", err)
-	}
-	hasOvertime := false
-	for rows2.Next() {
-		var cid int
-		var name, ctype string
-		var notnull int
-		var dflt_value *string
-		var pk int
-		err = rows2.Scan(&cid, &name, &ctype, &notnull, &dflt_value, &pk)
-		if err == nil && name == "is_overtime" {
-			hasOvertime = true
-		}
-	}
-	rows2.Close()
-
-	if !hasOvertime {
-		_, err = db.Exec("ALTER TABLE attendance ADD COLUMN is_overtime INTEGER NOT NULL DEFAULT 0")
-		if err != nil {
-			log.Fatalf("Failed to add is_overtime column: %v", err)
-		}
-		// 回填：已有的周末非请假记录标记为加班
-		_, err = db.Exec(`UPDATE attendance SET is_overtime = 1
-			WHERE status != 'leave'
-			  AND (strftime('%w', date) = '0' OR strftime('%w', date) = '6')`)
-		if err != nil {
-			log.Fatalf("Failed to backfill is_overtime: %v", err)
-		}
-	}
-
-	if tableExists("checklists") {
-		if !tableHasColumn("checklists", "kind") {
-			if _, err = db.Exec("ALTER TABLE checklists ADD COLUMN kind TEXT NOT NULL DEFAULT 'manual'"); err != nil {
-				log.Fatalf("Failed to add checklist kind column: %v", err)
-			}
-		}
-		// 清理已移除的每日与周期提醒清单，避免旧数据继续出现在导出或同步数据中。
-		if tableExists("checklist_runs") {
-			if _, err = db.Exec("DELETE FROM checklist_runs WHERE kind IN ('daily_start', 'iteration_end')"); err != nil {
-				log.Fatalf("Failed to remove legacy checklist runs: %v", err)
-			}
-		}
-		if tableExists("checklist_snapshots") {
-			if _, err = db.Exec(`DELETE FROM checklist_snapshots
-				WHERE checklist_id IN (SELECT id FROM checklists WHERE kind IN ('daily_start', 'iteration_end'))`); err != nil {
-				log.Fatalf("Failed to remove legacy checklist snapshots: %v", err)
-			}
-		}
-		if _, err = db.Exec("DELETE FROM checklists WHERE kind IN ('daily_start', 'iteration_end')"); err != nil {
-			log.Fatalf("Failed to remove legacy checklists: %v", err)
-		}
-	}
-
-	// 旧版按自然日配置，迁移为等价的每周工作日数（14 天 → 10 个工作日）。
-	if tableExists("user_settings") {
-		_, err = db.Exec(`INSERT INTO user_settings (user_id, key, value)
-			SELECT user_id, 'iteration_workdays',
-				CAST(CASE WHEN CAST(value AS INTEGER) < 2 THEN 1
-					ELSE (CAST(value AS INTEGER) * 5 + 3) / 7 END AS TEXT)
-			FROM user_settings old
-			WHERE key = 'iteration_duration_days'
-				AND NOT EXISTS (
-					SELECT 1 FROM user_settings current
-					WHERE current.user_id = old.user_id AND current.key = 'iteration_workdays'
-				)`)
-		if err != nil {
-			log.Fatalf("Failed to migrate iteration workdays: %v", err)
-		}
-	}
-}
-
-func tableExists(table string) bool {
-	var name string
-	return db.QueryRow("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&name) == nil
-}
-
-func tableHasColumn(table, column string) bool {
-	rows, err := db.Query("PRAGMA table_info(" + table + ")")
-	if err != nil {
-		return false
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var cid int
-		var name, columnType string
-		var notNull int
-		var defaultValue *string
-		var primaryKey int
-		if rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey) == nil && name == column {
-			return true
-		}
-	}
-	return false
-}
-
-// initPasskeyDB 创建 passkey 相关数据表
-func initPasskeyDB() {
-	query := `CREATE TABLE IF NOT EXISTS passkeys (
+	`CREATE TABLE IF NOT EXISTS passkeys (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user_id INTEGER NOT NULL REFERENCES users(id),
+		user_id INTEGER NOT NULL REFERENCES workey_profiles(id) ON DELETE CASCADE,
 		name TEXT NOT NULL,
 		credential_id BLOB NOT NULL UNIQUE,
 		public_key BLOB NOT NULL,
 		sign_count INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		last_used_at DATETIME
-	)`
-	if _, err := db.Exec(query); err != nil {
-		log.Printf("Warning: failed to create passkeys table: %v\n", err)
-	}
-
-	userKeysQuery := `CREATE TABLE IF NOT EXISTS user_keys (
+	)`,
+	`CREATE TABLE IF NOT EXISTS user_keys (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+		user_id INTEGER NOT NULL UNIQUE REFERENCES workey_profiles(id) ON DELETE CASCADE,
 		master_key_enc TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`
-	if _, err := db.Exec(userKeysQuery); err != nil {
-		log.Printf("Warning: failed to create user_keys table: %v\n", err)
-	}
+	)`,
+	`CREATE TABLE IF NOT EXISTS sync_config (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL UNIQUE REFERENCES workey_profiles(id) ON DELETE CASCADE,
+			webdav_url TEXT NOT NULL,
+			webdav_username TEXT NOT NULL,
+			webdav_password_enc TEXT NOT NULL,
+			remote_path TEXT NOT NULL DEFAULT '',
+			auto_sync_interval_minutes INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+	`CREATE TABLE IF NOT EXISTS sync_state (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL UNIQUE REFERENCES workey_profiles(id) ON DELETE CASCADE,
+			last_local_hash TEXT NOT NULL DEFAULT '',
+			last_remote_hash TEXT NOT NULL DEFAULT '',
+			last_sync_at DATETIME NOT NULL,
+			direction TEXT NOT NULL DEFAULT ''
+		)`,
+	`CREATE TABLE IF NOT EXISTS sync_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL REFERENCES workey_profiles(id) ON DELETE CASCADE,
+			direction TEXT NOT NULL,
+			status TEXT NOT NULL,
+			message TEXT NOT NULL DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 }
 
-// getOrCreateJWTSecret 从数据库获取或创建 JWT 签名密钥
-func getOrCreateJWTSecret() []byte {
+func init() {
+	m.Register(func(app core.App) error {
+		// 首次安装不能把已有 PocketBase 集合或其他应用的同名表当成 Workey 数据。
+		for _, query := range workeySchema {
+			if strings.HasPrefix(query, "CREATE TABLE IF NOT EXISTS ") {
+				table := strings.Fields(query)[5]
+				if app.HasTable(table) {
+					return fmt.Errorf("Workey schema conflicts with existing table %q; use a separate PocketBase data directory", table)
+				}
+			}
+		}
+		accounts := core.NewAuthCollection("workey_accounts")
+		accounts.Fields.Add(&core.TextField{Name: "username", Required: true, Max: 100})
+		accounts.Fields.GetByName(core.FieldNameEmail).(*core.EmailField).Required = false
+		accounts.Fields.GetByName(core.FieldNamePassword).(*core.PasswordField).Min = 6
+		accounts.PasswordAuth.Enabled = true
+		accounts.PasswordAuth.IdentityFields = []string{"username"}
+		accounts.AuthToken.Duration = 72 * 3600
+		accounts.Indexes = append(accounts.Indexes,
+			"CREATE UNIQUE INDEX idx_workey_accounts_username ON workey_accounts (username)")
+		// 原生记录 API 仅管理员可访问；普通用户通过带归属校验的 Workey API 操作。
+		if err := app.Save(accounts); err != nil {
+			return fmt.Errorf("create Workey auth collection: %w", err)
+		}
+		for _, query := range workeySchema {
+			if _, err := app.DB().NewQuery(query).Execute(); err != nil {
+				return fmt.Errorf("create Workey business schema: %w", err)
+			}
+		}
+		return nil
+	}, func(app core.App) error {
+		// 回滚会删除业务数据，只通过 PocketBase 的显式 migrate down 命令执行。
+		for _, table := range []string{
+			"sync_log", "sync_state", "sync_config", "user_keys", "passkeys",
+			"push_subscriptions", "pending_reminders", "holiday_calendar_days",
+			"iteration_overrides", "ticket_issues", "todos", "checklist_runs",
+			"checklist_snapshots", "checklists", "work_logs", "attendance",
+			"user_settings", "workey_profiles", "settings",
+		} {
+			if err := app.DeleteTable(table); err != nil {
+				return err
+			}
+		}
+		accounts, err := app.FindCollectionByNameOrId("workey_accounts")
+		if err != nil {
+			return err
+		}
+		return app.Delete(accounts)
+	}, "1791226800_workey_schema.go")
+}
+
+// getOrCreateEncryptionSecret 仅用于 WebDAV 配置和主密钥的静态加密，不用于认证。
+func getOrCreateEncryptionSecret() ([]byte, error) {
 	var secret string
-	err := db.QueryRow("SELECT value FROM settings WHERE key='jwt_secret'").Scan(&secret)
+	err := db.QueryRow("SELECT value FROM settings WHERE key = 'encryption_secret'").Scan(&secret)
 	if err == sql.ErrNoRows {
 		secret = generateRandomString(64)
-		db.Exec("INSERT INTO settings (key, value) VALUES ('jwt_secret', ?)", secret)
+		if _, err := db.Exec("INSERT INTO settings (key, value) VALUES ('encryption_secret', ?)", secret); err != nil {
+			return nil, err
+		}
 	} else if err != nil {
-		log.Fatal("Failed to get JWT secret:", err)
+		return nil, err
 	}
-	return []byte(secret)
+	return []byte(secret), nil
 }

@@ -1,32 +1,30 @@
-version: '3.8'
-
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL-https://pockethost.exe.xyz}
     container_name: workey
     ports:
       - "8000:8000"
     environment:
-      - WORKEY_DATA=/app/data
+      - WORKEY_DATA=/app/pb_data
+      - WORKEY_ALLOWED_ORIGINS=${WORKEY_ALLOWED_ORIGINS-https://workey.exe.xyz,https://pockethost.exe.xyz,http://localhost:3000,http://localhost:8000}
     volumes:
-      - workey-data:/app/data
-      - workey-uploads:/app/data/uploads
+      - pocketbase-data:/app/pb_data
     restart: unless-stopped
     networks:
       - workey-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8000"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
 volumes:
-  workey-data:
-    driver: local
-  workey-uploads:
+  pocketbase-data:
     driver: local
 
 networks:

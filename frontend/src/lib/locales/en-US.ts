@@ -2,6 +2,11 @@ import type { zhCN } from './zh-CN'
 
 /** English (US) copy. Key set must exactly match zh-CN. */
 export const enUS: Record<keyof typeof zhCN, string> = {
+  "api.connectionFailed": "Cannot connect to the Workey API ({url}). Open this address in your browser and sign in to the exe.dev proxy before retrying. If it still fails, check your network, the backend CORS origin configuration, and browser cookie restrictions.",
+  "api.invalidResponse": "The API returned invalid data. Check that the Workey PocketBase extension is deployed.",
+  "api.loginPage": "The API returned an HTML sign-in page instead of Workey data. Open {url} in your browser, sign in to the exe.dev proxy, and retry. Also check that the Workey PocketBase extension is deployed.",
+  "api.requestFailed": "Request failed",
+  "api.unauthorized": "Your session has expired. Please sign in again.",
   "attendance.clockIn": "In",
   "attendance.clockOut": "Out",
   "attendance.businessTrip": "Business trip",

@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -43,14 +46,18 @@ func (u *WebAuthnUser) WebAuthnCredentials() []webauthn.Credential {
 // --- WebAuthn 实例管理（按 rpID 缓存）---
 
 var (
-	waInstances   = map[string]*webauthn.WebAuthn{}
-	waInstancesMu sync.Mutex
+	waInstances       = map[string]*webauthn.WebAuthn{}
+	waInstancesMu     sync.Mutex
+	errWebAuthnOrigin = errors.New("invalid or disallowed WebAuthn origin")
 )
 
 // getWebAuthn 根据请求的 Host 和 Origin 创建或获取缓存的 WebAuthn 实例
 func getWebAuthn(r *http.Request) (*webauthn.WebAuthn, error) {
 	rpID := getRPID(r)
 	origin := getOrigin(r)
+	if rpID == "" || origin == "" {
+		return nil, errWebAuthnOrigin
+	}
 	cacheKey := rpID + "|" + origin
 
 	waInstancesMu.Lock()
@@ -153,23 +160,54 @@ func cleanExpiredSessions() {
 // --- 辅助函数 ---
 
 func getRPID(r *http.Request) string {
-	host := r.Host
-	if idx := strings.LastIndex(host, ":"); idx != -1 {
-		if !strings.Contains(host[idx:], "]") {
-			host = host[:idx]
-		}
+	origin := getOrigin(r)
+	u, err := url.Parse(origin)
+	if err != nil || origin == "" {
+		return ""
 	}
-	return host
+	return u.Hostname()
 }
 
 func getOrigin(r *http.Request) string {
-	host := r.Host
+	if origins, ok := r.Header["Origin"]; ok {
+		if len(origins) != 1 || !isAllowedOrigin(origins[0]) || !validWebAuthnOrigin(origins[0]) {
+			return ""
+		}
+		return origins[0]
+	}
+
+	// 无 Origin 的旧客户端继续使用后端 Host；浏览器跨域请求必须使用页面 Origin。
 	scheme := "https"
-	hostOnly := getRPID(r)
-	if strings.Contains(hostOnly, "localhost") || strings.Contains(hostOnly, "127.0.0.1") {
+	hostURL, err := url.Parse("https://" + r.Host)
+	if err != nil || hostURL.Hostname() == "" {
+		return ""
+	}
+	if isLoopbackHostname(hostURL.Hostname()) {
 		scheme = "http"
 	}
-	return scheme + "://" + host
+	origin := scheme + "://" + r.Host
+	if !validWebAuthnOrigin(origin) {
+		return ""
+	}
+	return origin
+}
+
+func validWebAuthnOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Hostname() == "" || u.User != nil || u.Opaque != "" ||
+		u.Path != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" ||
+		strings.ContainsAny(origin, "?#") {
+		return false
+	}
+	return u.Scheme == "https" || (u.Scheme == "http" && isLoopbackHostname(u.Hostname()))
+}
+
+func isLoopbackHostname(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func generateChallengeID() string {
@@ -181,7 +219,7 @@ func generateChallengeID() string {
 // loadWebAuthnUser 从数据库加载用户及其已注册的凭证
 func loadWebAuthnUser(userID int64) (*WebAuthnUser, error) {
 	var username string
-	err := db.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&username)
+	err := db.QueryRow("SELECT username FROM workey_profiles WHERE id = ?", userID).Scan(&username)
 	if err != nil {
 		return nil, err
 	}
@@ -259,6 +297,10 @@ func handlePasskeyRegisterBegin(w http.ResponseWriter, r *http.Request) {
 
 	wa, err := getWebAuthn(r)
 	if err != nil {
+		if errors.Is(err, errWebAuthnOrigin) {
+			jsonError(w, "Invalid or disallowed origin", http.StatusBadRequest)
+			return
+		}
 		jsonError(w, "WebAuthn configuration error", http.StatusInternalServerError)
 		return
 	}
@@ -341,6 +383,10 @@ func handlePasskeyRegisterFinish(w http.ResponseWriter, r *http.Request) {
 
 	wa, err := getWebAuthn(r)
 	if err != nil {
+		if errors.Is(err, errWebAuthnOrigin) {
+			jsonError(w, "Invalid or disallowed origin", http.StatusBadRequest)
+			return
+		}
 		jsonError(w, "WebAuthn configuration error", http.StatusInternalServerError)
 		return
 	}
@@ -394,6 +440,10 @@ func handlePasskeyAuthBegin(w http.ResponseWriter, r *http.Request) {
 
 	wa, err := getWebAuthn(r)
 	if err != nil {
+		if errors.Is(err, errWebAuthnOrigin) {
+			jsonError(w, "Invalid or disallowed origin", http.StatusBadRequest)
+			return
+		}
 		jsonError(w, "WebAuthn configuration error", http.StatusInternalServerError)
 		return
 	}
@@ -456,6 +506,10 @@ func handlePasskeyAuthFinish(w http.ResponseWriter, r *http.Request) {
 
 	wa, err := getWebAuthn(r)
 	if err != nil {
+		if errors.Is(err, errWebAuthnOrigin) {
+			jsonError(w, "Invalid or disallowed origin", http.StatusBadRequest)
+			return
+		}
 		jsonError(w, "WebAuthn configuration error", http.StatusInternalServerError)
 		return
 	}
@@ -490,9 +544,11 @@ func handlePasskeyAuthFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var user User
-	db.QueryRow("SELECT id, username, created_at FROM users WHERE id = ?", waUserImpl.id).
-		Scan(&user.ID, &user.Username, &user.CreatedAt)
+	user, err := profileForUser(waUserImpl.id)
+	if err != nil {
+		jsonError(w, "Failed to load user", http.StatusInternalServerError)
+		return
+	}
 
 	jsonOK(w, AuthResponse{Token: token, User: user})
 }

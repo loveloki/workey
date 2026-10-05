@@ -102,7 +102,7 @@ func TestReplaceImportDataNoduplicates(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 
-	userID := createTestUser(t, "user1", "pass")
+	userID := createTestUser(t, "user1", "password123")
 	data := makeTestExportData()
 
 	// 第一次导入
@@ -142,7 +142,7 @@ func TestReplaceImportDataRollbackOnError(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 
-	userID := createTestUser(t, "user2", "pass")
+	userID := createTestUser(t, "user2", "password123")
 
 	// 先插入一条初始记录
 	db.Exec("INSERT INTO attendance (user_id, date, status) VALUES (?, '2024-01-01', 'normal')", userID)

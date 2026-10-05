@@ -11,3 +11,7 @@ uploads/
 node_modules/
 .shelley-orchestrator/
 docs/
+/pb_data/
+/pb_public/
+frontend/.env.local
+frontend/.env.*.local
