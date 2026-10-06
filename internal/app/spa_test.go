@@ -1,95 +1,52 @@
 package app
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestHandleSPA_NoFrontend(t *testing.T) {
-	origDir, err := os.Getwd()
-	require.NoError(t, err)
-	os.Chdir(t.TempDir())
-	defer os.Chdir(origDir)
+func TestSPAAndUnknownAPIRoutes(t *testing.T) {
+	distDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(distDir, "assets"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(distDir, "index.html"), []byte("<html>workey</html>"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(distDir, "sw.js"), []byte("// sw"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(distDir, "assets", "app.js"), []byte("// app"), 0644))
+	t.Setenv("WORKEY_FRONTEND_DIST", distDir)
+	cleanup := setupTestDB(t)
+	defer cleanup()
 
-	req := httptest.NewRequest("GET", "/", nil)
-	rr := httptest.NewRecorder()
-
-	handleSPA(rr, req)
-
-	assert.Equal(t, http.StatusOK, rr.Code)
-
-	var resp map[string]string
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	assert.Equal(t, "api-only", resp["status"])
-}
-
-func TestHandleSPA_NonExistentPath(t *testing.T) {
-	req := httptest.NewRequest("GET", "/some/random/path", nil)
-	rr := httptest.NewRecorder()
-
-	handleSPA(rr, req)
-
-	assert.Equal(t, http.StatusOK, rr.Code)
-}
-
-func TestHandleSPA_WithDistDir(t *testing.T) {
-	dir := t.TempDir()
-
-	// 创建临时 dist 目录结构
-	distDir := dir + "/frontend/dist"
-	os.MkdirAll(distDir+"/assets", 0755)
-	os.WriteFile(distDir+"/index.html", []byte("<html></html>"), 0644)
-	os.WriteFile(distDir+"/sw.js", []byte("// sw"), 0644)
-	os.WriteFile(distDir+"/assets/app.js", []byte("// app"), 0644)
-
-	// 保存当前目录并切换到临时目录
-	origDir, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(origDir)
-
-	t.Run("SPA 回退返回 index.html", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/nonexistent-page", nil)
+	get := func(method, path string) *httptest.ResponseRecorder {
 		rr := httptest.NewRecorder()
+		serveTest(rr, httptest.NewRequest(method, path, nil))
+		return rr
+	}
 
-		handleSPA(rr, req)
+	for _, path := range []string{"/", "/dashboard", "/settings/data"} {
+		rr := get(http.MethodGet, path)
+		assert.Equal(t, http.StatusOK, rr.Code, path)
+		assert.Contains(t, rr.Body.String(), "workey", path)
+		assert.Equal(t, "no-cache", rr.Header().Get("Cache-Control"), path)
+	}
+	sw := get(http.MethodGet, "/sw.js")
+	assert.Equal(t, http.StatusOK, sw.Code)
+	assert.Equal(t, "no-cache", sw.Header().Get("Cache-Control"))
+	asset := get(http.MethodGet, "/assets/app.js")
+	assert.Equal(t, http.StatusOK, asset.Code)
+	assert.Contains(t, asset.Header().Get("Cache-Control"), "max-age=31536000")
 
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Contains(t, rr.Header().Get("Cache-Control"), "no-cache")
-	})
-
-	t.Run("sw.js 禁止缓存", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/sw.js", nil)
-		rr := httptest.NewRecorder()
-
-		handleSPA(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Contains(t, rr.Header().Get("Cache-Control"), "no-cache")
-	})
-
-	t.Run("静态资源长期缓存", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/assets/app.js", nil)
-		rr := httptest.NewRecorder()
-
-		handleSPA(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Contains(t, rr.Header().Get("Cache-Control"), "max-age=31536000")
-	})
-
-	t.Run("SPA 回退到 index.html", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/dashboard", nil)
-		rr := httptest.NewRecorder()
-
-		handleSPA(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Contains(t, rr.Header().Get("Cache-Control"), "no-cache")
-	})
+	// 未知 API 与不支持的方法返回 JSON 404，而不是 SPA 页面。
+	for _, req := range [][2]string{{http.MethodGet, "/api/not-a-workey-endpoint"}, {http.MethodGet, "/api/workey/nope"},
+		{http.MethodPost, "/api/workey/auth/me"}, {http.MethodPost, "/dashboard"}} {
+		rr := get(req[0], req[1])
+		assert.Equal(t, http.StatusNotFound, rr.Code, req)
+		assert.Contains(t, rr.Header().Get("Content-Type"), "application/json", req)
+	}
+	// PocketBase 系统路由不受影响。
+	assert.Equal(t, http.StatusOK, get(http.MethodGet, "/api/health").Code)
 }

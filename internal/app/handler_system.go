@@ -1,76 +1,54 @@
 package app
 
 import (
-	"database/sql"
 	"encoding/json"
-	"net/http"
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 // 系统信息和历史日期范围 handler
 
-func handleSystemVersion(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
+func handleSystemVersion(e *core.RequestEvent) error {
 	var v VersionResponse
-	data, err := os.ReadFile("version.json")
-	if err == nil {
+	if data, err := os.ReadFile("version.json"); err == nil {
 		if err := json.Unmarshal(data, &v); err == nil && v.Commit != "" {
-			jsonOK(w, v)
-			return
+			return e.JSON(200, v)
 		}
 	}
 
 	// 使用换行分隔各字段，避免 commit message 中的特殊字符导致 JSON 注入
-	cmd := exec.Command("git", "log", "-1", "--format=%h%n%cd%n%s", "--date=short")
-	out, err := cmd.Output()
+	out, err := exec.Command("git", "log", "-1", "--format=%h%n%cd%n%s", "--date=short").Output()
 	if err == nil {
 		parts := strings.SplitN(strings.TrimSpace(string(out)), "\n", 3)
 		if len(parts) == 3 {
-			jsonOK(w, VersionResponse{Commit: parts[0], Date: parts[1], Content: parts[2]})
-			return
+			return e.JSON(200, VersionResponse{Commit: parts[0], Date: parts[1], Content: parts[2]})
 		}
 	}
-
-	jsonOK(w, VersionResponse{Commit: "unknown", Date: "unknown", Content: "unknown"})
+	return e.JSON(200, VersionResponse{Commit: "unknown", Date: "unknown", Content: "unknown"})
 }
 
-func handleHistoryDateRange(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+func handleHistoryDateRange(e *core.RequestEvent) error {
+	var result struct {
+		Earliest *string `db:"earliest"`
+		Latest   *string `db:"latest"`
 	}
-
-	userID := getUserID(r)
-
-	var earliest, latest sql.NullString
-	err := db.QueryRow(`
-		SELECT MIN(d), MAX(d) FROM (
-			SELECT date AS d FROM attendance WHERE user_id = ?
+	// 跨 collection 聚合直接查询底层表；已完成待办按完成（最后更新）日期计入。
+	err := e.App.DB().NewQuery(`
+		SELECT MIN(d) AS earliest, MAX(d) AS latest FROM (
+			SELECT date AS d FROM attendance WHERE user = {:user}
 			UNION ALL
-			SELECT date AS d FROM work_logs WHERE user_id = ?
+			SELECT date AS d FROM work_logs WHERE user = {:user}
 			UNION ALL
-			SELECT date(updated_at) AS d FROM todos WHERE user_id = ? AND done = 1
+			SELECT date(updated) AS d FROM todos WHERE user = {:user} AND done = 1
 			UNION ALL
-			SELECT occurred_on AS d FROM ticket_issues WHERE user_id = ?
-		)
-	`, userID, userID, userID, userID).Scan(&earliest, &latest)
+			SELECT occurred_on AS d FROM ticket_issues WHERE user = {:user}
+		)`).Bind(dbx.Params{"user": e.Auth.Id}).One(&result)
 	if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
+		return e.InternalServerError("Internal error", err)
 	}
-
-	if !earliest.Valid {
-		jsonOK(w, VersionRangeResponse{})
-		return
-	}
-
-	e := earliest.String
-	l := latest.String
-	jsonOK(w, VersionRangeResponse{Earliest: &e, Latest: &l})
+	return e.JSON(200, VersionRangeResponse{Earliest: result.Earliest, Latest: result.Latest})
 }

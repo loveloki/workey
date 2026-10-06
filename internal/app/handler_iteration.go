@@ -1,11 +1,12 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 const maxIterationCount = 10000
@@ -17,24 +18,16 @@ type iterationConfig struct {
 	Overrides map[int64]IterationOverride
 }
 
-func handleIterations(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	response, err := iterationListForDate(getUserID(r), time.Now().Format(dateFormat))
+func handleIterations(e *core.RequestEvent) error {
+	response, err := iterationListForDate(e.App, e.Auth, time.Now().Format(dateFormat))
 	if err != nil {
-		jsonError(w, "Failed to calculate iterations", http.StatusInternalServerError)
-		return
+		return e.InternalServerError("Failed to calculate iterations", err)
 	}
-	jsonOK(w, response)
+	return e.JSON(200, response)
 }
 
-func loadIterationConfig(userID int64) (iterationConfig, error) {
-	values, err := loadSettings(userID)
-	if err != nil {
-		return iterationConfig{}, err
-	}
+func loadIterationConfig(app core.App, account *core.Record) (iterationConfig, error) {
+	values := loadSettings(account)
 	startDate, err := time.Parse(dateFormat, values["iteration_start_date"])
 	if err != nil {
 		startDate, _ = time.Parse(dateFormat, "2019-09-02")
@@ -44,40 +37,26 @@ func loadIterationConfig(userID int64) (iterationConfig, error) {
 		workdays = 10
 	}
 
-	calendar := map[string]bool{}
-	rows, err := db.Query("SELECT date, is_workday FROM holiday_calendar_days WHERE user_id = ?", userID)
+	params := dbx.Params{"user": account.Id}
+	days, err := findUserRecords(app, holidayCollection, "", "", params)
 	if err != nil {
 		return iterationConfig{}, err
 	}
-	for rows.Next() {
-		var date string
-		var isWorkday int
-		if err := rows.Scan(&date, &isWorkday); err != nil {
-			rows.Close()
-			return iterationConfig{}, err
-		}
-		calendar[date] = isWorkday != 0
-	}
-	if err := rows.Close(); err != nil {
-		return iterationConfig{}, err
+	calendar := make(map[string]bool, len(days))
+	for _, day := range days {
+		calendar[day.GetString("date")] = day.GetBool("is_workday")
 	}
 
-	overrides := map[int64]IterationOverride{}
-	rows, err = db.Query(`SELECT id, user_id, iteration_number, start_date, end_date, created_at, updated_at
-		FROM iteration_overrides WHERE user_id = ? ORDER BY iteration_number`, userID)
+	records, err := findUserRecords(app, iterationOverrideCollection, "", "iteration_number", params)
 	if err != nil {
 		return iterationConfig{}, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var override IterationOverride
-		if err := rows.Scan(&override.ID, &override.UserID, &override.IterationNumber, &override.StartDate,
-			&override.EndDate, &override.CreatedAt, &override.UpdatedAt); err != nil {
-			return iterationConfig{}, err
-		}
+	overrides := make(map[int64]IterationOverride, len(records))
+	for _, record := range records {
+		override := iterationOverrideFromRecord(record)
 		overrides[override.IterationNumber] = override
 	}
-	return iterationConfig{StartDate: startDate, Workdays: workdays, Calendar: calendar, Overrides: overrides}, rows.Err()
+	return iterationConfig{StartDate: startDate, Workdays: workdays, Calendar: calendar, Overrides: overrides}, nil
 }
 
 func isIterationWorkday(date time.Time, calendar map[string]bool) bool {
@@ -154,8 +133,8 @@ func buildIterationRange(number int64, cursor time.Time, config iterationConfig)
 	}, end.AddDate(0, 0, 1), nil
 }
 
-func iterationListForDate(userID int64, target string) (IterationListResponse, error) {
-	config, err := loadIterationConfig(userID)
+func iterationListForDate(app core.App, account *core.Record, target string) (IterationListResponse, error) {
+	config, err := loadIterationConfig(app, account)
 	if err != nil {
 		return IterationListResponse{}, err
 	}
@@ -198,130 +177,75 @@ func iterationListForDate(userID int64, target string) (IterationListResponse, e
 	return IterationListResponse{}, fmt.Errorf("iteration count exceeds limit")
 }
 
-func iterationRangeForDate(userID int64, target string) (int64, string, string, error) {
-	response, err := iterationListForDate(userID, target)
-	if err != nil {
-		return 0, "", "", err
-	}
-	for _, item := range response.Iterations {
-		if item.IterationNumber == response.CurrentIteration {
-			return item.IterationNumber, item.StartDate, item.EndDate, nil
-		}
-	}
-	return 0, "", "", fmt.Errorf("current iteration not found")
-}
-
 // 迭代周期覆盖 handler
 
-func handleIterationOverrides(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		handleGetIterationOverrides(w, r)
-	case "POST":
-		handleCreateIterationOverride(w, r)
-	case "DELETE":
-		handleDeleteIterationOverride(w, r)
-	default:
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-func handleGetIterationOverrides(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-	rows, err := db.Query(
-		"SELECT id, user_id, iteration_number, start_date, end_date, created_at, updated_at FROM iteration_overrides WHERE user_id = ? ORDER BY iteration_number",
-		userID,
-	)
+func handleGetIterationOverrides(e *core.RequestEvent) error {
+	records, err := findUserRecords(e.App, iterationOverrideCollection, "", "iteration_number", dbx.Params{"user": e.Auth.Id})
 	if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
+		return e.InternalServerError("Internal error", err)
 	}
-	defer rows.Close()
-
-	overrides := []IterationOverride{}
-	for rows.Next() {
-		var override IterationOverride
-		if err := rows.Scan(&override.ID, &override.UserID, &override.IterationNumber, &override.StartDate,
-			&override.EndDate, &override.CreatedAt, &override.UpdatedAt); err != nil {
-			jsonError(w, "Internal error", http.StatusInternalServerError)
-			return
-		}
-		overrides = append(overrides, override)
-	}
-	jsonOK(w, IterationOverrideListResponse{Overrides: overrides})
+	return e.JSON(200, IterationOverrideListResponse{Overrides: mapRecords(records, iterationOverrideFromRecord)})
 }
 
-func handleCreateIterationOverride(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
+func findIterationOverride(app core.App, userID string, number int64) (*core.Record, error) {
+	return app.FindFirstRecordByFilter(iterationOverrideCollection, "user = {:user} && iteration_number = {:number}",
+		dbx.Params{"user": userID, "number": number})
+}
+
+// handleSaveIterationOverride 按迭代序号新增或覆盖调整后的起止日期。
+func handleSaveIterationOverride(e *core.RequestEvent) error {
 	var req struct {
 		IterationNumber int64  `json:"iteration_number"`
 		StartDate       string `json:"start_date"`
 		EndDate         string `json:"end_date"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, "Invalid request body", http.StatusBadRequest)
-		return
+	if err := e.BindBody(&req); err != nil {
+		return e.BadRequestError("Invalid request body", err)
 	}
 	if req.IterationNumber < 1 {
-		jsonError(w, "iteration_number must be >= 1", http.StatusBadRequest)
-		return
+		return e.BadRequestError("iteration_number must be >= 1", nil)
 	}
-	startDate, err := time.Parse(dateFormat, req.StartDate)
-	if err != nil {
-		jsonError(w, "start_date must be in YYYY-MM-DD format", http.StatusBadRequest)
-		return
+	if !validDate(req.StartDate) {
+		return e.BadRequestError("start_date must be in YYYY-MM-DD format", nil)
 	}
-	endDate, err := time.Parse(dateFormat, req.EndDate)
-	if err != nil {
-		jsonError(w, "end_date must be in YYYY-MM-DD format", http.StatusBadRequest)
-		return
+	if !validDate(req.EndDate) {
+		return e.BadRequestError("end_date must be in YYYY-MM-DD format", nil)
 	}
-	if startDate.After(endDate) {
-		jsonError(w, "start_date must be <= end_date", http.StatusBadRequest)
-		return
+	if req.StartDate > req.EndDate {
+		return e.BadRequestError("start_date must be <= end_date", nil)
 	}
 
-	now := nowDatetime()
-	_, err = db.Exec(`INSERT INTO iteration_overrides
-		(user_id, iteration_number, start_date, end_date, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT(user_id, iteration_number) DO UPDATE SET
-			start_date = excluded.start_date, end_date = excluded.end_date, updated_at = excluded.updated_at`,
-		userID, req.IterationNumber, req.StartDate, req.EndDate, now, now)
-	if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
+	record, err := findIterationOverride(e.App, e.Auth.Id, req.IterationNumber)
+	if isNotFound(err) {
+		record, err = newUserRecord(e.App, iterationOverrideCollection, e.Auth.Id)
+		if err == nil {
+			record.Set("iteration_number", req.IterationNumber)
+		}
 	}
-
-	var override IterationOverride
-	err = db.QueryRow(
-		"SELECT id, user_id, iteration_number, start_date, end_date, created_at, updated_at FROM iteration_overrides WHERE user_id = ? AND iteration_number = ?",
-		userID, req.IterationNumber,
-	).Scan(&override.ID, &override.UserID, &override.IterationNumber, &override.StartDate,
-		&override.EndDate, &override.CreatedAt, &override.UpdatedAt)
 	if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
+		return e.InternalServerError("Internal error", err)
 	}
-	jsonOK(w, IterationOverrideResponse{Override: override})
+	record.Set("start_date", req.StartDate)
+	record.Set("end_date", req.EndDate)
+	if err := e.App.Save(record); err != nil {
+		return e.InternalServerError("Internal error", err)
+	}
+	return e.JSON(200, IterationOverrideResponse{Override: iterationOverrideFromRecord(record)})
 }
 
-func handleDeleteIterationOverride(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-	iterationNumber := r.URL.Query().Get("iteration_number")
-	if iterationNumber == "" {
-		jsonError(w, "iteration_number query parameter is required", http.StatusBadRequest)
-		return
-	}
-	result, err := db.Exec("DELETE FROM iteration_overrides WHERE user_id = ? AND iteration_number = ?", userID, iterationNumber)
+func handleDeleteIterationOverride(e *core.RequestEvent) error {
+	number, err := strconv.ParseInt(e.Request.URL.Query().Get("iteration_number"), 10, 64)
 	if err != nil {
-		jsonError(w, "Failed to delete override", http.StatusInternalServerError)
-		return
+		return e.BadRequestError("iteration_number query parameter is required", nil)
 	}
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		jsonError(w, "Override not found", http.StatusNotFound)
-		return
+	record, err := findIterationOverride(e.App, e.Auth.Id, number)
+	if isNotFound(err) {
+		return e.NotFoundError("Override not found", nil)
+	} else if err != nil {
+		return e.InternalServerError("Failed to delete override", err)
 	}
-	jsonOK(w, MessageResponse{Message: "Override deleted"})
+	if err := e.App.Delete(record); err != nil {
+		return e.InternalServerError("Failed to delete override", err)
+	}
+	return e.JSON(200, MessageResponse{Message: "Override deleted"})
 }

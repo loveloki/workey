@@ -1,119 +1,71 @@
 package app
 
 import (
-	"encoding/json"
-	"net/http"
+	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 // 工作日志 handler
 
-func handleWorkLogs(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		handleWorkLogCreate(w, r)
-		return
-	}
-	jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+func findWorkLog(app core.App, userID, date string) (*core.Record, error) {
+	return app.FindFirstRecordByFilter(workLogCollection, "user = {:user} && date = {:date}",
+		dbx.Params{"user": userID, "date": date})
 }
 
-func handleWorkLogCreate(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-
+func handleWorkLogSave(e *core.RequestEvent) error {
 	var req struct {
 		Date    string `json:"date"`
 		Content string `json:"content"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, "Invalid request body", http.StatusBadRequest)
-		return
+	if err := e.BindBody(&req); err != nil {
+		return e.BadRequestError("Invalid request body", err)
 	}
-
 	if req.Date == "" {
 		req.Date = today()
 	}
-
-	now := nowDatetime()
-
-	result, err := db.Exec(
-		"UPDATE work_logs SET content = ?, updated_at = ? WHERE user_id = ? AND date = ?",
-		req.Content, now, userID, req.Date,
-	)
-	if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
+	if !validDate(req.Date) {
+		return e.BadRequestError("date must be in YYYY-MM-DD format", nil)
 	}
 
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		_, err = db.Exec(
-			"INSERT INTO work_logs (user_id, date, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-			userID, req.Date, req.Content, now, now,
-		)
-		if err != nil {
-			jsonError(w, "Internal error", http.StatusInternalServerError)
-			return
+	record, err := findWorkLog(e.App, e.Auth.Id, req.Date)
+	if isNotFound(err) {
+		record, err = newUserRecord(e.App, workLogCollection, e.Auth.Id)
+		if err == nil {
+			record.Set("date", req.Date)
 		}
 	}
-
-	workLog := getWorkLog(userID, req.Date)
-	jsonOK(w, WorkLogResponse{WorkLog: workLog})
+	if err != nil {
+		return e.InternalServerError("Internal error", err)
+	}
+	record.Set("content", req.Content)
+	if err := e.App.Save(record); err != nil {
+		return e.InternalServerError("Internal error", err)
+	}
+	workLog := workLogFromRecord(record)
+	return e.JSON(200, WorkLogResponse{WorkLog: &workLog})
 }
 
-func handleWorkLogToday(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+func handleWorkLogToday(e *core.RequestEvent) error {
+	record, err := findWorkLog(e.App, e.Auth.Id, today())
+	if isNotFound(err) {
+		return e.JSON(200, WorkLogResponse{})
+	} else if err != nil {
+		return e.InternalServerError("Internal error", err)
 	}
-
-	userID := getUserID(r)
-	workLog := getWorkLog(userID, today())
-	if workLog == nil {
-		jsonOK(w, WorkLogResponse{})
-		return
-	}
-	jsonOK(w, WorkLogResponse{WorkLog: workLog})
+	workLog := workLogFromRecord(record)
+	return e.JSON(200, WorkLogResponse{WorkLog: &workLog})
 }
 
-func handleWorkLogRange(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	userID := getUserID(r)
-	start := r.URL.Query().Get("start")
-	end := r.URL.Query().Get("end")
+func handleWorkLogRange(e *core.RequestEvent) error {
+	start := e.Request.URL.Query().Get("start")
+	end := e.Request.URL.Query().Get("end")
 	if start == "" || end == "" {
-		jsonError(w, "start and end query parameters are required", http.StatusBadRequest)
-		return
+		return e.BadRequestError("start and end query parameters are required", nil)
 	}
-
-	rows, err := db.Query(
-		"SELECT id, user_id, date, content, created_at, updated_at FROM work_logs WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date",
-		userID, start, end,
-	)
+	records, err := findUserRecords(e.App, workLogCollection, "date >= {:start} && date <= {:end}", "date",
+		dbx.Params{"user": e.Auth.Id, "start": start, "end": end})
 	if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
+		return e.InternalServerError("Internal error", err)
 	}
-	defer rows.Close()
-
-	logs := []WorkLog{}
-	for rows.Next() {
-		var wl WorkLog
-		rows.Scan(&wl.ID, &wl.UserID, &wl.Date, &wl.Content, &wl.CreatedAt, &wl.UpdatedAt)
-		logs = append(logs, wl)
-	}
-	jsonOK(w, WorkLogListResponse{WorkLogs: logs})
-}
-
-func getWorkLog(userID int64, date string) *WorkLog {
-	var wl WorkLog
-	err := db.QueryRow(
-		"SELECT id, user_id, date, content, created_at, updated_at FROM work_logs WHERE user_id = ? AND date = ?",
-		userID, date,
-	).Scan(&wl.ID, &wl.UserID, &wl.Date, &wl.Content, &wl.CreatedAt, &wl.UpdatedAt)
-	if err != nil {
-		return nil
-	}
-	return &wl
+	return e.JSON(200, WorkLogListResponse{WorkLogs: mapRecords(records, workLogFromRecord)})
 }

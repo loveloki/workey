@@ -2,7 +2,9 @@ package main
 
 import (
 	"log"
+
 	"workey/internal/app"
+	_ "workey/migrations"
 )
 
 func main() {

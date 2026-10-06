@@ -1,13 +1,10 @@
 package app
 
 import (
-	"database/sql"
-	"encoding/json"
-	"errors"
-	"net/http"
-	"strconv"
 	"strings"
-	"time"
+
+	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 const (
@@ -26,174 +23,91 @@ type ticketIssueRequest struct {
 	Resolution         string `json:"resolution"`
 }
 
-func handleTicketIssues(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		handleTicketIssueList(w, r)
-	case http.MethodPost:
-		handleTicketIssueCreate(w, r)
-	case http.MethodPut:
-		handleTicketIssueUpdate(w, r)
-	case http.MethodDelete:
-		handleTicketIssueDelete(w, r)
-	default:
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-func handleTicketIssueCreate(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
+func readTicketIssueRequest(e *core.RequestEvent) (ticketIssueRequest, error) {
 	var req ticketIssueRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, "Invalid request body", http.StatusBadRequest)
-		return
+	if err := e.BindBody(&req); err != nil {
+		return req, e.BadRequestError("Invalid request body", err)
 	}
 	if message := validateTicketIssueRequest(&req); message != "" {
-		jsonError(w, message, http.StatusBadRequest)
-		return
+		return req, e.BadRequestError(message, nil)
 	}
-
-	now := nowDatetime()
-	result, err := db.Exec(`
-		INSERT INTO ticket_issues (
-			user_id, ticket_no, ticket_title, ticket_url, occurred_on, cause_type,
-			problem_description, cause_detail, resolution, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		userID, req.TicketNo, req.TicketTitle, req.TicketURL, req.OccurredOn,
-		req.CauseType, req.ProblemDescription, req.CauseDetail, req.Resolution, now, now,
-	)
-	if err != nil {
-		jsonError(w, "Failed to create ticket issue", http.StatusInternalServerError)
-		return
-	}
-	id, _ := result.LastInsertId()
-	issue, err := getTicketIssue(userID, id)
-	if err != nil {
-		jsonError(w, "Failed to load ticket issue", http.StatusInternalServerError)
-		return
-	}
-	jsonOK(w, TicketIssueResponse{TicketIssue: issue})
+	return req, nil
 }
 
-func handleTicketIssueUpdate(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-	id, ok := ticketIssueID(w, r)
-	if !ok {
-		return
-	}
-
-	var req ticketIssueRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-	if message := validateTicketIssueRequest(&req); message != "" {
-		jsonError(w, message, http.StatusBadRequest)
-		return
-	}
-
-	result, err := db.Exec(`
-		UPDATE ticket_issues SET
-			ticket_no = ?, ticket_title = ?, ticket_url = ?, occurred_on = ?, cause_type = ?,
-			problem_description = ?, cause_detail = ?, resolution = ?, updated_at = ?
-		WHERE id = ? AND user_id = ?`,
-		req.TicketNo, req.TicketTitle, req.TicketURL, req.OccurredOn, req.CauseType,
-		req.ProblemDescription, req.CauseDetail, req.Resolution, nowDatetime(), id, userID,
-	)
-	if err != nil {
-		jsonError(w, "Failed to update ticket issue", http.StatusInternalServerError)
-		return
-	}
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		jsonError(w, "Ticket issue not found", http.StatusNotFound)
-		return
-	}
-	issue, err := getTicketIssue(userID, id)
-	if err != nil {
-		jsonError(w, "Failed to load ticket issue", http.StatusInternalServerError)
-		return
-	}
-	jsonOK(w, TicketIssueResponse{TicketIssue: issue})
+func setTicketIssueFields(record *core.Record, req ticketIssueRequest) {
+	record.Set("ticket_no", req.TicketNo)
+	record.Set("ticket_title", req.TicketTitle)
+	record.Set("ticket_url", req.TicketURL)
+	record.Set("occurred_on", req.OccurredOn)
+	record.Set("cause_type", req.CauseType)
+	record.Set("problem_description", req.ProblemDescription)
+	record.Set("cause_detail", req.CauseDetail)
+	record.Set("resolution", req.Resolution)
 }
 
-func handleTicketIssueDelete(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-	id, ok := ticketIssueID(w, r)
-	if !ok {
-		return
-	}
-	result, err := db.Exec("DELETE FROM ticket_issues WHERE id = ? AND user_id = ?", id, userID)
+func handleTicketIssueCreate(e *core.RequestEvent) error {
+	req, err := readTicketIssueRequest(e)
 	if err != nil {
-		jsonError(w, "Failed to delete ticket issue", http.StatusInternalServerError)
-		return
+		return err
 	}
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		jsonError(w, "Ticket issue not found", http.StatusNotFound)
-		return
+	record, err := newUserRecord(e.App, ticketIssueCollection, e.Auth.Id)
+	if err != nil {
+		return e.InternalServerError("Failed to create ticket issue", err)
 	}
-	jsonOK(w, MessageResponse{Message: "Ticket issue deleted"})
+	setTicketIssueFields(record, req)
+	if err := e.App.Save(record); err != nil {
+		return e.InternalServerError("Failed to create ticket issue", err)
+	}
+	return e.JSON(200, TicketIssueResponse{TicketIssue: ticketIssueFromRecord(record)})
 }
 
-func handleTicketIssueList(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-	where, args, ok := ticketIssueFilters(w, r, userID, true)
-	if !ok {
-		return
+func handleTicketIssueUpdate(e *core.RequestEvent) error {
+	id := e.Request.URL.Query().Get("id")
+	if id == "" {
+		return e.BadRequestError("valid id query parameter is required", nil)
 	}
-
-	rows, err := db.Query(`
-		SELECT id, user_id, ticket_no, ticket_title, ticket_url, occurred_on, cause_type,
-			problem_description, cause_detail, resolution, created_at, updated_at
-		FROM ticket_issues WHERE `+where+`
-		ORDER BY occurred_on DESC, updated_at DESC, id DESC`, args...)
+	req, err := readTicketIssueRequest(e)
 	if err != nil {
-		jsonError(w, "Failed to list ticket issues", http.StatusInternalServerError)
-		return
+		return err
 	}
-	defer rows.Close()
+	record, err := requireOwnedRecord(e, ticketIssueCollection, id, "Ticket issue")
+	if err != nil {
+		return err
+	}
+	setTicketIssueFields(record, req)
+	if err := e.App.Save(record); err != nil {
+		return e.InternalServerError("Failed to update ticket issue", err)
+	}
+	return e.JSON(200, TicketIssueResponse{TicketIssue: ticketIssueFromRecord(record)})
+}
 
-	issues := []TicketIssue{}
-	for rows.Next() {
-		issue, err := scanTicketIssue(rows)
-		if err != nil {
-			jsonError(w, "Failed to read ticket issues", http.StatusInternalServerError)
-			return
+func handleTicketIssueDelete(e *core.RequestEvent) error {
+	return deleteOwnedRecord(e, ticketIssueCollection, "Ticket issue")
+}
+
+func handleTicketIssueList(e *core.RequestEvent) error {
+	records, err := findTicketIssues(e, true)
+	if err != nil {
+		return err
+	}
+	return e.JSON(200, TicketIssueListResponse{TicketIssues: mapRecords(records, ticketIssueFromRecord)})
+}
+
+func handleTicketIssueStats(e *core.RequestEvent) error {
+	records, err := findTicketIssues(e, false)
+	if err != nil {
+		return err
+	}
+	stats := TicketIssueStatsResponse{TotalCount: int64(len(records))}
+	for _, record := range records {
+		switch record.GetString("cause_type") {
+		case ticketCauseCode:
+			stats.CodeCount++
+		case ticketCauseOperation:
+			stats.OperationCount++
 		}
-		issues = append(issues, issue)
 	}
-	if err := rows.Err(); err != nil {
-		jsonError(w, "Failed to read ticket issues", http.StatusInternalServerError)
-		return
-	}
-	jsonOK(w, TicketIssueListResponse{TicketIssues: issues})
-}
-
-func handleTicketIssueStats(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	userID := getUserID(r)
-	where, args, ok := ticketIssueFilters(w, r, userID, false)
-	if !ok {
-		return
-	}
-
-	var stats TicketIssueStatsResponse
-	err := db.QueryRow(`
-		SELECT COUNT(*),
-			COALESCE(SUM(CASE WHEN cause_type = 'code' THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN cause_type = 'operation' THEN 1 ELSE 0 END), 0)
-		FROM ticket_issues WHERE `+where, args...).Scan(
-		&stats.TotalCount, &stats.CodeCount, &stats.OperationCount,
-	)
-	if err != nil {
-		jsonError(w, "Failed to calculate ticket issue stats", http.StatusInternalServerError)
-		return
-	}
-	jsonOK(w, stats)
+	return e.JSON(200, stats)
 }
 
 func validateTicketIssueRequest(req *ticketIssueRequest) string {
@@ -224,91 +138,49 @@ func validateTicketIssueRequest(req *ticketIssueRequest) string {
 	return ""
 }
 
-func ticketIssueFilters(w http.ResponseWriter, r *http.Request, userID int64, includeCause bool) (string, []any, bool) {
-	start := strings.TrimSpace(r.URL.Query().Get("start"))
-	end := strings.TrimSpace(r.URL.Query().Get("end"))
-	causeType := strings.TrimSpace(r.URL.Query().Get("cause_type"))
-	keyword := strings.TrimSpace(r.URL.Query().Get("q"))
+// findTicketIssues 按查询参数过滤当前用户的工单问题，关键字使用 PocketBase 的 ~（LIKE）运算符。
+func findTicketIssues(e *core.RequestEvent, includeCause bool) ([]*core.Record, error) {
+	query := e.Request.URL.Query()
+	start := strings.TrimSpace(query.Get("start"))
+	end := strings.TrimSpace(query.Get("end"))
+	causeType := strings.TrimSpace(query.Get("cause_type"))
+	keyword := strings.TrimSpace(query.Get("q"))
 
 	if start != "" && !validDate(start) {
-		jsonError(w, "start must use YYYY-MM-DD format", http.StatusBadRequest)
-		return "", nil, false
+		return nil, e.BadRequestError("start must use YYYY-MM-DD format", nil)
 	}
 	if end != "" && !validDate(end) {
-		jsonError(w, "end must use YYYY-MM-DD format", http.StatusBadRequest)
-		return "", nil, false
+		return nil, e.BadRequestError("end must use YYYY-MM-DD format", nil)
 	}
 	if start != "" && end != "" && start > end {
-		jsonError(w, "start must not be after end", http.StatusBadRequest)
-		return "", nil, false
+		return nil, e.BadRequestError("start must not be after end", nil)
 	}
 	if includeCause && causeType != "" && causeType != ticketCauseCode && causeType != ticketCauseOperation {
-		jsonError(w, "cause_type must be code or operation", http.StatusBadRequest)
-		return "", nil, false
+		return nil, e.BadRequestError("cause_type must be code or operation", nil)
 	}
 
-	parts := []string{"user_id = ?"}
-	args := []any{userID}
+	parts := []string{}
+	params := dbx.Params{"user": e.Auth.Id}
 	if start != "" {
-		parts = append(parts, "occurred_on >= ?")
-		args = append(args, start)
+		parts = append(parts, "occurred_on >= {:start}")
+		params["start"] = start
 	}
 	if end != "" {
-		parts = append(parts, "occurred_on <= ?")
-		args = append(args, end)
+		parts = append(parts, "occurred_on <= {:end}")
+		params["end"] = end
 	}
 	if includeCause && causeType != "" {
-		parts = append(parts, "cause_type = ?")
-		args = append(args, causeType)
+		parts = append(parts, "cause_type = {:cause}")
+		params["cause"] = causeType
 	}
 	if keyword != "" {
-		parts = append(parts, `(ticket_no LIKE ? OR ticket_title LIKE ? OR problem_description LIKE ? OR cause_detail LIKE ? OR resolution LIKE ?)`)
-		pattern := "%" + keyword + "%"
-		args = append(args, pattern, pattern, pattern, pattern, pattern)
+		parts = append(parts, "(ticket_no ~ {:q} || ticket_title ~ {:q} || problem_description ~ {:q} || cause_detail ~ {:q} || resolution ~ {:q})")
+		// 转义 %，让 PocketBase 按普通文本做包含匹配而不是当作通配模式。
+		params["q"] = strings.ReplaceAll(keyword, "%", `\%`)
 	}
-	return strings.Join(parts, " AND "), args, true
-}
-
-func ticketIssueID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	idText := r.URL.Query().Get("id")
-	id, err := strconv.ParseInt(idText, 10, 64)
-	if err != nil || id <= 0 {
-		jsonError(w, "valid id query parameter is required", http.StatusBadRequest)
-		return 0, false
+	records, err := findUserRecords(e.App, ticketIssueCollection, strings.Join(parts, " && "), "-occurred_on,-updated", params)
+	if err != nil {
+		return nil, e.InternalServerError("Failed to list ticket issues", err)
 	}
-	return id, true
-}
-
-func validDate(value string) bool {
-	if len(value) != len("2006-01-02") {
-		return false
-	}
-	parsed, err := time.Parse("2006-01-02", value)
-	return err == nil && parsed.Format("2006-01-02") == value
-}
-
-func getTicketIssue(userID, id int64) (TicketIssue, error) {
-	row := db.QueryRow(`
-		SELECT id, user_id, ticket_no, ticket_title, ticket_url, occurred_on, cause_type,
-			problem_description, cause_detail, resolution, created_at, updated_at
-		FROM ticket_issues WHERE id = ? AND user_id = ?`, id, userID)
-	issue, err := scanTicketIssue(row)
-	if errors.Is(err, sql.ErrNoRows) {
-		return TicketIssue{}, sql.ErrNoRows
-	}
-	return issue, err
-}
-
-type ticketIssueScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanTicketIssue(scanner ticketIssueScanner) (TicketIssue, error) {
-	var issue TicketIssue
-	err := scanner.Scan(
-		&issue.ID, &issue.UserID, &issue.TicketNo, &issue.TicketTitle, &issue.TicketURL,
-		&issue.OccurredOn, &issue.CauseType, &issue.ProblemDescription, &issue.CauseDetail,
-		&issue.Resolution, &issue.CreatedAt, &issue.UpdatedAt,
-	)
-	return issue, err
+	return records, nil
 }

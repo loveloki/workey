@@ -3,58 +3,80 @@ package app
 import (
 	"archive/zip"
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/types"
 )
 
-// 数据导出/导入/删除 handler
+// 数据导出/导入/删除 handler。ZIP 备份（data.json）是旧版数据迁入的唯一通道，
+// 导入兼容旧版数字 ID，并保留原始 created_at/updated_at。
 
-func handleDataExport(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	tx, err := db.Begin()
+const maxDataArchiveBytes int64 = 50 << 20
+const archivedChecklistTitlePrefix = "已删除的检查清单 #"
+
+// 导出/删除覆盖的业务 collection（用户设置保存在账号记录上，单独处理）。
+var userDataCollections = []string{
+	attendanceCollection, workLogCollection, todoCollection, ticketIssueCollection,
+	snapshotCollection, checklistCollection, iterationOverrideCollection, holidayCollection,
+}
+
+func handleDataExport(e *core.RequestEvent) error {
+	var data *ExportData
+	// 在同一事务中读取，保证各 collection 数据一致。
+	err := e.App.RunInTransaction(func(txApp core.App) error {
+		var err error
+		data, err = buildExportData(txApp, e.Auth.Id)
+		return err
+	})
 	if err != nil {
-		jsonError(w, "Failed to start data export", http.StatusInternalServerError)
-		return
-	}
-	defer tx.Rollback()
-	data, err := buildExportData(r.Context(), tx, getUserID(r))
-	if err != nil {
-		jsonError(w, "Failed to export data", http.StatusInternalServerError)
-		return
-	}
-	// 凭据、同步配置等不属于业务备份，绝不通过 user_settings 透传。
-	for key := range data.UserSettings {
-		if !isDataBusinessSetting(key) {
-			delete(data.UserSettings, key)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		jsonError(w, "Failed to finish data export", http.StatusInternalServerError)
-		return
+		return e.InternalServerError("Failed to export data", err)
 	}
 	var buf bytes.Buffer
 	if err := writeDataZip(&buf, data); err != nil || int64(buf.Len()) > maxDataArchiveBytes {
-		jsonError(w, "Failed to create export ZIP", http.StatusInternalServerError)
-		return
+		return e.InternalServerError("Failed to create export ZIP", err)
 	}
-	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition",
-		fmt.Sprintf(`attachment; filename="workey-export-%s.zip"`, time.Now().Format("2006-01-02")))
-	if _, err := w.Write(buf.Bytes()); err != nil {
-		// 响应可能已部分发送，此时不能再追加 JSON 错误破坏 ZIP。
-		log.Printf("Failed to send data export: %v", err)
+	e.Response.Header().Set("Content-Disposition",
+		fmt.Sprintf(`attachment; filename="workey-export-%s.zip"`, time.Now().Format(dateFormat)))
+	return e.Blob(200, "application/zip", buf.Bytes())
+}
+
+func buildExportData(app core.App, userID string) (*ExportData, error) {
+	account, err := app.FindRecordById(accountCollection, userID)
+	if err != nil {
+		return nil, err
 	}
+	params := dbx.Params{"user": userID}
+	records := map[string][]*core.Record{}
+	sorts := map[string]string{
+		attendanceCollection: "date", workLogCollection: "date", todoCollection: "@rowid",
+		ticketIssueCollection: "occurred_on,@rowid", checklistCollection: "@rowid", snapshotCollection: "@rowid",
+		iterationOverrideCollection: "iteration_number", holidayCollection: "date",
+	}
+	for _, collection := range userDataCollections {
+		if records[collection], err = findUserRecords(app, collection, "", sorts[collection], params); err != nil {
+			return nil, fmt.Errorf("query %s: %w", collection, err)
+		}
+	}
+	return &ExportData{
+		Attendance:         mapRecords(records[attendanceCollection], attendanceFromRecord),
+		WorkLogs:           mapRecords(records[workLogCollection], workLogFromRecord),
+		Todos:              mapRecords(records[todoCollection], todoFromRecord),
+		TicketIssues:       mapRecords(records[ticketIssueCollection], ticketIssueFromRecord),
+		Checklists:         mapRecords(records[checklistCollection], checklistFromRecord),
+		ChecklistSnapshots: mapRecords(records[snapshotCollection], snapshotFromRecord),
+		UserSettings:       storedSettings(account),
+		IterationOverrides: mapRecords(records[iterationOverrideCollection], iterationOverrideFromRecord),
+		HolidayCalendar:    mapRecords(records[holidayCollection], holidayFromRecord),
+		ExportedAt:         time.Now().UTC().Format(time.RFC3339),
+	}, nil
 }
 
 func writeDataZip(writer io.Writer, data *ExportData) error {
@@ -78,21 +100,11 @@ func writeDataZip(writer io.Writer, data *ExportData) error {
 	return zw.Close()
 }
 
-const maxDataArchiveBytes int64 = 50 << 20
-const archivedChecklistTitlePrefix = "已删除的检查清单 #"
-
-func handleDataImport(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// multipart 的内存阈值不是上传限额；同时限制整个请求和实际 ZIP 文件大小。
-	r.Body = http.MaxBytesReader(w, r.Body, maxDataArchiveBytes+(1<<20))
-	reader, err := r.MultipartReader()
+func handleDataImport(e *core.RequestEvent) error {
+	// 路由已通过 apis.BodyLimit 限制请求体；这里再限制实际 ZIP 文件大小。
+	reader, err := e.Request.MultipartReader()
 	if err != nil {
-		jsonError(w, "Invalid multipart upload", http.StatusBadRequest)
-		return
+		return e.BadRequestError("Invalid multipart upload", err)
 	}
 	var archive []byte
 	for {
@@ -101,53 +113,41 @@ func handleDataImport(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if err != nil {
-			jsonError(w, "Invalid or oversized upload (max 50MB)", http.StatusBadRequest)
-			return
+			return e.BadRequestError("Invalid or oversized upload (max 50MB)", err)
 		}
 		if part.FormName() != "file" || part.FileName() == "" || archive != nil {
 			part.Close()
-			jsonError(w, "Exactly one file is required", http.StatusBadRequest)
-			return
+			return e.BadRequestError("Exactly one file is required", nil)
 		}
 		archive, err = io.ReadAll(io.LimitReader(part, maxDataArchiveBytes+1))
 		part.Close()
 		if err != nil || int64(len(archive)) > maxDataArchiveBytes {
-			jsonError(w, "File too large or unreadable (max 50MB)", http.StatusBadRequest)
-			return
+			return e.BadRequestError("File too large or unreadable (max 50MB)", err)
 		}
 	}
 	if archive == nil {
-		jsonError(w, "No file provided", http.StatusBadRequest)
-		return
+		return e.BadRequestError("No file provided", nil)
 	}
 	data, err := decodeDataArchive(archive)
 	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
+		return e.BadRequestError(err.Error(), nil)
 	}
-	userID := getUserID(r)
-	if err := prepareDataImport(&data, userID, nowDatetime()); err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
+	userID := e.Auth.Id
+	if err := prepareDataImport(&data, RecordID(userID), nowDatetime()); err != nil {
+		return e.BadRequestError(err.Error(), nil)
 	}
 
-	tx, err := db.Begin()
+	var response DataImportResponse
+	err = e.App.RunInTransaction(func(txApp core.App) error {
+		var err error
+		response, err = importData(txApp, userID, data)
+		return err
+	})
 	if err != nil {
-		jsonError(w, "Failed to start data import", http.StatusInternalServerError)
-		return
-	}
-	defer tx.Rollback()
-	response, err := importDataTransaction(tx, userID, data)
-	if err != nil {
-		jsonError(w, "Failed to import data; no changes saved", http.StatusInternalServerError)
-		return
-	}
-	if err := tx.Commit(); err != nil {
-		jsonError(w, "Failed to commit data import", http.StatusInternalServerError)
-		return
+		return e.InternalServerError("Failed to import data; no changes saved", err)
 	}
 	response.Message = "Data imported successfully"
-	jsonOK(w, response)
+	return e.JSON(200, response)
 }
 
 // decodeDataArchive 不访问数据库，先校验所有文件的路径、大小和 CRC，再解码唯一的 data.json。
@@ -209,12 +209,17 @@ func decodeDataArchive(archive []byte) (ExportData, error) {
 	if err := validateDataJSON(jsonBytes); err != nil {
 		return data, fmt.Errorf("Invalid data.json: %w", err)
 	}
+	var decoded struct {
+		ExportData
+		// 旧版生产实例仍导出已移除的周期清单进度（checklist_runs），该功能已下线，导入时忽略。
+		ChecklistRuns json.RawMessage `json:"checklist_runs"`
+	}
 	decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&data); err != nil {
+	if err := decoder.Decode(&decoded); err != nil {
 		return data, fmt.Errorf("Invalid data.json format: %w", err)
 	}
-	return data, nil
+	return decoded.ExportData, nil
 }
 
 // encoding/json 默认接受重复键和多个 JSON 值；备份导入必须拒绝这些有歧义的数据。
@@ -335,15 +340,6 @@ func validateDataJSONContainer(decoder *json.Decoder, kind json.Delim, depth int
 	return nil
 }
 
-func isDataBusinessSetting(key string) bool {
-	switch key {
-	case "timezone", "kanban_url", "theme", "iteration_start_date", "iteration_duration_days", "iteration_workdays", "reminder_delay":
-		return true
-	default:
-		return false
-	}
-}
-
 // 保持原始时间字符串；仅为旧备份没有提供的可选时间补默认值。
 func prepareImportTimestamps(created, updated *string, now string) error {
 	if *created == "" {
@@ -397,7 +393,7 @@ func validImportClock(value *string) bool {
 }
 
 // 校验及补齐在事务前完成，坏数据不能被当作“成功导入”静默跳过。
-func prepareDataImport(data *ExportData, userID int64, now string) error {
+func prepareDataImport(data *ExportData, userID RecordID, now string) error {
 	for i := range data.Attendance {
 		a := &data.Attendance[i]
 		a.UserID = userID
@@ -445,14 +441,14 @@ func prepareDataImport(data *ExportData, userID int64, now string) error {
 			return fmt.Errorf("ticket_issues[%d]: %w", i, err)
 		}
 	}
-	checklistIDs := make(map[int64]bool)
+	checklistIDs := make(map[RecordID]bool)
 	for i := range data.Checklists {
 		c := &data.Checklists[i]
 		c.UserID = userID
-		if c.ID < 0 || (c.ID != 0 && checklistIDs[c.ID]) || strings.TrimSpace(c.Title) == "" {
+		if (c.ID != "" && checklistIDs[c.ID]) || strings.TrimSpace(c.Title) == "" {
 			return fmt.Errorf("Invalid or duplicate checklist ID/title")
 		}
-		if c.ID != 0 {
+		if c.ID != "" {
 			checklistIDs[c.ID] = true
 		}
 		switch c.Kind {
@@ -472,11 +468,11 @@ func prepareDataImport(data *ExportData, userID int64, now string) error {
 			return fmt.Errorf("checklists[%d]: %w", i, err)
 		}
 	}
-	archivedIndices := make(map[int64]int)
+	archivedIndices := make(map[RecordID]int)
 	for i := range data.ChecklistSnapshots {
 		snapshot := &data.ChecklistSnapshots[i]
 		snapshot.UserID = userID
-		if snapshot.ChecklistID <= 0 {
+		if snapshot.ChecklistID == "" {
 			return fmt.Errorf("Snapshot references an invalid checklist ID")
 		}
 		if snapshot.Data == "" {
@@ -496,7 +492,7 @@ func prepareDataImport(data *ExportData, userID int64, now string) error {
 			archivedIndices[snapshot.ChecklistID] = len(data.Checklists)
 			data.Checklists = append(data.Checklists, Checklist{
 				ID: snapshot.ChecklistID, UserID: userID,
-				Title: fmt.Sprintf("%s%d", archivedChecklistTitlePrefix, snapshot.ChecklistID),
+				Title: archivedChecklistTitlePrefix + string(snapshot.ChecklistID),
 				Items: "[]", Kind: checklistKindManual, CreatedAt: snapshot.CreatedAt, UpdatedAt: snapshot.CreatedAt,
 			})
 			checklistIDs[snapshot.ChecklistID] = true
@@ -531,7 +527,7 @@ func prepareDataImport(data *ExportData, userID int64, now string) error {
 	}
 	settings := make(map[string]string)
 	for key, value := range data.UserSettings {
-		if isDataBusinessSetting(key) && value != "" {
+		if isSettingKey(key) && value != "" {
 			settings[key] = value
 		}
 	}
@@ -542,12 +538,7 @@ func prepareDataImport(data *ExportData, userID int64, now string) error {
 			return fmt.Errorf("Invalid iteration_duration_days")
 		}
 		if settings["iteration_workdays"] == "" {
-			// 先除后乘，保持旧换算的舍入规则并避免大整数溢出。
-			workdays := (days/7)*5 + ((days%7)*5+3)/7
-			if workdays < 1 {
-				workdays = 1
-			}
-			settings["iteration_workdays"] = strconv.Itoa(workdays)
+			settings["iteration_workdays"] = strconv.Itoa(workdaysFromDurationDays(days))
 		}
 	}
 	if value := settings["iteration_workdays"]; value != "" {
@@ -597,149 +588,241 @@ func validImportSnapshotJSON(value string) bool {
 	return err == io.EOF
 }
 
-// 所有读写都只能通过同一个事务执行；查询/写入错误直接传播，交由调用者回滚。
-func importDataTransaction(tx *sql.Tx, userID int64, data ExportData) (DataImportResponse, error) {
+// setImportTimestamps 在保存后写回备份中的原始时间。
+// 直接更新 autodate 列：重新导入相同的 updated 值时，PocketBase 会把它视为“未手动修改”而刷新为当前时间。
+func setImportTimestamps(app core.App, record *core.Record, created, updated string) error {
+	if created == "" && updated == "" {
+		return nil
+	}
+	values := dbx.Params{}
+	for field, value := range map[string]string{"created": created, "updated": updated} {
+		if value == "" {
+			continue
+		}
+		parsed, err := parseImportTimestamp(value)
+		if err != nil {
+			return err
+		}
+		datetime, err := types.ParseDateTime(parsed)
+		if err != nil {
+			return err
+		}
+		values[field] = datetime.String()
+		record.SetRaw(field, datetime)
+	}
+	_, err := app.DB().Update(record.Collection().Name, values, dbx.HashExp{"id": record.Id}).Execute()
+	return err
+}
+
+// saveImported 保存记录并写回原始时间。
+func saveImported(app core.App, record *core.Record, created, updated string) error {
+	if err := app.Save(record); err != nil {
+		return err
+	}
+	return setImportTimestamps(app, record, created, updated)
+}
+
+// upsertByKey 按唯一键查找当前用户的记录，不存在时返回未保存的新记录。
+func upsertByKey(app core.App, collection, userID string, key dbx.Params) (*core.Record, error) {
+	parts := []string{}
+	params := dbx.Params{"user": userID}
+	for field, value := range key {
+		parts = append(parts, field+" = {:"+field+"}")
+		params[field] = value
+	}
+	records, err := findUserRecords(app, collection, strings.Join(parts, " && "), "", params)
+	if err != nil {
+		return nil, err
+	}
+	if len(records) > 0 {
+		return records[0], nil
+	}
+	record, err := newUserRecord(app, collection, userID)
+	if err != nil {
+		return nil, err
+	}
+	for field, value := range key {
+		record.Set(field, value)
+	}
+	return record, nil
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+// importData 的所有读写都使用同一个事务 app；任何错误都会让整个导入回滚。
+func importData(app core.App, userID string, data ExportData) (DataImportResponse, error) {
 	var response DataImportResponse
 	for _, a := range data.Attendance {
-		_, err := tx.Exec(`INSERT INTO attendance
-			(user_id, date, clock_in, clock_out, status, is_overtime, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(user_id, date) DO UPDATE SET clock_in = excluded.clock_in,
-			clock_out = excluded.clock_out, status = excluded.status, is_overtime = excluded.is_overtime,
-			created_at = excluded.created_at, updated_at = excluded.updated_at`,
-			userID, a.Date, a.ClockIn, a.ClockOut, a.Status, a.IsOvertime, a.CreatedAt, a.UpdatedAt)
+		record, err := upsertByKey(app, attendanceCollection, userID, dbx.Params{"date": a.Date})
 		if err != nil {
+			return response, fmt.Errorf("attendance: %w", err)
+		}
+		record.Set("clock_in", stringValue(a.ClockIn))
+		record.Set("clock_out", stringValue(a.ClockOut))
+		record.Set("status", a.Status)
+		record.Set("is_overtime", a.IsOvertime)
+		if err := saveImported(app, record, a.CreatedAt, a.UpdatedAt); err != nil {
 			return response, fmt.Errorf("attendance: %w", err)
 		}
 		response.AttendanceCount++
 	}
 	for _, wl := range data.WorkLogs {
-		_, err := tx.Exec(`INSERT INTO work_logs (user_id, date, content, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET content = excluded.content,
-			created_at = excluded.created_at, updated_at = excluded.updated_at`,
-			userID, wl.Date, wl.Content, wl.CreatedAt, wl.UpdatedAt)
+		record, err := upsertByKey(app, workLogCollection, userID, dbx.Params{"date": wl.Date})
 		if err != nil {
+			return response, fmt.Errorf("work_logs: %w", err)
+		}
+		record.Set("content", wl.Content)
+		if err := saveImported(app, record, wl.CreatedAt, wl.UpdatedAt); err != nil {
 			return response, fmt.Errorf("work_logs: %w", err)
 		}
 		response.WorkLogCount++
 	}
-	checklistIDMap := make(map[int64]int64)
-	consumedChecklists := make(map[int64]bool)
+
+	checklistIDMap := make(map[RecordID]string)
+	consumedChecklists := make(map[string]bool)
 	for _, c := range data.Checklists {
-		id, err := findImportChecklistID(tx, userID, c, consumedChecklists)
+		record, err := findImportChecklist(app, userID, c, consumedChecklists)
 		if err != nil {
 			return response, fmt.Errorf("query checklists: %w", err)
 		}
-		if id != 0 {
-			_, err = tx.Exec("UPDATE checklists SET items = ?, created_at = ?, updated_at = ? WHERE id = ? AND user_id = ?",
-				c.Items, c.CreatedAt, c.UpdatedAt, id, userID)
-		} else {
-			id, err = insertImportRecord(tx, `INSERT INTO checklists (user_id, title, items, kind, created_at, updated_at)
-				VALUES (?, ?, ?, 'manual', ?, ?)`, userID, c.Title, c.Items, c.CreatedAt, c.UpdatedAt)
+		if record == nil {
+			if record, err = newUserRecord(app, checklistCollection, userID); err != nil {
+				return response, err
+			}
+			record.Set("title", c.Title)
 		}
-		if err != nil {
+		record.Set("items", types.JSONRaw(c.Items))
+		if err := saveImported(app, record, c.CreatedAt, c.UpdatedAt); err != nil {
 			return response, fmt.Errorf("checklists: %w", err)
 		}
-		consumedChecklists[id] = true
-		if c.ID != 0 {
-			checklistIDMap[c.ID] = id
+		consumedChecklists[record.Id] = true
+		if c.ID != "" {
+			checklistIDMap[c.ID] = record.Id
 		}
 		response.ChecklistCount++
 	}
-	consumedSnapshots := make(map[int64]bool)
+
+	consumedSnapshots := make(map[string]bool)
 	for _, snapshot := range data.ChecklistSnapshots {
 		checklistID, ok := checklistIDMap[snapshot.ChecklistID]
 		if !ok {
 			return response, fmt.Errorf("missing checklist mapping")
 		}
-		id, err := findEquivalentImportID(tx, consumedSnapshots, snapshot.CreatedAt, snapshot.CreatedAt,
-			`SELECT id, created_at, created_at FROM checklist_snapshots
-			WHERE user_id = ? AND checklist_id = ? AND title = ? AND items_hash = ? AND data = ? ORDER BY id`,
-			userID, checklistID, snapshot.Title, snapshot.ItemsHash, snapshot.Data)
+		candidates, err := findUserRecords(app, snapshotCollection,
+			"checklist = {:checklist} && title = {:title} && items_hash = {:hash}", "@rowid",
+			dbx.Params{"user": userID, "checklist": checklistID, "title": snapshot.Title, "hash": snapshot.ItemsHash})
 		if err != nil {
 			return response, fmt.Errorf("query checklist_snapshots: %w", err)
 		}
-		if id == 0 {
-			id, err = insertImportRecord(tx, `INSERT INTO checklist_snapshots
-				(user_id, checklist_id, title, items_hash, data, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-				userID, checklistID, snapshot.Title, snapshot.ItemsHash, snapshot.Data, snapshot.CreatedAt)
+		record := findEquivalentImport(candidates, consumedSnapshots, snapshot.CreatedAt, snapshot.CreatedAt,
+			func(r *core.Record) bool { return jsonText(r, "data", "null") == snapshot.Data })
+		if record == nil {
+			if record, err = newUserRecord(app, snapshotCollection, userID); err != nil {
+				return response, err
+			}
+			record.Set("checklist", checklistID)
+			record.Set("title", snapshot.Title)
+			record.Set("items_hash", snapshot.ItemsHash)
+			record.Set("data", types.JSONRaw(snapshot.Data))
+			if err := saveImported(app, record, snapshot.CreatedAt, snapshot.CreatedAt); err != nil {
+				return response, fmt.Errorf("checklist_snapshots: %w", err)
+			}
 		}
-		if err != nil {
-			return response, fmt.Errorf("checklist_snapshots: %w", err)
-		}
-		consumedSnapshots[id] = true
+		consumedSnapshots[record.Id] = true
 		response.SnapshotCount++
 	}
-	consumedTodos := make(map[int64]bool)
+
+	consumedTodos := make(map[string]bool)
 	for _, todo := range data.Todos {
-		id, err := findEquivalentImportID(tx, consumedTodos, todo.CreatedAt, todo.UpdatedAt,
-			"SELECT id, created_at, updated_at FROM todos WHERE user_id = ? AND content = ? AND url = ? AND done = ? ORDER BY id",
-			userID, todo.Content, todo.URL, todo.Done)
+		candidates, err := findUserRecords(app, todoCollection, "content = {:content} && url = {:url} && done = {:done}", "@rowid",
+			dbx.Params{"user": userID, "content": todo.Content, "url": todo.URL, "done": todo.Done})
 		if err != nil {
 			return response, fmt.Errorf("query todos: %w", err)
 		}
-		if id == 0 {
-			id, err = insertImportRecord(tx, "INSERT INTO todos (user_id, content, url, done, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-				userID, todo.Content, todo.URL, todo.Done, todo.CreatedAt, todo.UpdatedAt)
+		record := findEquivalentImport(candidates, consumedTodos, todo.CreatedAt, todo.UpdatedAt, nil)
+		if record == nil {
+			if record, err = newUserRecord(app, todoCollection, userID); err != nil {
+				return response, err
+			}
+			record.Set("content", todo.Content)
+			record.Set("url", todo.URL)
+			record.Set("done", todo.Done)
+			if err := saveImported(app, record, todo.CreatedAt, todo.UpdatedAt); err != nil {
+				return response, fmt.Errorf("todos: %w", err)
+			}
 		}
-		if err != nil {
-			return response, fmt.Errorf("todos: %w", err)
-		}
-		consumedTodos[id] = true
+		consumedTodos[record.Id] = true
 		response.TodoCount++
 	}
-	consumedIssues := make(map[int64]bool)
+
+	consumedIssues := make(map[string]bool)
 	for _, issue := range data.TicketIssues {
-		id, err := findEquivalentImportID(tx, consumedIssues, issue.CreatedAt, issue.UpdatedAt,
-			`SELECT id, created_at, updated_at FROM ticket_issues WHERE user_id = ? AND ticket_no = ? AND ticket_title = ?
-			AND ticket_url = ? AND occurred_on = ? AND cause_type = ? AND problem_description = ?
-			AND cause_detail = ? AND resolution = ? ORDER BY id`,
-			userID, issue.TicketNo, issue.TicketTitle, issue.TicketURL, issue.OccurredOn, issue.CauseType,
-			issue.ProblemDescription, issue.CauseDetail, issue.Resolution)
+		fields := dbx.Params{
+			"ticket_no": issue.TicketNo, "ticket_title": issue.TicketTitle, "ticket_url": issue.TicketURL,
+			"occurred_on": issue.OccurredOn, "cause_type": issue.CauseType, "problem_description": issue.ProblemDescription,
+			"cause_detail": issue.CauseDetail, "resolution": issue.Resolution,
+		}
+		parts := []string{}
+		params := dbx.Params{"user": userID}
+		for field, value := range fields {
+			parts = append(parts, field+" = {:"+field+"}")
+			params[field] = value
+		}
+		candidates, err := findUserRecords(app, ticketIssueCollection, strings.Join(parts, " && "), "@rowid", params)
 		if err != nil {
 			return response, fmt.Errorf("query ticket_issues: %w", err)
 		}
-		if id == 0 {
-			id, err = insertImportRecord(tx, `INSERT INTO ticket_issues (user_id, ticket_no, ticket_title, ticket_url, occurred_on,
-				cause_type, problem_description, cause_detail, resolution, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				userID, issue.TicketNo, issue.TicketTitle, issue.TicketURL, issue.OccurredOn, issue.CauseType,
-				issue.ProblemDescription, issue.CauseDetail, issue.Resolution, issue.CreatedAt, issue.UpdatedAt)
+		record := findEquivalentImport(candidates, consumedIssues, issue.CreatedAt, issue.UpdatedAt, nil)
+		if record == nil {
+			if record, err = newUserRecord(app, ticketIssueCollection, userID); err != nil {
+				return response, err
+			}
+			for field, value := range fields {
+				record.Set(field, value)
+			}
+			if err := saveImported(app, record, issue.CreatedAt, issue.UpdatedAt); err != nil {
+				return response, fmt.Errorf("ticket_issues: %w", err)
+			}
 		}
-		if err != nil {
-			return response, fmt.Errorf("ticket_issues: %w", err)
-		}
-		consumedIssues[id] = true
+		consumedIssues[record.Id] = true
 		response.TicketIssueCount++
 	}
-	for key, value := range data.UserSettings {
-		if !isDataBusinessSetting(key) {
-			return response, fmt.Errorf("setting is not allowed")
-		}
-		_, err := tx.Exec(`INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?)
-			ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value`, userID, key, value)
+
+	if len(data.UserSettings) > 0 {
+		account, err := app.FindRecordById(accountCollection, userID)
 		if err != nil {
 			return response, fmt.Errorf("user_settings: %w", err)
 		}
+		for key, value := range data.UserSettings {
+			if !isSettingKey(key) {
+				return response, fmt.Errorf("setting is not allowed")
+			}
+			account.Set(key, value)
+		}
+		if err := app.Save(account); err != nil {
+			return response, fmt.Errorf("user_settings: %w", err)
+		}
 	}
+
 	for _, o := range data.IterationOverrides {
-		_, err := tx.Exec(`INSERT INTO iteration_overrides (user_id, iteration_number, start_date, end_date, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, iteration_number) DO UPDATE SET
-			start_date = excluded.start_date, end_date = excluded.end_date,
-			created_at = excluded.created_at, updated_at = excluded.updated_at`,
-			userID, o.IterationNumber, o.StartDate, o.EndDate, o.CreatedAt, o.UpdatedAt)
+		record, err := upsertByKey(app, iterationOverrideCollection, userID, dbx.Params{"iteration_number": o.IterationNumber})
 		if err != nil {
+			return response, fmt.Errorf("iteration_overrides: %w", err)
+		}
+		record.Set("start_date", o.StartDate)
+		record.Set("end_date", o.EndDate)
+		if err := saveImported(app, record, o.CreatedAt, o.UpdatedAt); err != nil {
 			return response, fmt.Errorf("iteration_overrides: %w", err)
 		}
 		response.OverrideCount++
 	}
 	for _, day := range data.HolidayCalendar {
-		_, err := tx.Exec(`INSERT INTO holiday_calendar_days (user_id, date, is_workday, name, source, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET
-			is_workday = excluded.is_workday, name = excluded.name, source = excluded.source,
-			created_at = excluded.created_at, updated_at = excluded.updated_at`,
-			userID, day.Date, day.IsWorkday, day.Name, day.Source, day.CreatedAt, day.UpdatedAt)
-		if err != nil {
+		if err := upsertHolidayDay(app, userID, day); err != nil {
 			return response, fmt.Errorf("holiday_calendar: %w", err)
 		}
 		response.CalendarDayCount++
@@ -747,139 +830,94 @@ func importDataTransaction(tx *sql.Tx, userID int64, data ExportData) (DataImpor
 	return response, nil
 }
 
-func insertImportRecord(tx *sql.Tx, query string, args ...any) (int64, error) {
-	result, err := tx.Exec(query, args...)
-	if err != nil {
-		return 0, err
-	}
-	return result.LastInsertId()
-}
-
-// 目标记录一次导入最多匹配一次，保留旧备份中内容甚至时间完全相同的多条合法记录。
-// 时间比较使用时间点而非文本，兼容 SQLite DATETIME 和 PocketBase 驱动返回的 RFC3339。
-func findEquivalentImportID(tx *sql.Tx, consumed map[int64]bool, created, updated, query string, args ...any) (int64, error) {
-	rows, err := tx.Query(query, args...)
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-	var matchingID int64
-	for rows.Next() {
-		var id int64
-		var existingCreated, existingUpdated string
-		if err := rows.Scan(&id, &existingCreated, &existingUpdated); err != nil {
-			return 0, err
-		}
-		if matchingID == 0 && !consumed[id] && importTimestampsEqual(created, existingCreated) && importTimestampsEqual(updated, existingUpdated) {
-			matchingID = id
-		}
-	}
-	return matchingID, rows.Err()
-}
-
-func findImportChecklistID(tx *sql.Tx, userID int64, checklist Checklist, consumed map[int64]bool) (int64, error) {
-	rows, err := tx.Query("SELECT id, items, created_at, updated_at FROM checklists WHERE user_id = ? AND kind = 'manual' AND title = ? ORDER BY id", userID, checklist.Title)
-	if err != nil {
-		return 0, err
-	}
-	defer rows.Close()
-	var fallbackID, itemsID, exactID int64
-	for rows.Next() {
-		var id int64
-		var items, created, updated string
-		if err := rows.Scan(&id, &items, &created, &updated); err != nil {
-			return 0, err
-		}
-		if consumed[id] {
+// findEquivalentImport 返回第一个未被本次导入占用、时间点（及可选的额外条件）相同的记录。
+// 一次导入中每条目标记录最多匹配一次，保留备份中内容甚至时间完全相同的多条合法记录。
+func findEquivalentImport(candidates []*core.Record, consumed map[string]bool, created, updated string, match func(*core.Record) bool) *core.Record {
+	for _, record := range candidates {
+		if consumed[record.Id] || (match != nil && !match(record)) {
 			continue
 		}
-		if fallbackID == 0 {
-			fallbackID = id
+		if importTimestampsEqual(created, formatTime(record.GetDateTime("created"))) &&
+			importTimestampsEqual(updated, formatTime(record.GetDateTime("updated"))) {
+			return record
 		}
-		if items == checklist.Items {
-			if itemsID == 0 {
-				itemsID = id
+	}
+	return nil
+}
+
+func findImportChecklist(app core.App, userID string, checklist Checklist, consumed map[string]bool) (*core.Record, error) {
+	records, err := findUserRecords(app, checklistCollection, "title = {:title}", "@rowid",
+		dbx.Params{"user": userID, "title": checklist.Title})
+	if err != nil {
+		return nil, err
+	}
+	var fallback, sameItems, exact *core.Record
+	for _, record := range records {
+		if consumed[record.Id] {
+			continue
+		}
+		if fallback == nil {
+			fallback = record
+		}
+		if jsonText(record, "items", "[]") == checklist.Items {
+			if sameItems == nil {
+				sameItems = record
 			}
-			if exactID == 0 && importTimestampsEqual(created, checklist.CreatedAt) && importTimestampsEqual(updated, checklist.UpdatedAt) {
-				exactID = id
+			if exact == nil && importTimestampsEqual(formatTime(record.GetDateTime("created")), checklist.CreatedAt) &&
+				importTimestampsEqual(formatTime(record.GetDateTime("updated")), checklist.UpdatedAt) {
+				exact = record
 			}
 		}
 	}
-	if err := rows.Err(); err != nil {
-		return 0, err
-	}
-	if exactID != 0 {
-		return exactID, nil
+	if exact != nil {
+		return exact, nil
 	}
 	// 占位模板仅复用完全等价的历史记录，不覆盖碰巧同名的正常模板。
 	if strings.HasPrefix(checklist.Title, archivedChecklistTitlePrefix) && checklist.Items == "[]" {
-		return 0, nil
+		return nil, nil
 	}
-	if itemsID != 0 {
-		return itemsID, nil
+	if sameItems != nil {
+		return sameItems, nil
 	}
 	// 保留旧版按标题更新行为，但不能重复使用刚插入/已更新的模板，避免快照关系合并。
-	return fallbackID, nil
+	return fallback, nil
 }
 
-func handleDataDelete(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "DELETE" {
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	userID := getUserID(r)
-
+func handleDataDelete(e *core.RequestEvent) error {
 	var req struct {
 		Password string `json:"password"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Password == "" {
-		jsonError(w, "Password is required to delete data", http.StatusBadRequest)
-		return
+	if err := e.BindBody(&req); err != nil || req.Password == "" {
+		return e.BadRequestError("Password is required to delete data", nil)
+	}
+	if !e.Auth.ValidatePassword(req.Password) {
+		return e.UnauthorizedError("Password is incorrect", nil)
 	}
 
-	valid, err := validateUserPassword(userID, req.Password)
-	if err != nil {
-		jsonError(w, "Failed to validate password", http.StatusInternalServerError)
-		return
-	}
-
-	if !valid {
-		jsonError(w, "Password is incorrect", http.StatusUnauthorized)
-		return
-	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		jsonError(w, "Failed to start data deletion", http.StatusInternalServerError)
-		return
-	}
-	defer tx.Rollback()
-	tables := []string{"attendance", "work_logs", "todos", "ticket_issues", "checklist_runs", "checklist_snapshots", "checklists", "iteration_overrides", "holiday_calendar_days"}
 	counts := map[string]int64{}
-	for _, table := range tables {
-		result, err := tx.Exec("DELETE FROM "+table+" WHERE user_id = ?", userID)
-		if err != nil {
-			jsonError(w, "Failed to delete "+table, http.StatusInternalServerError)
-			return
+	err := e.App.RunInTransaction(func(txApp core.App) error {
+		for _, collection := range userDataCollections {
+			records, err := findUserRecords(txApp, collection, "", "", dbx.Params{"user": e.Auth.Id})
+			if err != nil {
+				return err
+			}
+			for _, record := range records {
+				if err := txApp.Delete(record); err != nil {
+					return err
+				}
+			}
+			counts[collection] = int64(len(records))
 		}
-		n, err := result.RowsAffected()
-		if err != nil {
-			jsonError(w, "Failed to count deleted data", http.StatusInternalServerError)
-			return
-		}
-		counts[table] = n
+		return nil
+	})
+	if err != nil {
+		return e.InternalServerError("Failed to delete data", err)
 	}
-	if err := tx.Commit(); err != nil {
-		jsonError(w, "Failed to commit data deletion", http.StatusInternalServerError)
-		return
-	}
-
-	jsonOK(w, DataDeleteResponse{
+	return e.JSON(200, DataDeleteResponse{
 		Message:          "All data deleted successfully",
-		AttendanceCount:  counts["attendance"],
-		WorkLogCount:     counts["work_logs"],
-		TodoCount:        counts["todos"],
-		TicketIssueCount: counts["ticket_issues"],
+		AttendanceCount:  counts[attendanceCollection],
+		WorkLogCount:     counts[workLogCollection],
+		TodoCount:        counts[todoCollection],
+		TicketIssueCount: counts[ticketIssueCollection],
 	})
 }

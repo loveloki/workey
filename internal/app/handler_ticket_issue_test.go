@@ -4,18 +4,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func createTicketIssueForTest(t *testing.T, userID int64, body string) TicketIssue {
+func createTicketIssueForTest(t *testing.T, userID string, body string) TicketIssue {
 	t.Helper()
-	req := createAuthenticatedRequest(t, http.MethodPost, "/api/ticket-issues", body, userID)
+	req := createAuthenticatedRequest(t, http.MethodPost, "/api/workey/ticket-issues", body, userID)
 	rr := httptest.NewRecorder()
-	handleTicketIssues(rr, req)
+	serveTest(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 	var resp TicketIssueResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
@@ -44,9 +43,9 @@ func TestHandleTicketIssuesCRUD(t *testing.T) {
 	assert.Equal(t, ticketCauseCode, issue.CauseType)
 
 	t.Run("获取列表", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, http.MethodGet, "/api/ticket-issues", "", userID)
+		req := createAuthenticatedRequest(t, http.MethodGet, "/api/workey/ticket-issues", "", userID)
 		rr := httptest.NewRecorder()
-		handleTicketIssues(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		var resp TicketIssueListResponse
@@ -62,9 +61,9 @@ func TestHandleTicketIssuesCRUD(t *testing.T) {
 			"problem_description":"配置后无法登录","cause_detail":"操作时遗漏配置项",
 			"resolution":"补充操作手册"
 		}`
-		req := createAuthenticatedRequest(t, http.MethodPut, "/api/ticket-issues?id="+strconv.FormatInt(issue.ID, 10), body, userID)
+		req := createAuthenticatedRequest(t, http.MethodPut, "/api/workey/ticket-issues?id="+string(issue.ID), body, userID)
 		rr := httptest.NewRecorder()
-		handleTicketIssues(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 		var resp TicketIssueResponse
@@ -78,23 +77,23 @@ func TestHandleTicketIssuesCRUD(t *testing.T) {
 			"ticket_no":"WO-1001","occurred_on":"2025-01-11","cause_type":"code",
 			"problem_description":"问题","cause_detail":"根因"
 		}`
-		req := createAuthenticatedRequest(t, http.MethodPut, "/api/ticket-issues?id="+strconv.FormatInt(issue.ID, 10), body, otherUserID)
+		req := createAuthenticatedRequest(t, http.MethodPut, "/api/workey/ticket-issues?id="+string(issue.ID), body, otherUserID)
 		rr := httptest.NewRecorder()
-		handleTicketIssues(rr, req)
+		serveTest(rr, req)
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
 
 	t.Run("其他用户不能删除", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, http.MethodDelete, "/api/ticket-issues?id="+strconv.FormatInt(issue.ID, 10), "", otherUserID)
+		req := createAuthenticatedRequest(t, http.MethodDelete, "/api/workey/ticket-issues?id="+string(issue.ID), "", otherUserID)
 		rr := httptest.NewRecorder()
-		handleTicketIssues(rr, req)
+		serveTest(rr, req)
 		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
 
 	t.Run("删除记录", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, http.MethodDelete, "/api/ticket-issues?id="+strconv.FormatInt(issue.ID, 10), "", userID)
+		req := createAuthenticatedRequest(t, http.MethodDelete, "/api/workey/ticket-issues?id="+string(issue.ID), "", userID)
 		rr := httptest.NewRecorder()
-		handleTicketIssues(rr, req)
+		serveTest(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 }
@@ -119,9 +118,9 @@ func TestHandleTicketIssuesFiltersAndStats(t *testing.T) {
 
 	t.Run("按日期、分类和关键词过滤", func(t *testing.T) {
 		req := createAuthenticatedRequest(t, http.MethodGet,
-			"/api/ticket-issues?start=2025-02-01&end=2025-02-28&cause_type=operation&q=%E5%8F%91%E5%B8%83", "", userID)
+			"/api/workey/ticket-issues?start=2025-02-01&end=2025-02-28&cause_type=operation&q=%E5%8F%91%E5%B8%83", "", userID)
 		rr := httptest.NewRecorder()
-		handleTicketIssues(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		var resp TicketIssueListResponse
@@ -132,9 +131,9 @@ func TestHandleTicketIssuesFiltersAndStats(t *testing.T) {
 
 	t.Run("统计日期范围内原因", func(t *testing.T) {
 		req := createAuthenticatedRequest(t, http.MethodGet,
-			"/api/ticket-issues/stats?start=2025-02-01&end=2025-02-28", "", userID)
+			"/api/workey/ticket-issues/stats?start=2025-02-01&end=2025-02-28", "", userID)
 		rr := httptest.NewRecorder()
-		handleTicketIssueStats(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		var resp TicketIssueStatsResponse
@@ -145,9 +144,9 @@ func TestHandleTicketIssuesFiltersAndStats(t *testing.T) {
 	})
 
 	t.Run("统计支持关键词", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, http.MethodGet, "/api/ticket-issues/stats?q=%E6%93%8D%E4%BD%9C", "", userID)
+		req := createAuthenticatedRequest(t, http.MethodGet, "/api/workey/ticket-issues/stats?q=%E6%93%8D%E4%BD%9C", "", userID)
 		rr := httptest.NewRecorder()
-		handleTicketIssueStats(rr, req)
+		serveTest(rr, req)
 		var resp TicketIssueStatsResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 		assert.Equal(t, int64(1), resp.TotalCount)
@@ -173,38 +172,38 @@ func TestHandleTicketIssuesValidation(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			req := createAuthenticatedRequest(t, http.MethodPost, "/api/ticket-issues", tc.body, userID)
+			req := createAuthenticatedRequest(t, http.MethodPost, "/api/workey/ticket-issues", tc.body, userID)
 			rr := httptest.NewRecorder()
-			handleTicketIssues(rr, req)
+			serveTest(rr, req)
 			assert.Equal(t, http.StatusBadRequest, rr.Code)
 		})
 	}
 
 	t.Run("查询起止日期倒置", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, http.MethodGet, "/api/ticket-issues?start=2025-02-01&end=2025-01-01", "", userID)
+		req := createAuthenticatedRequest(t, http.MethodGet, "/api/workey/ticket-issues?start=2025-02-01&end=2025-01-01", "", userID)
 		rr := httptest.NewRecorder()
-		handleTicketIssues(rr, req)
+		serveTest(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("缺少有效 ID", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, http.MethodDelete, "/api/ticket-issues?id=x", "", userID)
+		req := createAuthenticatedRequest(t, http.MethodDelete, "/api/workey/ticket-issues?id=", "", userID)
 		rr := httptest.NewRecorder()
-		handleTicketIssues(rr, req)
+		serveTest(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("不支持的方法", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, http.MethodPatch, "/api/ticket-issues", "", userID)
+		req := createAuthenticatedRequest(t, http.MethodPatch, "/api/workey/ticket-issues", "", userID)
 		rr := httptest.NewRecorder()
-		handleTicketIssues(rr, req)
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+		serveTest(rr, req)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
 
 	t.Run("统计不支持 POST", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, http.MethodPost, "/api/ticket-issues/stats", "", userID)
+		req := createAuthenticatedRequest(t, http.MethodPost, "/api/workey/ticket-issues/stats", "", userID)
 		rr := httptest.NewRecorder()
-		handleTicketIssueStats(rr, req)
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+		serveTest(rr, req)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
 }

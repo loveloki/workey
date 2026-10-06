@@ -17,10 +17,10 @@ func TestHandleSettings(t *testing.T) {
 	userID := createTestUser(t, "settingsuser", "password123")
 
 	t.Run("获取默认设置", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, "GET", "/api/settings", "", userID)
+		req := createAuthenticatedRequest(t, "GET", "/api/workey/settings", "", userID)
 		rr := httptest.NewRecorder()
 
-		handleSettings(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
@@ -33,10 +33,10 @@ func TestHandleSettings(t *testing.T) {
 
 	t.Run("更新设置", func(t *testing.T) {
 		body := `{"timezone":"+9","theme":"dark"}`
-		req := createAuthenticatedRequest(t, "POST", "/api/settings", body, userID)
+		req := createAuthenticatedRequest(t, "POST", "/api/workey/settings", body, userID)
 		rr := httptest.NewRecorder()
 
-		handleSettings(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
@@ -47,10 +47,10 @@ func TestHandleSettings(t *testing.T) {
 	})
 
 	t.Run("更新后读取验证持久化", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, "GET", "/api/settings", "", userID)
+		req := createAuthenticatedRequest(t, "GET", "/api/workey/settings", "", userID)
 		rr := httptest.NewRecorder()
 
-		handleSettings(rr, req)
+		serveTest(rr, req)
 
 		var resp SettingsResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
@@ -60,10 +60,10 @@ func TestHandleSettings(t *testing.T) {
 
 	t.Run("更新所有设置", func(t *testing.T) {
 		body := `{"timezone":"+0","theme":"auto","kanban_url":"https://custom.url","iteration_start_date":"2024-01-01","iteration_duration_days":"7"}`
-		req := createAuthenticatedRequest(t, "POST", "/api/settings", body, userID)
+		req := createAuthenticatedRequest(t, "POST", "/api/workey/settings", body, userID)
 		rr := httptest.NewRecorder()
 
-		handleSettings(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
@@ -77,10 +77,10 @@ func TestHandleSettings(t *testing.T) {
 	})
 
 	t.Run("提醒延迟默认值为 9", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, "GET", "/api/settings", "", userID)
+		req := createAuthenticatedRequest(t, "GET", "/api/workey/settings", "", userID)
 		rr := httptest.NewRecorder()
 
-		handleSettings(rr, req)
+		serveTest(rr, req)
 
 		var resp SettingsResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
@@ -89,10 +89,10 @@ func TestHandleSettings(t *testing.T) {
 
 	t.Run("更新提醒延迟", func(t *testing.T) {
 		body := `{"reminder_delay":"7"}`
-		req := createAuthenticatedRequest(t, "POST", "/api/settings", body, userID)
+		req := createAuthenticatedRequest(t, "POST", "/api/workey/settings", body, userID)
 		rr := httptest.NewRecorder()
 
-		handleSettings(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
@@ -102,28 +102,28 @@ func TestHandleSettings(t *testing.T) {
 	})
 
 	t.Run("PUT 方法不允许", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, "PUT", "/api/settings", "", userID)
+		req := createAuthenticatedRequest(t, "PUT", "/api/workey/settings", "", userID)
 		rr := httptest.NewRecorder()
 
-		handleSettings(rr, req)
+		serveTest(rr, req)
 
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
 
 	t.Run("无效 JSON 请求体", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, "POST", "/api/settings", "bad", userID)
+		req := createAuthenticatedRequest(t, "POST", "/api/workey/settings", "bad", userID)
 		rr := httptest.NewRecorder()
 
-		handleSettings(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("更新后 GET 读取所有已保存设置", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, "GET", "/api/settings", "", userID)
+		req := createAuthenticatedRequest(t, "GET", "/api/workey/settings", "", userID)
 		rr := httptest.NewRecorder()
 
-		handleSettings(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 

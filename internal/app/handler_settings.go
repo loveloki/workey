@@ -1,23 +1,17 @@
 package app
 
 import (
-	"encoding/json"
-	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/pocketbase/pocketbase/core"
 )
 
-// 用户设置 handler
+// 用户设置 handler：设置保存在 workey_accounts 认证记录的同名字段上，空值表示使用默认值。
 
-func handleSettings(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		handleGetSettings(w, r)
-	case "POST":
-		handlePostSettings(w, r)
-	default:
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
+var settingKeys = []string{
+	"timezone", "kanban_url", "theme", "iteration_start_date",
+	"iteration_duration_days", "iteration_workdays", "reminder_delay",
 }
 
 func defaultSettings() map[string]string {
@@ -32,34 +26,47 @@ func defaultSettings() map[string]string {
 	}
 }
 
-func loadSettings(userID int64) (map[string]string, error) {
+func isSettingKey(key string) bool {
+	for _, k := range settingKeys {
+		if k == key {
+			return true
+		}
+	}
+	return false
+}
+
+// storedSettings 返回账号上已保存（非空）的设置。
+func storedSettings(account *core.Record) map[string]string {
+	values := map[string]string{}
+	for _, key := range settingKeys {
+		if value := account.GetString(key); value != "" {
+			values[key] = value
+		}
+	}
+	return values
+}
+
+// workdaysFromDurationDays 把旧版自然日周期按每周 5 个工作日换算（先除后乘避免溢出）。
+func workdaysFromDurationDays(days int) int {
+	workdays := (days/7)*5 + ((days%7)*5+3)/7
+	if workdays < 1 {
+		workdays = 1
+	}
+	return workdays
+}
+
+func loadSettings(account *core.Record) map[string]string {
 	values := defaultSettings()
-	rows, err := db.Query("SELECT key, value FROM user_settings WHERE user_id = ?", userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	hasWorkdays := false
-	for rows.Next() {
-		var key, value string
-		if err := rows.Scan(&key, &value); err != nil {
-			return nil, err
-		}
+	stored := storedSettings(account)
+	for key, value := range stored {
 		values[key] = value
-		if key == "iteration_workdays" {
-			hasWorkdays = true
+	}
+	if stored["iteration_workdays"] == "" {
+		if days, err := strconv.Atoi(values["iteration_duration_days"]); err == nil && days > 0 {
+			values["iteration_workdays"] = strconv.Itoa(workdaysFromDurationDays(days))
 		}
 	}
-	if !hasWorkdays {
-		if days, parseErr := strconv.Atoi(values["iteration_duration_days"]); parseErr == nil && days > 0 {
-			workdays := (days*5 + 3) / 7
-			if workdays < 1 {
-				workdays = 1
-			}
-			values["iteration_workdays"] = strconv.Itoa(workdays)
-		}
-	}
-	return values, rows.Err()
+	return values
 }
 
 func settingsResponse(values map[string]string) SettingsResponse {
@@ -74,52 +81,37 @@ func settingsResponse(values map[string]string) SettingsResponse {
 	}
 }
 
-func handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	values, err := loadSettings(getUserID(r))
-	if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
-	}
-	jsonOK(w, settingsResponse(values))
+func handleGetSettings(e *core.RequestEvent) error {
+	return e.JSON(200, settingsResponse(loadSettings(e.Auth)))
 }
 
-func handlePostSettings(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
+func handleSaveSettings(e *core.RequestEvent) error {
 	var req SettingsUpdateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, "Invalid request body", http.StatusBadRequest)
-		return
+	if err := e.BindBody(&req); err != nil {
+		return e.BadRequestError("Invalid request body", err)
 	}
-
 	if req.IterationStartDate != "" {
 		if _, err := time.Parse(dateFormat, req.IterationStartDate); err != nil {
-			jsonError(w, "iteration_start_date must be in YYYY-MM-DD format", http.StatusBadRequest)
-			return
+			return e.BadRequestError("iteration_start_date must be in YYYY-MM-DD format", nil)
 		}
 	}
 	if req.IterationWorkdays != "" {
 		workdays, err := strconv.Atoi(req.IterationWorkdays)
 		if err != nil || workdays < 1 || workdays > 100 {
-			jsonError(w, "iteration_workdays must be between 1 and 100", http.StatusBadRequest)
-			return
+			return e.BadRequestError("iteration_workdays must be between 1 and 100", nil)
 		}
 	}
-
-	// 旧客户端仍可提交自然日周期，按每周 5 个工作日换算。
+	// 旧客户端仍可只提交自然日周期。
 	if req.IterationWorkdays == "" && req.IterationDurationDays != "" {
 		days, err := strconv.Atoi(req.IterationDurationDays)
 		if err != nil || days < 1 {
-			jsonError(w, "iteration_duration_days must be a positive integer", http.StatusBadRequest)
-			return
+			return e.BadRequestError("iteration_duration_days must be a positive integer", nil)
 		}
-		workdays := (days*5 + 3) / 7
-		if workdays < 1 {
-			workdays = 1
-		}
-		req.IterationWorkdays = strconv.Itoa(workdays)
+		req.IterationWorkdays = strconv.Itoa(workdaysFromDurationDays(days))
 	}
 
-	settingsToSave := map[string]string{
+	account := e.Auth
+	for key, value := range map[string]string{
 		"timezone":                req.Timezone,
 		"kanban_url":              req.KanbanURL,
 		"theme":                   req.Theme,
@@ -127,22 +119,13 @@ func handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		"iteration_duration_days": req.IterationDurationDays,
 		"iteration_workdays":      req.IterationWorkdays,
 		"reminder_delay":          req.ReminderDelay,
-	}
-	for key, value := range settingsToSave {
-		if value == "" {
-			continue
-		}
-		if _, err := db.Exec(`INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?)
-			ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value`, userID, key, value); err != nil {
-			jsonError(w, "Failed to save settings", http.StatusInternalServerError)
-			return
+	} {
+		if value != "" {
+			account.Set(key, value)
 		}
 	}
-
-	values, err := loadSettings(userID)
-	if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
+	if err := e.App.Save(account); err != nil {
+		return e.BadRequestError("Failed to save settings", err)
 	}
-	jsonOK(w, settingsResponse(values))
+	return e.JSON(200, settingsResponse(loadSettings(account)))
 }

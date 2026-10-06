@@ -12,46 +12,32 @@ import (
 )
 
 func TestHandleSystemVersion(t *testing.T) {
-	t.Run("返回版本信息", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/version", nil)
+	cleanup := setupTestDB(t)
+	defer cleanup()
+	userID := createTestUser(t, "versionuser", "password123")
+
+	get := func() VersionResponse {
 		rr := httptest.NewRecorder()
-
-		handleSystemVersion(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
-
+		serveTest(rr, createAuthenticatedRequest(t, "GET", "/api/workey/system/version", "", userID))
+		require.Equal(t, http.StatusOK, rr.Code)
 		var resp VersionResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.NotEmpty(t, resp.Commit)
-	})
+		return resp
+	}
 
-	t.Run("不允许 POST 方法", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/version", nil)
-		rr := httptest.NewRecorder()
-
-		handleSystemVersion(rr, req)
-
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	t.Run("返回版本信息", func(t *testing.T) {
+		assert.NotEmpty(t, get().Commit)
 	})
 
 	t.Run("使用 version.json 文件", func(t *testing.T) {
-		dir := t.TempDir()
-		origDir, _ := os.Getwd()
-		os.Chdir(dir)
-		defer os.Chdir(origDir)
+		t.Chdir(t.TempDir())
+		require.NoError(t, os.WriteFile("version.json", []byte(`{"commit":"abc123","date":"2024-06-01","content":"test version"}`), 0644))
+		assert.Equal(t, "abc123", get().Commit)
+	})
 
-		os.WriteFile("version.json", []byte(`{"commit":"abc123","date":"2024-06-01","content":"test version"}`), 0644)
-
-		req := httptest.NewRequest("GET", "/api/version", nil)
+	t.Run("需要登录", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-
-		handleSystemVersion(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-
-		var resp VersionResponse
-		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Equal(t, "abc123", resp.Commit)
+		serveTest(rr, httptest.NewRequest("GET", "/api/workey/system/version", nil))
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 }

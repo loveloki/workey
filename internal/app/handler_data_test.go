@@ -10,10 +10,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,21 +28,20 @@ func TestHandleDataExport(t *testing.T) {
 	userID := createTestUser(t, "exportuser", "password123")
 
 	// 创建全面的测试数据
-	db.Exec("INSERT INTO work_logs (user_id, date, content, created_at, updated_at) VALUES (?, '2024-06-01', '测试日志', datetime('now'), datetime('now'))", userID)
-	db.Exec("INSERT INTO attendance (user_id, date, clock_in, status, is_overtime, created_at, updated_at) VALUES (?, '2024-06-01', '09:00', 'normal', 0, datetime('now'), datetime('now'))", userID)
-	db.Exec("INSERT INTO todos (user_id, content, url, created_at, updated_at) VALUES (?, '待办', '', datetime('now'), datetime('now'))", userID)
-	db.Exec("INSERT INTO ticket_issues (user_id, ticket_no, occurred_on, cause_type, problem_description, cause_detail, created_at, updated_at) VALUES (?, 'WO-1', '2024-06-01', 'code', '接口报错', '边界未处理', datetime('now'), datetime('now'))", userID)
-	result, _ := db.Exec("INSERT INTO checklists (user_id, title, items, kind, created_at, updated_at) VALUES (?, '清单', '[{\"text\":\"检查\"}]', 'manual', datetime('now'), datetime('now'))", userID)
-	checklistID, _ := result.LastInsertId()
-	db.Exec("INSERT INTO checklist_snapshots (user_id, checklist_id, title, items_hash, data, created_at) VALUES (?, ?, '清单快照', 'hash', '{}', datetime('now'))", userID, checklistID)
-	db.Exec("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'theme', 'dark')", userID)
-	db.Exec("INSERT INTO iteration_overrides (user_id, iteration_number, start_date, end_date, created_at, updated_at) VALUES (?, 1, '2024-01-01', '2024-01-14', datetime('now'), datetime('now'))", userID)
+	insertTestRecord(t, workLogCollection, userID, map[string]any{"date": "2024-06-01", "content": "测试日志"})
+	insertTestRecord(t, attendanceCollection, userID, map[string]any{"date": "2024-06-01", "clock_in": "09:00", "status": "normal"})
+	insertTestRecord(t, todoCollection, userID, map[string]any{"content": "待办"})
+	insertTestRecord(t, ticketIssueCollection, userID, map[string]any{"ticket_no": "WO-1", "occurred_on": "2024-06-01", "cause_type": "code", "problem_description": "接口报错", "cause_detail": "边界未处理"})
+	checklist := insertTestRecord(t, checklistCollection, userID, map[string]any{"title": "清单", "items": `[{"text":"检查"}]`})
+	insertTestRecord(t, snapshotCollection, userID, map[string]any{"checklist": checklist.Id, "title": "清单快照", "items_hash": "hash", "data": "{}"})
+	setTestAccountFields(t, userID, map[string]any{"theme": "dark"})
+	insertTestRecord(t, iterationOverrideCollection, userID, map[string]any{"iteration_number": 1, "start_date": "2024-01-01", "end_date": "2024-01-14"})
 
 	t.Run("导出数据为 ZIP", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, "GET", "/api/data/export", "", userID)
+		req := createAuthenticatedRequest(t, "GET", "/api/workey/data/export", "", userID)
 		rr := httptest.NewRecorder()
 
-		handleDataExport(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		assert.Equal(t, "application/zip", rr.Header().Get("Content-Type"))
@@ -73,12 +75,12 @@ func TestHandleDataExport(t *testing.T) {
 	})
 
 	t.Run("POST 方法不允许", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, "POST", "/api/data/export", "", userID)
+		req := createAuthenticatedRequest(t, "POST", "/api/workey/data/export", "", userID)
 		rr := httptest.NewRecorder()
 
-		handleDataExport(rr, req)
+		serveTest(rr, req)
 
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
 }
 
@@ -89,25 +91,29 @@ func TestHandleDataDelete(t *testing.T) {
 	userID := createTestUser(t, "deluser", "delpassword")
 
 	// 插入测试数据
-	db.Exec("INSERT INTO work_logs (user_id, date, content, created_at, updated_at) VALUES (?, '2024-06-01', 'test', datetime('now'), datetime('now'))", userID)
-	db.Exec("INSERT INTO ticket_issues (user_id, ticket_no, occurred_on, cause_type, problem_description, cause_detail) VALUES (?, 'WO-DELETE', '2024-06-01', 'operation', '问题', '操作遗漏')", userID)
+	insertTestRecord(t, workLogCollection, userID, map[string]any{"date": "2024-06-01", "content": "test"})
+	insertTestRecord(t, ticketIssueCollection, userID, map[string]any{"ticket_no": "WO-DELETE", "occurred_on": "2024-06-01", "cause_type": "operation", "problem_description": "问题", "cause_detail": "操作遗漏"})
+	checklist := insertTestRecord(t, checklistCollection, userID, map[string]any{"title": "清单"})
+	insertTestRecord(t, snapshotCollection, userID, map[string]any{"checklist": checklist.Id, "data": "{}"})
+	otherID := createTestUser(t, "deluser-other", "delpassword")
+	insertTestRecord(t, workLogCollection, otherID, map[string]any{"date": "2024-06-01", "content": "保留"})
 
 	t.Run("密码错误应拒绝删除", func(t *testing.T) {
 		body := `{"password":"wrongpassword"}`
-		req := createAuthenticatedRequest(t, "DELETE", "/api/data/delete", body, userID)
+		req := createAuthenticatedRequest(t, "DELETE", "/api/workey/data/delete", body, userID)
 		rr := httptest.NewRecorder()
 
-		handleDataDelete(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 
 	t.Run("密码正确应成功删除所有数据", func(t *testing.T) {
 		body := `{"password":"delpassword"}`
-		req := createAuthenticatedRequest(t, "DELETE", "/api/data/delete", body, userID)
+		req := createAuthenticatedRequest(t, "DELETE", "/api/workey/data/delete", body, userID)
 		rr := httptest.NewRecorder()
 
-		handleDataDelete(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
@@ -116,19 +122,18 @@ func TestHandleDataDelete(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 		assert.Equal(t, int64(1), resp.TicketIssueCount)
 
-		var count int
-		db.QueryRow("SELECT COUNT(*) FROM work_logs WHERE user_id = ?", userID).Scan(&count)
-		assert.Equal(t, 0, count)
-		db.QueryRow("SELECT COUNT(*) FROM ticket_issues WHERE user_id = ?", userID).Scan(&count)
-		assert.Equal(t, 0, count)
+		for _, collection := range userDataCollections {
+			assert.Zero(t, countUserRecords(t, collection, userID), collection)
+		}
+		assert.Equal(t, 1, countUserRecords(t, workLogCollection, otherID))
 	})
 
 	t.Run("缺少密码应返回错误", func(t *testing.T) {
 		body := `{}`
-		req := createAuthenticatedRequest(t, "DELETE", "/api/data/delete", body, userID)
+		req := createAuthenticatedRequest(t, "DELETE", "/api/workey/data/delete", body, userID)
 		rr := httptest.NewRecorder()
 
-		handleDataDelete(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
@@ -159,12 +164,12 @@ func TestHandleDataImport(t *testing.T) {
 		part.Write(buf.Bytes())
 		writer.Close()
 
-		req := createAuthenticatedRequest(t, "POST", "/api/data/import", "", userID)
+		req := createAuthenticatedRequest(t, "POST", "/api/workey/data/import", "", userID)
 		req.Body = io.NopCloser(&body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 		rr := httptest.NewRecorder()
 
-		handleDataImport(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
@@ -182,12 +187,12 @@ func TestHandleDataImport(t *testing.T) {
 		part.Write([]byte("not a zip file"))
 		writer.Close()
 
-		req := createAuthenticatedRequest(t, "POST", "/api/data/import", "", userID)
+		req := createAuthenticatedRequest(t, "POST", "/api/workey/data/import", "", userID)
 		req.Body = io.NopCloser(&body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 		rr := httptest.NewRecorder()
 
-		handleDataImport(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
@@ -205,23 +210,23 @@ func TestHandleDataImport(t *testing.T) {
 		part.Write(buf.Bytes())
 		writer.Close()
 
-		req := createAuthenticatedRequest(t, "POST", "/api/data/import", "", userID)
+		req := createAuthenticatedRequest(t, "POST", "/api/workey/data/import", "", userID)
 		req.Body = io.NopCloser(&body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 		rr := httptest.NewRecorder()
 
-		handleDataImport(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("GET 方法不允许", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, "GET", "/api/data/import", "", userID)
+		req := createAuthenticatedRequest(t, "GET", "/api/workey/data/import", "", userID)
 		rr := httptest.NewRecorder()
 
-		handleDataImport(rr, req)
+		serveTest(rr, req)
 
-		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
 	})
 }
 
@@ -231,12 +236,12 @@ func TestHandleDataExport_MethodNotAllowed(t *testing.T) {
 
 	userID := createTestUser(t, "expmeth", "password123")
 
-	req := createAuthenticatedRequest(t, "POST", "/api/data/export", "", userID)
+	req := createAuthenticatedRequest(t, "POST", "/api/workey/data/export", "", userID)
 	rr := httptest.NewRecorder()
 
-	handleDataExport(rr, req)
+	serveTest(rr, req)
 
-	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
 func TestHandleDataImport_NoFile(t *testing.T) {
@@ -249,12 +254,12 @@ func TestHandleDataImport_NoFile(t *testing.T) {
 	writer := multipart.NewWriter(&body)
 	writer.Close()
 
-	req := createAuthenticatedRequest(t, "POST", "/api/data/import", "", userID)
+	req := createAuthenticatedRequest(t, "POST", "/api/workey/data/import", "", userID)
 	req.Body = io.NopCloser(&body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rr := httptest.NewRecorder()
 
-	handleDataImport(rr, req)
+	serveTest(rr, req)
 
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 }
@@ -265,12 +270,12 @@ func TestHandleDataDelete_MethodNotAllowed(t *testing.T) {
 
 	userID := createTestUser(t, "delmeth", "password123")
 
-	req := createAuthenticatedRequest(t, "GET", "/api/data/delete", "", userID)
+	req := createAuthenticatedRequest(t, "GET", "/api/workey/data/delete", "", userID)
 	rr := httptest.NewRecorder()
 
-	handleDataDelete(rr, req)
+	serveTest(rr, req)
 
-	assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	assert.Equal(t, http.StatusNotFound, rr.Code)
 }
 
 func TestHandleHistoryDateRange(t *testing.T) {
@@ -280,10 +285,10 @@ func TestHandleHistoryDateRange(t *testing.T) {
 	userID := createTestUser(t, "histuser", "password123")
 
 	t.Run("无数据时返回 null", func(t *testing.T) {
-		req := createAuthenticatedRequest(t, "GET", "/api/history/date-range", "", userID)
+		req := createAuthenticatedRequest(t, "GET", "/api/workey/history/date-range", "", userID)
 		rr := httptest.NewRecorder()
 
-		handleHistoryDateRange(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
@@ -293,13 +298,13 @@ func TestHandleHistoryDateRange(t *testing.T) {
 	})
 
 	t.Run("有数据时返回日期范围", func(t *testing.T) {
-		db.Exec("INSERT INTO attendance (user_id, date, status, created_at, updated_at) VALUES (?, '2024-03-01', 'normal', datetime('now'), datetime('now'))", userID)
-		db.Exec("INSERT INTO attendance (user_id, date, status, created_at, updated_at) VALUES (?, '2024-06-15', 'normal', datetime('now'), datetime('now'))", userID)
+		insertTestRecord(t, attendanceCollection, userID, map[string]any{"date": "2024-03-01", "status": "normal"})
+		insertTestRecord(t, attendanceCollection, userID, map[string]any{"date": "2024-06-15", "status": "normal"})
 
-		req := createAuthenticatedRequest(t, "GET", "/api/history/date-range", "", userID)
+		req := createAuthenticatedRequest(t, "GET", "/api/workey/history/date-range", "", userID)
 		rr := httptest.NewRecorder()
 
-		handleHistoryDateRange(rr, req)
+		serveTest(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
@@ -343,7 +348,7 @@ func makeDataTestArchive(t *testing.T, entries ...dataArchiveTestEntry) []byte {
 	return buf.Bytes()
 }
 
-func importDataTestArchive(t *testing.T, userID int64, archive []byte) *httptest.ResponseRecorder {
+func importDataTestArchive(t *testing.T, userID string, archive []byte) *httptest.ResponseRecorder {
 	t.Helper()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
@@ -352,26 +357,26 @@ func importDataTestArchive(t *testing.T, userID int64, archive []byte) *httptest
 	_, err = part.Write(archive)
 	require.NoError(t, err)
 	require.NoError(t, writer.Close())
-	req := createAuthenticatedRequest(t, http.MethodPost, "/api/data/import", "", userID)
+	req := createAuthenticatedRequest(t, http.MethodPost, "/api/workey/data/import", "", userID)
 	req.Body = io.NopCloser(&body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rr := httptest.NewRecorder()
-	handleDataImport(rr, req)
+	serveTest(rr, req)
 	return rr
 }
 
-func importDataTestFixture(t *testing.T, userID int64, data ExportData) *httptest.ResponseRecorder {
+func importDataTestFixture(t *testing.T, userID string, data ExportData) *httptest.ResponseRecorder {
 	t.Helper()
 	raw, err := json.Marshal(data)
 	require.NoError(t, err)
 	return importDataTestArchive(t, userID, makeDataTestArchive(t, dataArchiveTestEntry{"data.json", raw}))
 }
 
-func exportDataTestFixture(t *testing.T, userID int64) (ExportData, []byte) {
+func exportDataTestFixture(t *testing.T, userID string) (ExportData, []byte) {
 	t.Helper()
-	req := createAuthenticatedRequest(t, http.MethodGet, "/api/data/export", "", userID)
+	req := createAuthenticatedRequest(t, http.MethodGet, "/api/workey/data/export", "", userID)
 	rr := httptest.NewRecorder()
-	handleDataExport(rr, req)
+	serveTest(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 	data, err := decodeDataArchive(rr.Body.Bytes())
 	require.NoError(t, err)
@@ -382,21 +387,21 @@ func fullDataTestFixture() ExportData {
 	created, updated := "2021-06-01 09:30:00", "2022-07-08T18:15:00Z"
 	clockIn, clockOut := "2021-06-01 08:45:00", "2021-06-01 18:00:00"
 	return ExportData{
-		Attendance:   []Attendance{{ID: 11, UserID: 999, Date: "2021-06-01", ClockIn: &clockIn, ClockOut: &clockOut, Status: "business_trip", IsOvertime: true, CreatedAt: created, UpdatedAt: updated}},
-		WorkLogs:     []WorkLog{{ID: 21, UserID: 999, Date: "2021-06-01", Content: "工作记录\n第二行", CreatedAt: created, UpdatedAt: updated}},
-		Todos:        []Todo{{ID: 31, UserID: 999, Content: "历史待办", URL: "https://example.test/task", Done: true, CreatedAt: created, UpdatedAt: updated}},
-		TicketIssues: []TicketIssue{{ID: 41, UserID: 999, TicketNo: "WO-HISTORY", TicketTitle: "历史问题", TicketURL: "https://example.test/issue", OccurredOn: "2021-06-01", CauseType: "code", ProblemDescription: "接口异常", CauseDetail: "缺少边界检查", Resolution: "增加测试", CreatedAt: created, UpdatedAt: updated}},
+		Attendance:   []Attendance{{ID: "11", UserID: "999", Date: "2021-06-01", ClockIn: &clockIn, ClockOut: &clockOut, Status: "business_trip", IsOvertime: true, CreatedAt: created, UpdatedAt: updated}},
+		WorkLogs:     []WorkLog{{ID: "21", UserID: "999", Date: "2021-06-01", Content: "工作记录\n第二行", CreatedAt: created, UpdatedAt: updated}},
+		Todos:        []Todo{{ID: "31", UserID: "999", Content: "历史待办", URL: "https://example.test/task", Done: true, CreatedAt: created, UpdatedAt: updated}},
+		TicketIssues: []TicketIssue{{ID: "41", UserID: "999", TicketNo: "WO-HISTORY", TicketTitle: "历史问题", TicketURL: "https://example.test/issue", OccurredOn: "2021-06-01", CauseType: "code", ProblemDescription: "接口异常", CauseDetail: "缺少边界检查", Resolution: "增加测试", CreatedAt: created, UpdatedAt: updated}},
 		Checklists: []Checklist{
-			{ID: 101, UserID: 999, Title: "已存在清单", Items: `[{"text":"检查","nested":[1,true,null]}]`, Kind: "manual", CreatedAt: created, UpdatedAt: updated},
-			{ID: 102, UserID: 999, Title: "新清单", Items: `["旧版字符串条目"]`, Kind: "manual", CreatedAt: created, UpdatedAt: updated},
+			{ID: "101", UserID: "999", Title: "已存在清单", Items: `[{"text":"检查","nested":[1,true,null]}]`, Kind: "manual", CreatedAt: created, UpdatedAt: updated},
+			{ID: "102", UserID: "999", Title: "新清单", Items: `["旧版字符串条目"]`, Kind: "manual", CreatedAt: created, UpdatedAt: updated},
 		},
 		ChecklistSnapshots: []ChecklistSnapshot{
-			{ID: 201, UserID: 999, ChecklistID: 101, Title: "旧清单快照", ItemsHash: "hash-1", Data: `{"checked":[true],"notes":["通过"],"extras":[{"text":"额外项目"}]}`, CreatedAt: created},
-			{ID: 202, UserID: 999, ChecklistID: 102, Title: "新清单快照", ItemsHash: "hash-2", Data: `{"checked":[false],"notes":["备注"],"extras":[]}`, CreatedAt: updated},
+			{ID: "201", UserID: "999", ChecklistID: "101", Title: "旧清单快照", ItemsHash: "hash-1", Data: `{"checked":[true],"notes":["通过"],"extras":[{"text":"额外项目"}]}`, CreatedAt: created},
+			{ID: "202", UserID: "999", ChecklistID: "102", Title: "新清单快照", ItemsHash: "hash-2", Data: `{"checked":[false],"notes":["备注"],"extras":[]}`, CreatedAt: updated},
 		},
 		UserSettings:       map[string]string{"timezone": "+8", "kanban_url": "https://example.test/board", "theme": "dark", "iteration_start_date": "2021-06-01", "iteration_duration_days": "14", "iteration_workdays": "12", "reminder_delay": "8", "jwt_secret": "must-not-import", "password_hash": "must-not-import", "webdav_password": "must-not-import"},
-		IterationOverrides: []IterationOverride{{ID: 301, UserID: 999, IterationNumber: 5, StartDate: "2021-06-01", EndDate: "2021-06-14", CreatedAt: created, UpdatedAt: updated}},
-		HolidayCalendar:    []HolidayCalendarDay{{ID: 401, UserID: 999, Date: "2021-06-12", IsWorkday: true, Name: "调休", Source: "legacy", CreatedAt: created, UpdatedAt: updated}},
+		IterationOverrides: []IterationOverride{{ID: "301", UserID: "999", IterationNumber: 5, StartDate: "2021-06-01", EndDate: "2021-06-14", CreatedAt: created, UpdatedAt: updated}},
+		HolidayCalendar:    []HolidayCalendarDay{{ID: "401", UserID: "999", Date: "2021-06-12", IsWorkday: true, Name: "调休", Source: "legacy", CreatedAt: created, UpdatedAt: updated}},
 		ExportedAt:         "2022-07-09T12:00:00Z",
 	}
 }
@@ -436,11 +441,11 @@ func TestDataImportLegacyFixture(t *testing.T) {
 	assert.Equal(t, "normal", data.Attendance[0].Status)
 	assert.False(t, data.Attendance[0].IsOvertime)
 	assert.Nil(t, data.Attendance[0].ClockOut)
-	assert.Equal(t, userID, data.Attendance[0].UserID)
+	assert.Equal(t, RecordID(userID), data.Attendance[0].UserID)
 	assertDataTimestampEqual(t, "2020-03-02 08:45:00", data.Attendance[0].CreatedAt)
 	assertDataTimestampEqual(t, "2020-03-02 18:00:00", data.WorkLogs[0].UpdatedAt)
 	assert.Equal(t, "manual", data.Checklists[0].Kind)
-	assert.NotEqual(t, int64(41), data.Checklists[0].ID)
+	assert.NotEqual(t, RecordID("41"), data.Checklists[0].ID)
 	assert.Equal(t, data.Checklists[0].ID, data.ChecklistSnapshots[0].ChecklistID)
 	assert.Equal(t, "10", data.UserSettings["iteration_workdays"])
 	assert.Equal(t, "14", data.UserSettings["iteration_duration_days"])
@@ -451,9 +456,9 @@ func TestDataImportLegacyFixture(t *testing.T) {
 	assert.Equal(t, data.Todos[1].CreatedAt, data.Todos[1].UpdatedAt)
 
 	// 历史完成记录仍按原完成日期可见，不会因导入变成“今天完成”。
-	req := createAuthenticatedRequest(t, http.MethodGet, "/api/todos/completed-range?start=2020-03-03&end=2020-03-03", "", userID)
+	req := createAuthenticatedRequest(t, http.MethodGet, "/api/workey/todos/completed-range?start=2020-03-03&end=2020-03-03", "", userID)
 	history := httptest.NewRecorder()
-	handleCompletedRangeTodos(history, req)
+	serveTest(history, req)
 	require.Equal(t, http.StatusOK, history.Code)
 	var todos TodoListResponse
 	require.NoError(t, json.Unmarshal(history.Body.Bytes(), &todos))
@@ -461,10 +466,14 @@ func TestDataImportLegacyFixture(t *testing.T) {
 	assert.Equal(t, "已完成的历史待办", todos.Todos[0].Content)
 	assertDataTimestampEqual(t, "2020-03-02 09:30:00", todos.Todos[0].CreatedAt)
 	assertDataTimestampEqual(t, "2020-03-03 18:00:00", todos.Todos[0].UpdatedAt)
-	var created, updated string
-	require.NoError(t, db.QueryRow("SELECT CAST(created_at AS TEXT), CAST(updated_at AS TEXT) FROM todos WHERE user_id = ? AND done = 1", userID).Scan(&created, &updated))
-	assert.Equal(t, "2020-03-02 09:30:00", created)
-	assert.Equal(t, "2020-03-03 18:00:00", updated)
+	var stored struct {
+		Created string `db:"created"`
+		Updated string `db:"updated"`
+	}
+	require.NoError(t, testApp.DB().NewQuery("SELECT created, updated FROM todos WHERE user = {:user} AND done = 1").
+		Bind(dbx.Params{"user": userID}).One(&stored))
+	assert.Equal(t, "2020-03-02 09:30:00.000Z", stored.Created)
+	assert.Equal(t, "2020-03-03 18:00:00.000Z", stored.Updated)
 }
 
 func TestDataImportFullRoundTripAndDeduplication(t *testing.T) {
@@ -475,20 +484,16 @@ func TestDataImportFullRoundTripAndDeduplication(t *testing.T) {
 	fixture := fullDataTestFixture()
 	initial := importDataTestFixture(t, sourceID, fixture)
 	require.Equal(t, http.StatusOK, initial.Code, initial.Body.String())
-	// 测试导出白名单，不能仅依赖导入已过滤掉敏感键。
-	_, err := db.Exec("INSERT INTO user_settings (user_id, key, value) VALUES (?, 'jwt_secret', 'private-credential')", sourceID)
-	require.NoError(t, err)
+	// 导出只包含业务设置，账号的密码哈希/tokenKey 等字段绝不能出现在备份中。
 	source, archive := exportDataTestFixture(t, sourceID)
 	for _, key := range []string{"jwt_secret", "password_hash", "webdav_password"} {
 		assert.NotContains(t, source.UserSettings, key)
 	}
-	assert.NotContains(t, string(archive), "private-credential")
-	result, err := db.Exec("INSERT INTO checklists (user_id, title, items, kind) VALUES (?, '已存在清单', '[]', 'manual')", targetID)
-	require.NoError(t, err)
-	existingChecklistID, err := result.LastInsertId()
-	require.NoError(t, err)
-	_, err = db.Exec("INSERT INTO work_logs (user_id, date, content) VALUES (?, '2021-06-01', '覆盖前')", targetID)
-	require.NoError(t, err)
+	for _, secret := range []string{"tokenKey", "password", testAccount(t, sourceID).TokenKey()} {
+		assert.NotContains(t, string(archive), secret)
+	}
+	existingChecklistID := RecordID(insertTestRecord(t, checklistCollection, targetID, map[string]any{"title": "已存在清单", "items": "[]"}).Id)
+	insertTestRecord(t, workLogCollection, targetID, map[string]any{"date": "2021-06-01", "content": "覆盖前"})
 
 	for attempt := 0; attempt < 2; attempt++ {
 		rr := importDataTestArchive(t, targetID, archive)
@@ -516,44 +521,44 @@ func TestDataImportFullRoundTripAndDeduplication(t *testing.T) {
 			normalizeTime(&data.Attendance[i].UpdatedAt)
 			normalizeTime(data.Attendance[i].ClockIn)
 			normalizeTime(data.Attendance[i].ClockOut)
-			data.Attendance[i].ID, data.Attendance[i].UserID = 0, 0
+			data.Attendance[i].ID, data.Attendance[i].UserID = "", ""
 		}
 		for i := range data.WorkLogs {
 			normalizeTime(&data.WorkLogs[i].CreatedAt)
 			normalizeTime(&data.WorkLogs[i].UpdatedAt)
-			data.WorkLogs[i].ID, data.WorkLogs[i].UserID = 0, 0
+			data.WorkLogs[i].ID, data.WorkLogs[i].UserID = "", ""
 		}
 		for i := range data.Todos {
 			normalizeTime(&data.Todos[i].CreatedAt)
 			normalizeTime(&data.Todos[i].UpdatedAt)
-			data.Todos[i].ID, data.Todos[i].UserID = 0, 0
+			data.Todos[i].ID, data.Todos[i].UserID = "", ""
 		}
 		for i := range data.TicketIssues {
 			normalizeTime(&data.TicketIssues[i].CreatedAt)
 			normalizeTime(&data.TicketIssues[i].UpdatedAt)
-			data.TicketIssues[i].ID, data.TicketIssues[i].UserID = 0, 0
+			data.TicketIssues[i].ID, data.TicketIssues[i].UserID = "", ""
 		}
 		for i := range data.Checklists {
 			normalizeTime(&data.Checklists[i].CreatedAt)
 			normalizeTime(&data.Checklists[i].UpdatedAt)
-			data.Checklists[i].ID, data.Checklists[i].UserID = int64(i+1), 0
+			data.Checklists[i].ID, data.Checklists[i].UserID = RecordID(strconv.Itoa(i+1)), ""
 		}
 		for i := range data.ChecklistSnapshots {
 			normalizeTime(&data.ChecklistSnapshots[i].CreatedAt)
-			data.ChecklistSnapshots[i].ID, data.ChecklistSnapshots[i].UserID, data.ChecklistSnapshots[i].ChecklistID = 0, 0, int64(i+1)
+			data.ChecklistSnapshots[i].ID, data.ChecklistSnapshots[i].UserID, data.ChecklistSnapshots[i].ChecklistID = "", "", RecordID(strconv.Itoa(i+1))
 		}
 		for i := range data.IterationOverrides {
 			normalizeTime(&data.IterationOverrides[i].CreatedAt)
 			normalizeTime(&data.IterationOverrides[i].UpdatedAt)
-			data.IterationOverrides[i].ID, data.IterationOverrides[i].UserID = 0, 0
+			data.IterationOverrides[i].ID, data.IterationOverrides[i].UserID = "", ""
 		}
 		for i := range data.HolidayCalendar {
 			normalizeTime(&data.HolidayCalendar[i].CreatedAt)
 			normalizeTime(&data.HolidayCalendar[i].UpdatedAt)
-			data.HolidayCalendar[i].ID, data.HolidayCalendar[i].UserID = 0, 0
+			data.HolidayCalendar[i].ID, data.HolidayCalendar[i].UserID = "", ""
 		}
 		for key := range data.UserSettings {
-			if !isDataBusinessSetting(key) {
+			if !isSettingKey(key) {
 				delete(data.UserSettings, key)
 			}
 		}
@@ -564,10 +569,10 @@ func TestDataImportFullRoundTripAndDeduplication(t *testing.T) {
 	assertDataTimestampEqual(t, fixture.Todos[0].CreatedAt, target.Todos[0].CreatedAt)
 	assertDataTimestampEqual(t, fixture.Todos[0].UpdatedAt, target.Todos[0].UpdatedAt)
 	assert.Equal(t, "12", target.UserSettings["iteration_workdays"])
-	for _, table := range []string{"attendance", "work_logs", "todos", "ticket_issues", "checklists", "checklist_snapshots", "iteration_overrides", "holiday_calendar_days"} {
-		var count int
-		require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM "+table+" WHERE user_id NOT IN (?, ?)", sourceID, targetID).Scan(&count))
-		assert.Zero(t, count, table)
+	for _, collection := range userDataCollections {
+		records, err := testApp.FindRecordsByFilter(collection, "user != {:a} && user != {:b}", "", 0, 0, dbx.Params{"a": sourceID, "b": targetID})
+		require.NoError(t, err)
+		assert.Empty(t, records, collection)
 	}
 }
 
@@ -602,8 +607,7 @@ func TestDataImportInvalidRecordsAreAtomic(t *testing.T) {
 		{"非法清单JSON", func(d *ExportData) { d.Checklists[1].Items = `{"not":"array"}` }},
 		{"重复清单ID", func(d *ExportData) { d.Checklists[1].ID = d.Checklists[0].ID }},
 		{"未知清单类型", func(d *ExportData) { d.Checklists[1].Kind = "unknown" }},
-		{"非法快照引用", func(d *ExportData) { d.ChecklistSnapshots[1].ChecklistID = 0 }},
-		{"负数快照引用", func(d *ExportData) { d.ChecklistSnapshots[1].ChecklistID = -1 }},
+		{"非法快照引用", func(d *ExportData) { d.ChecklistSnapshots[1].ChecklistID = "" }},
 		{"非法快照JSON", func(d *ExportData) { d.ChecklistSnapshots[1].Data = `{"checked":[],"checked":[true]}` }},
 		{"反向迭代日期", func(d *ExportData) { d.IterationOverrides[0].EndDate = "2020-01-01" }},
 		{"非法节假日日期", func(d *ExportData) { d.HolidayCalendar[0].Date = "2021-13-01" }},
@@ -615,8 +619,7 @@ func TestDataImportInvalidRecordsAreAtomic(t *testing.T) {
 			cleanup := setupTestDB(t)
 			defer cleanup()
 			userID := createTestUser(t, "invalid-data", "password123")
-			_, err := db.Exec("INSERT INTO work_logs (user_id, date, content, created_at, updated_at) VALUES (?, '2021-06-01', '原始数据', '2019-01-01 00:00:00', '2019-01-02 00:00:00')", userID)
-			require.NoError(t, err)
+			insertTestRecordAt(t, workLogCollection, userID, map[string]any{"date": "2021-06-01", "content": "原始数据"}, "2019-01-01 00:00:00", "2019-01-02 00:00:00")
 			before, _ := exportDataTestFixture(t, userID)
 			data := fullDataTestFixture()
 			tc.mutate(&data)
@@ -630,16 +633,19 @@ func TestDataImportInvalidRecordsAreAtomic(t *testing.T) {
 }
 
 func TestDataImportWriteErrorsRollbackEverything(t *testing.T) {
-	for _, table := range []string{"checklists", "checklist_snapshots", "todos", "ticket_issues", "user_settings", "iteration_overrides", "holiday_calendar_days"} {
+	for _, table := range []string{"checklists", "checklist_snapshots", "todos", "ticket_issues", "workey_accounts", "iteration_overrides", "holiday_calendar_days"} {
 		t.Run(table, func(t *testing.T) {
 			cleanup := setupTestDB(t)
 			defer cleanup()
 			userID := createTestUser(t, "rollback", "password123")
-			_, err := db.Exec("INSERT INTO work_logs (user_id, date, content, created_at, updated_at) VALUES (?, '2021-06-01', '不可改变', '2018-01-01 00:00:00', '2018-01-02 00:00:00')", userID)
-			require.NoError(t, err)
+			insertTestRecordAt(t, workLogCollection, userID, map[string]any{"date": "2021-06-01", "content": "不可改变"}, "2018-01-01 00:00:00", "2018-01-02 00:00:00")
 			before, _ := exportDataTestFixture(t, userID)
-			_, err = db.Exec("CREATE TRIGGER fail_data_import BEFORE INSERT ON " + table + " BEGIN SELECT RAISE(ABORT, 'forced write failure'); END")
-			require.NoError(t, err)
+			// 用户设置保存在账号记录上，写入表现为 UPDATE。
+			event := "INSERT"
+			if table == accountCollection {
+				event = "UPDATE"
+			}
+			rawTestExec(t, "CREATE TRIGGER fail_data_import BEFORE "+event+" ON "+table+" BEGIN SELECT RAISE(ABORT, 'forced write failure'); END")
 			rr := importDataTestFixture(t, userID, fullDataTestFixture())
 			assert.Equal(t, http.StatusInternalServerError, rr.Code, rr.Body.String())
 			assert.Contains(t, rr.Body.String(), "no changes saved")
@@ -655,15 +661,13 @@ func TestDataImportLookupErrorsAreNotTreatedAsMissing(t *testing.T) {
 	defer cleanup()
 	userID := createTestUser(t, "lookup-error", "password123")
 	// 移除表强制查询报错，不能被误判成 sql.ErrNoRows 而继续导入其余记录。
-	_, err := db.Exec("DROP TABLE checklists")
-	require.NoError(t, err)
+	rawTestExec(t, "DROP TABLE checklists")
 	rr := importDataTestFixture(t, userID, fullDataTestFixture())
 	assert.Equal(t, http.StatusInternalServerError, rr.Code, rr.Body.String())
-	for _, table := range []string{"attendance", "work_logs", "todos", "ticket_issues", "user_settings"} {
-		var count int
-		require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM "+table+" WHERE user_id = ?", userID).Scan(&count))
-		assert.Zero(t, count, table)
+	for _, collection := range []string{attendanceCollection, workLogCollection, todoCollection, ticketIssueCollection} {
+		assert.Zero(t, countUserRecords(t, collection, userID), collection)
 	}
+	assert.Empty(t, storedSettings(testAccount(t, userID)))
 }
 
 func TestDecodeDataArchiveRejectsUnsafeFilesAndJSON(t *testing.T) {
@@ -772,24 +776,24 @@ func TestDataImportPreservesDuplicateBusinessRecords(t *testing.T) {
 	userID := createTestUser(t, "duplicate-history", "password123")
 	data := fullDataTestFixture()
 	secondTodo, exactTodo, openTodo := data.Todos[0], data.Todos[0], data.Todos[0]
-	secondTodo.ID, secondTodo.CreatedAt, secondTodo.UpdatedAt = 32, "2021-06-02 09:30:00", "2022-07-09T18:15:00Z"
-	exactTodo.ID = 33
-	openTodo.ID, openTodo.Done = 34, false
+	secondTodo.ID, secondTodo.CreatedAt, secondTodo.UpdatedAt = "32", "2021-06-02 09:30:00", "2022-07-09T18:15:00Z"
+	exactTodo.ID = "33"
+	openTodo.ID, openTodo.Done = "34", false
 	data.Todos = append(data.Todos, secondTodo, exactTodo, openTodo)
 	secondIssue, exactIssue := data.TicketIssues[0], data.TicketIssues[0]
-	secondIssue.ID, secondIssue.CreatedAt, secondIssue.UpdatedAt = 42, "2021-06-02 09:30:00", "2022-07-09T18:15:00Z"
-	exactIssue.ID = 43
+	secondIssue.ID, secondIssue.CreatedAt, secondIssue.UpdatedAt = "42", "2021-06-02 09:30:00", "2022-07-09T18:15:00Z"
+	exactIssue.ID = "43"
 	data.TicketIssues = append(data.TicketIssues, secondIssue, exactIssue)
 	data.Checklists[1].Title = data.Checklists[0].Title
 	exactChecklist := data.Checklists[0]
-	exactChecklist.ID = 103
+	exactChecklist.ID = "103"
 	data.Checklists = append(data.Checklists, exactChecklist)
 	thirdSnapshot := data.ChecklistSnapshots[0]
-	thirdSnapshot.ID, thirdSnapshot.ChecklistID, thirdSnapshot.Title = 203, 103, "第三个模板快照"
+	thirdSnapshot.ID, thirdSnapshot.ChecklistID, thirdSnapshot.Title = "203", "103", "第三个模板快照"
 	data.ChecklistSnapshots = append(data.ChecklistSnapshots, thirdSnapshot)
 	// 同一个模板也可能有完全相同的多条快照，不能按字段去重而丢失源记录数量。
 	exactSnapshot := data.ChecklistSnapshots[0]
-	exactSnapshot.ID = 204
+	exactSnapshot.ID = "204"
 	data.ChecklistSnapshots = append(data.ChecklistSnapshots, exactSnapshot)
 
 	for attempt := 0; attempt < 2; attempt++ {
@@ -829,16 +833,13 @@ func TestDataImportRestoresOrphanedSnapshots(t *testing.T) {
 	userID := createTestUser(t, "orphan-snapshots", "password123")
 	data := ExportData{
 		ChecklistSnapshots: []ChecklistSnapshot{
-			{ID: 1, UserID: 999, ChecklistID: 77, Title: "已删除模板的晚期快照", ItemsHash: "h1", Data: `{"checked":[true]}`, CreatedAt: "2021-06-02 12:00:00"},
-			{ID: 2, UserID: 999, ChecklistID: 77, Title: "已删除模板的早期快照", ItemsHash: "h2", Data: `{"checked":[false]}`, CreatedAt: "2021-06-01 12:00:00"},
-			{ID: 3, UserID: 999, ChecklistID: 88, Title: "另一个已删除模板", ItemsHash: "h3", Data: `{}`, CreatedAt: "2021-07-01 12:00:00"},
+			{ID: "1", UserID: "999", ChecklistID: "77", Title: "已删除模板的晚期快照", ItemsHash: "h1", Data: `{"checked":[true]}`, CreatedAt: "2021-06-02 12:00:00"},
+			{ID: "2", UserID: "999", ChecklistID: "77", Title: "已删除模板的早期快照", ItemsHash: "h2", Data: `{"checked":[false]}`, CreatedAt: "2021-06-01 12:00:00"},
+			{ID: "3", UserID: "999", ChecklistID: "88", Title: "另一个已删除模板", ItemsHash: "h3", Data: `{}`, CreatedAt: "2021-07-01 12:00:00"},
 		},
 	}
 	// 有碰巧同名的正常模板时，占位恢复不能把快照绑过去或覆盖其条目。
-	result, err := db.Exec("INSERT INTO checklists (user_id, title, items, kind, created_at, updated_at) VALUES (?, ?, '[\"正常模板\"]', 'manual', '2019-01-01 00:00:00', '2019-01-01 00:00:00')", userID, archivedChecklistTitlePrefix+"77")
-	require.NoError(t, err)
-	normalID, err := result.LastInsertId()
-	require.NoError(t, err)
+	normalID := RecordID(insertTestRecordAt(t, checklistCollection, userID, map[string]any{"title": archivedChecklistTitlePrefix + "77", "items": `["正常模板"]`}, "2019-01-01 00:00:00", "2019-01-01 00:00:00").Id)
 	rr := importDataTestFixture(t, userID, data)
 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
 	var response DataImportResponse
@@ -852,7 +853,7 @@ func TestDataImportRestoresOrphanedSnapshots(t *testing.T) {
 	assert.Equal(t, `["正常模板"]`, exported.Checklists[0].Items)
 	for _, snapshot := range exported.ChecklistSnapshots {
 		assert.NotEqual(t, normalID, snapshot.ChecklistID)
-		assert.Equal(t, userID, snapshot.UserID)
+		assert.Equal(t, RecordID(userID), snapshot.UserID)
 	}
 	assert.Equal(t, exported.ChecklistSnapshots[0].ChecklistID, exported.ChecklistSnapshots[1].ChecklistID)
 	assert.NotEqual(t, exported.ChecklistSnapshots[0].ChecklistID, exported.ChecklistSnapshots[2].ChecklistID)
@@ -866,12 +867,12 @@ func TestDataImportRestoresOrphanedSnapshots(t *testing.T) {
 	// 同一个旧备份和新版闭环备份重复导入，仍保持三模板与三条快照。
 	rr = importDataTestFixture(t, userID, data)
 	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
-	for _, id := range []int64{userID, targetID} {
+	for _, id := range []string{userID, targetID} {
 		actual, _ := exportDataTestFixture(t, id)
 		require.Len(t, actual.Checklists, 3)
 		require.Len(t, actual.ChecklistSnapshots, 3)
 		for i, snapshot := range actual.ChecklistSnapshots {
-			assert.Equal(t, id, snapshot.UserID)
+			assert.Equal(t, RecordID(id), snapshot.UserID)
 			assert.Equal(t, data.ChecklistSnapshots[i].Data, snapshot.Data)
 			assertDataTimestampEqual(t, data.ChecklistSnapshots[i].CreatedAt, snapshot.CreatedAt)
 			if i < 2 {
@@ -887,13 +888,9 @@ func TestDataImportUpdateErrorsRollbackEverything(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 	userID := createTestUser(t, "rollback-update", "password123")
-	result, err := db.Exec("INSERT INTO checklists (user_id, title, items, kind) VALUES (?, '已存在清单', '[]', 'manual')", userID)
-	require.NoError(t, err)
-	_, err = result.LastInsertId()
-	require.NoError(t, err)
+	insertTestRecord(t, checklistCollection, userID, map[string]any{"title": "已存在清单", "items": "[]"})
 	before, _ := exportDataTestFixture(t, userID)
-	_, err = db.Exec("CREATE TRIGGER fail_data_update BEFORE UPDATE ON checklists BEGIN SELECT RAISE(ABORT, 'forced update failure'); END")
-	require.NoError(t, err)
+	rawTestExec(t, "CREATE TRIGGER fail_data_update BEFORE UPDATE ON checklists BEGIN SELECT RAISE(ABORT, 'forced update failure'); END")
 	rr := importDataTestFixture(t, userID, fullDataTestFixture())
 	assert.Equal(t, http.StatusInternalServerError, rr.Code, rr.Body.String())
 	after, _ := exportDataTestFixture(t, userID)
@@ -905,10 +902,8 @@ func TestDataImportCommitErrorsRollbackEverything(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 	userID := createTestUser(t, "rollback-commit", "password123")
-	_, err := db.Exec("CREATE TABLE data_import_commit_guard (todo_id INTEGER REFERENCES todos(id) DEFERRABLE INITIALLY DEFERRED)")
-	require.NoError(t, err)
-	_, err = db.Exec("CREATE TRIGGER fail_data_commit AFTER INSERT ON holiday_calendar_days BEGIN INSERT INTO data_import_commit_guard (todo_id) VALUES (-999); END")
-	require.NoError(t, err)
+	rawTestExec(t, "CREATE TABLE data_import_commit_guard (todo_id TEXT REFERENCES todos(id) DEFERRABLE INITIALLY DEFERRED)")
+	rawTestExec(t, "CREATE TRIGGER fail_data_commit AFTER INSERT ON holiday_calendar_days BEGIN INSERT INTO data_import_commit_guard (todo_id) VALUES ('missing'); END")
 	before, _ := exportDataTestFixture(t, userID)
 	rr := importDataTestFixture(t, userID, fullDataTestFixture())
 	assert.Equal(t, http.StatusInternalServerError, rr.Code, rr.Body.String())
@@ -916,7 +911,7 @@ func TestDataImportCommitErrorsRollbackEverything(t *testing.T) {
 	before.ExportedAt, after.ExportedAt = "", ""
 	assert.Equal(t, before, after)
 	var count int
-	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM data_import_commit_guard").Scan(&count))
+	require.NoError(t, testApp.DB().NewQuery("SELECT COUNT(*) FROM data_import_commit_guard").Row(&count))
 	assert.Zero(t, count)
 }
 
@@ -924,10 +919,10 @@ func TestDataImportLegacySnapshotJSONValues(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 	userID := createTestUser(t, "legacy-snapshot-values", "password123")
-	data := ExportData{Checklists: []Checklist{{ID: 1, Title: "旧快照", Items: "[]"}}}
+	data := ExportData{Checklists: []Checklist{{ID: "1", Title: "旧快照", Items: "[]"}}}
 	for i, raw := range []string{"null", `[]`, `"旧备注"`, `true`, `123`, `{}`} {
 		data.ChecklistSnapshots = append(data.ChecklistSnapshots, ChecklistSnapshot{
-			ID: int64(i + 1), ChecklistID: 1, Title: "旧值", Data: raw, CreatedAt: "2020-01-01 12:00:00",
+			ID: RecordID(strconv.Itoa(i + 1)), ChecklistID: "1", Title: "旧值", Data: raw, CreatedAt: "2020-01-01 12:00:00",
 		})
 	}
 	rr := importDataTestFixture(t, userID, data)
@@ -953,11 +948,11 @@ func TestDataImportRejectsMultipleUploadedFiles(t *testing.T) {
 		require.NoError(t, err)
 	}
 	require.NoError(t, writer.Close())
-	req := createAuthenticatedRequest(t, http.MethodPost, "/api/data/import", "", userID)
+	req := createAuthenticatedRequest(t, http.MethodPost, "/api/workey/data/import", "", userID)
 	req.Body = io.NopCloser(&body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rr := httptest.NewRecorder()
-	handleDataImport(rr, req)
+	serveTest(rr, req)
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
 	exported, _ := exportDataTestFixture(t, userID)
 	assert.Empty(t, exported.WorkLogs)
@@ -966,7 +961,63 @@ func TestDataImportRejectsMultipleUploadedFiles(t *testing.T) {
 
 func TestPrepareDataImportPreservesLongLegacyIterations(t *testing.T) {
 	data := ExportData{UserSettings: map[string]string{"iteration_duration_days": "365"}}
-	require.NoError(t, prepareDataImport(&data, 1, "2020-01-01T00:00:00Z"))
+	require.NoError(t, prepareDataImport(&data, "1", "2020-01-01T00:00:00Z"))
 	assert.Equal(t, "365", data.UserSettings["iteration_duration_days"])
 	assert.Equal(t, "261", data.UserSettings["iteration_workdays"])
+}
+
+func setTestAccountFields(t *testing.T, userID string, fields map[string]any) {
+	t.Helper()
+	account := testAccount(t, userID)
+	for key, value := range fields {
+		account.Set(key, value)
+	}
+	require.NoError(t, testApp.Save(account))
+}
+
+func insertTestRecordAt(t *testing.T, collection, userID string, fields map[string]any, created, updated string) *core.Record {
+	t.Helper()
+	record := insertTestRecord(t, collection, userID, fields)
+	require.NoError(t, setImportTimestamps(testApp, record, created, updated))
+	return record
+}
+
+func countUserRecords(t *testing.T, collection, userID string) int {
+	t.Helper()
+	records, err := findUserRecords(testApp, collection, "", "", dbx.Params{"user": userID})
+	require.NoError(t, err)
+	return len(records)
+}
+
+func rawTestExec(t *testing.T, query string) {
+	t.Helper()
+	_, err := testApp.DB().NewQuery(query).Execute()
+	require.NoError(t, err)
+}
+
+// testdata 中的 ZIP 由旧版生产二进制（PocketBase 改造前）真实导出，含已移除功能的 checklist_runs 键。
+func TestDataImportLegacyProductionExport(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+	userID := createTestUser(t, "legacy-production", "password123")
+	archive, err := os.ReadFile("testdata/legacy-production-export.zip")
+	require.NoError(t, err)
+	expected := DataImportResponse{Message: "Data imported successfully", AttendanceCount: 1, WorkLogCount: 2, TodoCount: 2,
+		TicketIssueCount: 1, ChecklistCount: 2, SnapshotCount: 2, OverrideCount: 1, CalendarDayCount: 2}
+	for attempt := 0; attempt < 2; attempt++ {
+		rr := importDataTestArchive(t, userID, archive)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		var response DataImportResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &response))
+		assert.Equal(t, expected, response)
+	}
+	exported, _ := exportDataTestFixture(t, userID)
+	assert.Len(t, exported.Todos, 2)
+	assert.Len(t, exported.WorkLogs, 2)
+	require.Len(t, exported.Checklists, 2)
+	// 旧版删除清单后残留的快照恢复到占位清单。
+	assert.Equal(t, archivedChecklistTitlePrefix+"2", exported.Checklists[1].Title)
+	assert.Equal(t, exported.Checklists[1].ID, exported.ChecklistSnapshots[1].ChecklistID)
+	assert.Equal(t, "dark", exported.UserSettings["theme"])
+	assert.Equal(t, "8", exported.UserSettings["iteration_workdays"])
 }

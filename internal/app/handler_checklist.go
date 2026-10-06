@@ -2,271 +2,143 @@ package app
 
 import (
 	"encoding/json"
-	"net/http"
 	"strings"
+
+	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/types"
 )
 
 // 检查清单及快照 handler
 
 const checklistKindManual = "manual"
 
-func handleChecklists(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		handleGetChecklists(w, r)
-	case "POST":
-		handleCreateChecklist(w, r)
-	case "PUT":
-		handleUpdateChecklist(w, r)
-	case "DELETE":
-		handleDeleteChecklist(w, r)
-	default:
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-func handleGetChecklists(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-
-	rows, err := db.Query(
-		"SELECT id, user_id, title, items, kind, created_at, updated_at FROM checklists WHERE user_id = ? AND kind = 'manual' ORDER BY updated_at DESC",
-		userID,
-	)
+func handleGetChecklists(e *core.RequestEvent) error {
+	records, err := findUserRecords(e.App, checklistCollection, "", "-updated,-@rowid", dbx.Params{"user": e.Auth.Id})
 	if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
+		return e.InternalServerError("Internal error", err)
 	}
-	defer rows.Close()
-
-	checklists := []Checklist{}
-	for rows.Next() {
-		var c Checklist
-		rows.Scan(&c.ID, &c.UserID, &c.Title, &c.Items, &c.Kind, &c.CreatedAt, &c.UpdatedAt)
-		checklists = append(checklists, c)
-	}
-	jsonOK(w, ChecklistListResponse{Checklists: checklists})
+	return e.JSON(200, ChecklistListResponse{Checklists: mapRecords(records, checklistFromRecord)})
 }
 
-func handleCreateChecklist(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-
+func handleCreateChecklist(e *core.RequestEvent) error {
 	var req struct {
 		Title string            `json:"title"`
 		Items []json.RawMessage `json:"items"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, "Invalid request body", http.StatusBadRequest)
-		return
+	if err := e.BindBody(&req); err != nil {
+		return e.BadRequestError("Invalid request body", err)
 	}
-
 	if strings.TrimSpace(req.Title) == "" {
-		jsonError(w, "Title is required", http.StatusBadRequest)
-		return
+		return e.BadRequestError("Title is required", nil)
 	}
-
 	if req.Items == nil {
 		req.Items = []json.RawMessage{}
 	}
-	itemsJSON, _ := json.Marshal(req.Items)
-
-	now := nowDatetime()
-	result, err := db.Exec(
-		"INSERT INTO checklists (user_id, title, items, kind, created_at, updated_at) VALUES (?, ?, ?, 'manual', ?, ?)",
-		userID, req.Title, string(itemsJSON), now, now,
-	)
+	items, err := json.Marshal(req.Items)
 	if err != nil {
-		jsonError(w, "Failed to create checklist", http.StatusInternalServerError)
-		return
+		return e.BadRequestError("Invalid checklist items", err)
 	}
-
-	id, _ := result.LastInsertId()
-	checklist := Checklist{
-		ID:        id,
-		UserID:    userID,
-		Title:     req.Title,
-		Items:     string(itemsJSON),
-		Kind:      checklistKindManual,
-		CreatedAt: now,
-		UpdatedAt: now,
+	record, err := newUserRecord(e.App, checklistCollection, e.Auth.Id)
+	if err != nil {
+		return e.InternalServerError("Failed to create checklist", err)
 	}
-	jsonOK(w, ChecklistResponse{Checklist: checklist})
+	record.Set("title", req.Title)
+	record.Set("items", types.JSONRaw(items))
+	if err := e.App.Save(record); err != nil {
+		return e.InternalServerError("Failed to create checklist", err)
+	}
+	return e.JSON(200, ChecklistResponse{Checklist: checklistFromRecord(record)})
 }
 
-func handleUpdateChecklist(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-	id := r.URL.Query().Get("id")
+func handleUpdateChecklist(e *core.RequestEvent) error {
+	id := e.Request.URL.Query().Get("id")
 	if id == "" {
-		jsonError(w, "id query parameter is required", http.StatusBadRequest)
-		return
+		return e.BadRequestError("id query parameter is required", nil)
 	}
-
 	var req struct {
 		Title *string           `json:"title"`
 		Items []json.RawMessage `json:"items"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, "Invalid request body", http.StatusBadRequest)
-		return
+	if err := e.BindBody(&req); err != nil {
+		return e.BadRequestError("Invalid request body", err)
 	}
-
-	var existing Checklist
-	err := db.QueryRow(
-		"SELECT id, user_id, title, items, kind, created_at, updated_at FROM checklists WHERE id = ? AND user_id = ? AND kind = 'manual'",
-		id, userID,
-	).Scan(&existing.ID, &existing.UserID, &existing.Title, &existing.Items, &existing.Kind, &existing.CreatedAt, &existing.UpdatedAt)
+	record, err := requireOwnedRecord(e, checklistCollection, id, "Checklist")
 	if err != nil {
-		jsonError(w, "Checklist not found", http.StatusNotFound)
-		return
+		return err
 	}
-
 	if req.Title != nil {
-		existing.Title = *req.Title
+		if strings.TrimSpace(*req.Title) == "" {
+			return e.BadRequestError("Title is required", nil)
+		}
+		record.Set("title", *req.Title)
 	}
 	if req.Items != nil {
-		itemsJSON, _ := json.Marshal(req.Items)
-		existing.Items = string(itemsJSON)
+		items, err := json.Marshal(req.Items)
+		if err != nil {
+			return e.BadRequestError("Invalid checklist items", err)
+		}
+		record.Set("items", types.JSONRaw(items))
 	}
-
-	now := nowDatetime()
-	_, err = db.Exec(
-		"UPDATE checklists SET title = ?, items = ?, updated_at = ? WHERE id = ? AND user_id = ?",
-		existing.Title, existing.Items, now, id, userID,
-	)
-	if err != nil {
-		jsonError(w, "Failed to update checklist", http.StatusInternalServerError)
-		return
+	if err := e.App.Save(record); err != nil {
+		return e.InternalServerError("Failed to update checklist", err)
 	}
-
-	existing.UpdatedAt = now
-	jsonOK(w, ChecklistResponse{Checklist: existing})
+	return e.JSON(200, ChecklistResponse{Checklist: checklistFromRecord(record)})
 }
 
-func handleDeleteChecklist(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-	id := r.URL.Query().Get("id")
-	if id == "" {
-		jsonError(w, "id query parameter is required", http.StatusBadRequest)
-		return
-	}
-
-	var kind string
-	if err := db.QueryRow("SELECT kind FROM checklists WHERE id = ? AND user_id = ?", id, userID).Scan(&kind); err != nil {
-		jsonError(w, "Checklist not found", http.StatusNotFound)
-		return
-	}
-	if kind != checklistKindManual {
-		jsonError(w, "Checklist not found", http.StatusNotFound)
-		return
-	}
-
-	result, err := db.Exec("DELETE FROM checklists WHERE id = ? AND user_id = ? AND kind = 'manual'", id, userID)
-	if err != nil {
-		jsonError(w, "Failed to delete checklist", http.StatusInternalServerError)
-		return
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		jsonError(w, "Checklist not found", http.StatusNotFound)
-		return
-	}
-
-	jsonOK(w, MessageResponse{Message: "Checklist deleted"})
+// handleDeleteChecklist 删除清单，其快照由 relation 的 CascadeDelete 一并删除。
+func handleDeleteChecklist(e *core.RequestEvent) error {
+	return deleteOwnedRecord(e, checklistCollection, "Checklist")
 }
 
 // --- 检查清单快照 ---
 
-func handleChecklistSnapshots(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		handleGetChecklistSnapshots(w, r)
-	case "POST":
-		handleCreateChecklistSnapshot(w, r)
-	case "DELETE":
-		handleDeleteChecklistSnapshot(w, r)
-	default:
-		jsonError(w, "Method not allowed", http.StatusMethodNotAllowed)
+func handleGetChecklistSnapshots(e *core.RequestEvent) error {
+	checklistID := e.Request.URL.Query().Get("checklist_id")
+	if checklistID == "" {
+		return e.BadRequestError("checklist_id is required", nil)
 	}
-}
-
-func handleGetChecklistSnapshots(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-	clID := r.URL.Query().Get("checklist_id")
-	if clID == "" {
-		jsonError(w, "checklist_id is required", http.StatusBadRequest)
-		return
-	}
-	rows, err := db.Query(
-		"SELECT id, user_id, checklist_id, title, items_hash, data, created_at FROM checklist_snapshots WHERE user_id = ? AND checklist_id = ? ORDER BY id DESC",
-		userID, clID,
-	)
+	records, err := findUserRecords(e.App, snapshotCollection, "checklist = {:checklist}", "-created,-@rowid",
+		dbx.Params{"user": e.Auth.Id, "checklist": checklistID})
 	if err != nil {
-		jsonError(w, "Internal error", http.StatusInternalServerError)
-		return
+		return e.InternalServerError("Internal error", err)
 	}
-	defer rows.Close()
-	snapshots := []ChecklistSnapshot{}
-	for rows.Next() {
-		var s ChecklistSnapshot
-		rows.Scan(&s.ID, &s.UserID, &s.ChecklistID, &s.Title, &s.ItemsHash, &s.Data, &s.CreatedAt)
-		snapshots = append(snapshots, s)
-	}
-	jsonOK(w, SnapshotListResponse{Snapshots: snapshots})
+	return e.JSON(200, SnapshotListResponse{Snapshots: mapRecords(records, snapshotFromRecord)})
 }
 
-func handleCreateChecklistSnapshot(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
+func handleCreateChecklistSnapshot(e *core.RequestEvent) error {
 	var req struct {
-		ChecklistID int64       `json:"checklist_id"`
-		Title       string      `json:"title"`
-		ItemsHash   string      `json:"items_hash"`
-		Data        interface{} `json:"data"`
+		ChecklistID string          `json:"checklist_id"`
+		Title       string          `json:"title"`
+		ItemsHash   string          `json:"items_hash"`
+		Data        json.RawMessage `json:"data"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonError(w, "Invalid request body", http.StatusBadRequest)
-		return
+	if err := e.BindBody(&req); err != nil {
+		return e.BadRequestError("Invalid request body", err)
 	}
-	if req.ChecklistID == 0 {
-		jsonError(w, "checklist_id is required", http.StatusBadRequest)
-		return
+	if req.ChecklistID == "" {
+		return e.BadRequestError("checklist_id is required", nil)
 	}
-	var owner int64
-	if err := db.QueryRow("SELECT user_id FROM checklists WHERE id = ? AND kind = 'manual'", req.ChecklistID).Scan(&owner); err != nil || owner != userID {
-		jsonError(w, "Checklist not found", http.StatusNotFound)
-		return
+	if _, err := requireOwnedRecord(e, checklistCollection, req.ChecklistID, "Checklist"); err != nil {
+		return err
 	}
-	dataBytes, _ := json.Marshal(req.Data)
-	now := nowDatetime()
-	result, err := db.Exec(
-		"INSERT INTO checklist_snapshots (user_id, checklist_id, title, items_hash, data, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-		userID, req.ChecklistID, req.Title, req.ItemsHash, string(dataBytes), now,
-	)
+	if len(req.Data) == 0 {
+		req.Data = json.RawMessage("null")
+	}
+	record, err := newUserRecord(e.App, snapshotCollection, e.Auth.Id)
 	if err != nil {
-		jsonError(w, "Failed to save snapshot", http.StatusInternalServerError)
-		return
+		return e.InternalServerError("Failed to save snapshot", err)
 	}
-	id, _ := result.LastInsertId()
-	jsonOK(w, SnapshotResponse{Snapshot: ChecklistSnapshot{
-		ID: id, UserID: userID, ChecklistID: req.ChecklistID,
-		Title: req.Title, ItemsHash: req.ItemsHash, Data: string(dataBytes), CreatedAt: now,
-	}})
+	record.Set("checklist", req.ChecklistID)
+	record.Set("title", req.Title)
+	record.Set("items_hash", req.ItemsHash)
+	record.Set("data", types.JSONRaw(req.Data))
+	if err := e.App.Save(record); err != nil {
+		return e.InternalServerError("Failed to save snapshot", err)
+	}
+	return e.JSON(200, SnapshotResponse{Snapshot: snapshotFromRecord(record)})
 }
 
-func handleDeleteChecklistSnapshot(w http.ResponseWriter, r *http.Request) {
-	userID := getUserID(r)
-	id := r.URL.Query().Get("id")
-	if id == "" {
-		jsonError(w, "id is required", http.StatusBadRequest)
-		return
-	}
-	result, err := db.Exec("DELETE FROM checklist_snapshots WHERE id = ? AND user_id = ?", id, userID)
-	if err != nil {
-		jsonError(w, "Failed to delete snapshot", http.StatusInternalServerError)
-		return
-	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		jsonError(w, "Snapshot not found", http.StatusNotFound)
-		return
-	}
-	jsonOK(w, MessageResponse{Message: "Snapshot deleted"})
+func handleDeleteChecklistSnapshot(e *core.RequestEvent) error {
+	return deleteOwnedRecord(e, snapshotCollection, "Snapshot")
 }
