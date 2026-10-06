@@ -9,7 +9,7 @@ React 19 单页应用，为 Workey Go PocketBase 扩展的自定义 `/api` 路�
 - **TanStack Query** — 服务端状态管理，自动缓存/去重/轮询
 - **Tailwind CSS v4** — 原子化样式 + CSS 变量设计系统（Radix Colors）
 - **Vite 6** — 构建工具，HMR 极速
-- **vite-plugin-pwa** — 离线支持 + Service Worker
+- **vite-plugin-pwa** — 离线支持 + Service Worker（仅缓存，不含推送）
 - **Vitest + Testing Library** — 单元/集成测试
 
 ## 开发
@@ -25,34 +25,26 @@ pnpm test:coverage  # 覆盖率报告
 
 ## API 地址与部署
 
-未配置时，开发和构建均默认连接 `https://pockethost.exe.xyz`，不自动回退到本地 `/api`。该服务必须将普通 PocketBase 二进制替换为 **Workey Go PocketBase 扩展二进制**；普通 PocketBase 的管理/集合 API 不能替代 Workey 路由。
-
-可复制 `.env.example` 为 `.env.local` 并设置 `VITE_API_BASE_URL`。地址末尾的 `/` 会自动规范化，也支持带路径前缀的地址。此变量在构建时写入浏览器代码，修改后须重启开发服务器或重新构建；**禁止放入 PocketBase 管理员凭据或任何密钥**。
+前端与后端由**同一个二进制同源提供**：`apiUrl()` 未配置时使用相对路径 `/api/workey/*`，无需跨域。仅当后端部署在另一台主机时，才通过构建时变量指定：
 
 ```bash
-# 默认远程后端
+# 默认同源（推荐）
 pnpm build
 
-# 显式空字符串：同源本地一体部署
-VITE_API_BASE_URL= pnpm build
+# 后端在别的主机
+VITE_API_BASE_URL=https://api.example.com pnpm build
 
-# 本地开发：/api 由现有 Vite 代理转发到 localhost:8000
-VITE_API_BASE_URL= pnpm dev
+# 本地开发：Vite 将 /api 代理到 localhost:8000
+pnpm dev
 ```
 
-本地开发也可在不提交到 Git 的 `frontend/.env.local` 中显式配置：
+`frontend/.env.local`（不提交）可用于本地覆盖。此变量在构建时写入浏览器代码，修改后需重新构建；**禁止放入任何凭据**。
 
-```dotenv
-VITE_API_BASE_URL=
-```
+请求统一携带 `credentials: 'include'`（用于 exe.dev 代理会话）与 Workey Bearer token。后端自定义路由都在 `/api/workey/*`（避免与 PocketBase 的 `/api/settings` 等系统路由冲突）；接口契约见 `frontend/src/lib/models.gen.ts`，由 tygo 从 `internal/app/` 的 Go 结构体生成，禁止手改。
 
-这会让开发请求走同源 `/api` 的 Vite proxy，也会影响后续构建；若此文件存在，远程构建应显式设置 `VITE_API_BASE_URL=https://pockethost.exe.xyz`。为避免覆盖运行中的 `frontend/dist`，构建验证使用 `pnpm exec vite build --outDir /tmp/workey-pocketbase-frontend`，不代表已经部署或重启服务。
+错误响应为 PocketBase ApiError：`{"status": 400, "message": "...", "data": {}}`，`api.ts` 读取 `message` 作为展示文案。登录态续期由 `POST /api/workey/auth/refresh` 完成（启动时用现有 token 换新 token）；修改密码会吊销旧 token，因此前端使用响应中的新 token。
 
-所有 API 请求（含导出 ZIP、导入、Passkey 和 Push）均使用该地址并带 `credentials: include`，用于 exe.dev 代理会话；Workey 用户 token 仍使用 Bearer 认证。远程服务需允许 **React 页面真实 Origin** 的跨域请求与 credentials（不能使用通配符来源），并暴露 `X-New-Token` 响应头以支持 token 刷新。浏览器 Cookie 策略仍可能限制跨站会话。
-
-首次使用远程服务，用户需先在浏览器中访问 `https://pockethost.exe.xyz` 完成 exe.dev 代理登录，不能仅依靠 `credentials: include` 自动完成首次登录。若收到登录 HTML，或代理重定向受 CORS 限制导致 fetch 网络错误，界面会显示本地化提示而不清除 Workey token。不要使用 PocketBase 管理员账号作为 Workey 用户认证。
-
-Passkey 使用浏览器生成的真实页面 Origin，前端直接使用扩展根据 Origin allowlist 返回的 `rp.id` / `rpId`，不将它们改成 API 后端 host。后端 allowlist 应包含实际 React 页面来源（本地开发如 `http://localhost:3000`）；生产页面使用 HTTPS，切换页面域名后旧域名的 Passkey 不一定可用。
+跳过验证使用后端提供的完整 API，**不要使用 PocketBase 超级管理员账号**登录前端。
 
 ## 目录结构
 
@@ -71,14 +63,14 @@ src/
 ├── components/
 │   ├── dashboard/          # 首页模块（工作日志、待办、已完成统计）
 │   ├── checklists/         # 检查清单子组件
-│   ├── settings/           # 设置子组件（主题/时区/密码/Passkey 等）
+│   ├── settings/           # 设置子组件（主题/时区/密码/数据管理等）
 │   ├── Card.tsx            # 通用卡片容器
 │   ├── CopyButton.tsx      # 复制到剪贴板
 │   ├── InputField.tsx      # 通用输入框
 │   └── LoadingScreen.tsx   # 加载状态
 ├── lib/
-│   ├── api.ts              # HTTP API 层（类型安全的请求/响应）
-│   ├── queries.ts          # TanStack Query hooks（30+ query/mutation）
+│   ├── api.ts              # HTTP API 层（/api/workey 契约，类型安全）
+│   ├── queries.ts          # TanStack Query hooks
 │   ├── auth-context.tsx    # 认证状态 Context
 │   ├── useAuthGuard.ts     # 路由级认证守卫 hook
 │   ├── toast-context.tsx   # Toast 通知系统

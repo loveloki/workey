@@ -3,14 +3,18 @@
 //////////
 // source: models.go
 
+/**
+ * RecordID 是 PocketBase record ID；反序列化时兼容旧版备份中的数字 ID。
+ */
+export type RecordID = string;
 export interface User {
-  id: number /* int64 */;
+  id: RecordID;
   username: string;
   created_at: string;
 }
 export interface Attendance {
-  id: number /* int64 */;
-  user_id: number /* int64 */;
+  id: RecordID;
+  user_id: RecordID;
   date: string;
   clock_in?: string;
   clock_out?: string;
@@ -20,16 +24,16 @@ export interface Attendance {
   updated_at: string;
 }
 export interface WorkLog {
-  id: number /* int64 */;
-  user_id: number /* int64 */;
+  id: RecordID;
+  user_id: RecordID;
   date: string;
   content: string;
   created_at: string;
   updated_at: string;
 }
 export interface Todo {
-  id: number /* int64 */;
-  user_id: number /* int64 */;
+  id: RecordID;
+  user_id: RecordID;
   content: string;
   url: string;
   done: boolean;
@@ -40,8 +44,8 @@ export interface Todo {
  * TicketIssue 记录工单问题、根因分类和复盘结论。
  */
 export interface TicketIssue {
-  id: number /* int64 */;
-  user_id: number /* int64 */;
+  id: RecordID;
+  user_id: RecordID;
   ticket_no: string;
   ticket_title: string;
   ticket_url: string;
@@ -54,26 +58,26 @@ export interface TicketIssue {
   updated_at: string;
 }
 export interface Checklist {
-  id: number /* int64 */;
-  user_id: number /* int64 */;
+  id: RecordID;
+  user_id: RecordID;
   title: string;
   items: string; // JSON 数组字符串
-  kind: string; // 仅保留 manual，兼容旧数据库字段
+  kind: string; // 固定为 manual，保留以兼容旧备份
   created_at: string;
   updated_at: string;
 }
 export interface ChecklistSnapshot {
-  id: number /* int64 */;
-  user_id: number /* int64 */;
-  checklist_id: number /* int64 */;
+  id: RecordID;
+  user_id: RecordID;
+  checklist_id: RecordID;
   title: string;
   items_hash: string;
   data: string; // JSON: { checked: bool[], notes: string[], extras: [...] }
   created_at: string;
 }
 export interface IterationOverride {
-  id: number /* int64 */;
-  user_id: number /* int64 */;
+  id: RecordID;
+  user_id: RecordID;
   iteration_number: number /* int64 */;
   start_date: string;
   end_date: string;
@@ -84,8 +88,8 @@ export interface IterationOverride {
  * HolidayCalendarDay 只保存中国法定节假日与调休工作日等例外日期。
  */
 export interface HolidayCalendarDay {
-  id: number /* int64 */;
-  user_id: number /* int64 */;
+  id: RecordID;
+  user_id: RecordID;
   date: string;
   is_workday: boolean;
   name: string;
@@ -111,30 +115,6 @@ export interface SettingsUpdateRequest {
   iteration_duration_days?: string; // 兼容旧客户端
   iteration_workdays?: string;
   reminder_delay?: string;
-}
-export interface Passkey {
-  id: number /* int64 */;
-  name: string;
-  created_at: string;
-  last_used_at?: string;
-}
-export interface PendingReminder {
-  id: number /* int64 */;
-  user_id: number /* int64 */;
-  send_at: string;
-  attempts: number /* int */;
-  created_at: string;
-}
-/**
- * PushSubscription 浏览器推送订阅信息
- */
-export interface PushSubscription {
-  id: number /* int64 */;
-  user_id: number /* int64 */;
-  endpoint: string;
-  p256dh: string;
-  auth: string;
-  created_at: string;
 }
 /**
  * 数据导出结构
@@ -261,22 +241,6 @@ export interface VersionRangeResponse {
   earliest?: string;
   latest?: string;
 }
-export interface PasskeyListResponse {
-  passkeys: Passkey[];
-}
-export interface PasskeyRegisterResponse {
-  passkey: Passkey;
-}
-/**
- * PasskeyAuthBeginResponse 返回 WebAuthn 认证挑战参数
- */
-export interface PasskeyAuthBeginResponse {
-  challenge: string;
-  challengeId: string;
-  rpId: string;
-  timeout: number /* int */;
-  userVerification: string;
-}
 export interface DataImportResponse {
   message: string;
   attendance_count: number /* int */;
@@ -294,132 +258,4 @@ export interface DataDeleteResponse {
   work_log_count: number /* int64 */;
   todo_count: number /* int64 */;
   ticket_issue_count: number /* int64 */;
-}
-export interface VapidKeyResponse {
-  public_key: string;
-}
-export interface PushSubscribeRequest {
-  endpoint: string;
-  p256dh: string;
-  auth: string;
-}
-/**
- * SyncConfigResponse WebDAV 配置信息（密码脚敏信息不返回）
- */
-export interface SyncConfigResponse {
-  configured: boolean;
-  webdav_url: string;
-  webdav_username: string;
-  remote_path: string;
-  auto_sync_interval_minutes: number /* int */;
-  created_at: string;
-  updated_at: string;
-  warning?: string;
-}
-/**
- * SyncStatusResponse 当前同步状态
- */
-export interface SyncStatusResponse {
-  configured: boolean;
-  last_sync_at?: string;
-  last_direction?: string;
-  last_local_hash?: string;
-  last_remote_hash?: string;
-}
-/**
- * SyncCheckResponse 冲突检测结果
- */
-export interface SyncCheckResponse {
-  status: string; // ok / conflict / remote_ahead / local_ahead / no_config / first_sync
-  current_local_hash: string;
-  current_remote_hash: string;
-  last_local_hash: string;
-  last_remote_hash: string;
-  message: string;
-}
-/**
- * SyncOperationResponse push/pull 操作结果
- */
-export interface SyncOperationResponse {
-  message: string;
-  local_hash: string;
-  remote_hash: string;
-}
-/**
- * SyncConflictResponse 冲突响应（HTTP 409）
- */
-export interface SyncConflictResponse {
-  error: string;
-  current_local_hash: string;
-  current_remote_hash: string;
-  last_local_hash: string;
-  last_remote_hash: string;
-}
-/**
- * SyncLogListResponse 同步日志列表
- */
-export interface SyncLogListResponse {
-  logs: SyncLog[];
-}
-/**
- * SyncValidateResponse 验证 WebDAV 连接结果
- */
-export interface SyncValidateResponse {
-  success: boolean;
-  message: string;
-}
-
-//////////
-// source: sync_types.go
-
-/**
- * SyncConfig 存储 WebDAV 连接配置（敏感字段加密后入库）
- */
-export interface SyncConfig {
-  id: number /* int64 */;
-  user_id: number /* int64 */;
-  webdav_url: string;
-  webdav_username: string;
-  remote_path: string;
-  auto_sync_interval_minutes: number /* int */;
-  created_at: string;
-  updated_at: string;
-}
-/**
- * SyncState 记录每次成功同步后的状态快照
- */
-export interface SyncState {
-  id: number /* int64 */;
-  user_id: number /* int64 */;
-  last_local_hash: string;
-  last_remote_hash: string;
-  last_sync_at: string;
-  direction: string; // push / pull
-}
-/**
- * SyncLog 记录每次同步操作的详细日志
- */
-export interface SyncLog {
-  id: number /* int64 */;
-  user_id: number /* int64 */;
-  direction: string; // push / pull / check
-  status: string; // success / conflict / error
-  message: string;
-  created_at: string;
-}
-/**
- * WebDAV 远端 manifest 文件结构
- */
-export interface SyncManifest {
-  version: number /* int */;
-  snapshot_file: string;
-  snapshot_hash: string;
-  pushed_at: string;
-}
-/**
- * EncryptedMasterKey 存储在 WebDAV 上的加密主密钥
- */
-export interface EncryptedMasterKey {
-  salt: string;
-  encrypted: string;
 }

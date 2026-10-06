@@ -6,7 +6,7 @@ import type { Todo } from './api'
 // 测试 Feature：将一天的工作数据格式化为可复制的 Markdown 文本
 describe('formatDayMarkdown', () => {
   function makeTodo(content: string, url = ''): Todo {
-    return { id: 1, user_id: 1, content, url, done: true, created_at: '', updated_at: '' }
+    return { id: 't1', user_id: 'u1', content, url, done: true, created_at: '', updated_at: '' }
   }
 
   // check 函数：统一调用签名，降低测试摩擦
@@ -45,7 +45,7 @@ describe('formatDayMarkdown', () => {
 
   describe('includeMeta 选项（历史导出）', () => {
     const att = {
-      id: 1, user_id: 1, date: '2026-05-15',
+      id: 'a1', user_id: 'u1', date: '2026-05-15',
       clock_in: '2026-05-15T09:05:00+08:00',
       clock_out: '2026-05-15T18:30:00+08:00',
       status: 'normal', is_overtime: false, created_at: '', updated_at: '',
@@ -78,7 +78,7 @@ describe('formatDayMarkdown', () => {
 // 导出文案跟随语言
 describe('formatDayMarkdown 多语言', () => {
   const att = {
-    id: 1, user_id: 1, date: '2026-05-15',
+    id: 'a1', user_id: 'u1', date: '2026-05-15',
     clock_in: '2026-05-15T09:05:00+08:00',
     clock_out: '2026-05-15T18:30:00+08:00',
     status: 'normal', is_overtime: true, created_at: '', updated_at: '',
@@ -108,7 +108,7 @@ describe('formatDayMarkdown 多语言', () => {
   })
 
   it('不含元信息时输出与语言无关', () => {
-    const todos = [{ id: 1, user_id: 1, content: 'task1', url: '', done: true, created_at: '', updated_at: '' } as Todo]
+    const todos = [{ id: 't1', user_id: 'u1', content: 'task1', url: '', done: true, created_at: '', updated_at: '' } as Todo]
     expect(formatDayMarkdown('2026-05-15', att, 'log', todos, { lang: 'en-US' })).toBe(
       formatDayMarkdown('2026-05-15', att, 'log', todos, { lang: 'zh-CN' }),
     )

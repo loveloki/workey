@@ -12,15 +12,10 @@ vi.mock('../../lib/api', async importOriginal => {
       get: vi.fn(),
       save: vi.fn(),
     },
-    push: {
-      getVapidKey: vi.fn(),
-      subscribe: vi.fn(),
-      unsubscribe: vi.fn(),
-    },
   }
 })
 
-import { settings, push } from '../../lib/api'
+import { settings } from '../../lib/api'
 
 const defaultSettings = {
   timezone: '+8',
@@ -56,13 +51,6 @@ describe('ReminderSection', () => {
   beforeEach(() => {
     client = makeClient()
     vi.mocked(settings.get).mockResolvedValue(defaultSettings as any)
-
-    // 模拟浏览器 Notification API
-    Object.defineProperty(window, 'Notification', {
-      value: { permission: 'default' },
-      writable: true,
-      configurable: true,
-    })
   })
 
   afterEach(() => {
@@ -72,7 +60,7 @@ describe('ReminderSection', () => {
   it('渲染延迟选择器', async () => {
     render(<Wrapper client={client} />)
     await waitFor(() => {
-      expect(screen.getByText(/打卡后延迟/)).toBeInTheDocument()
+      expect(screen.getByText(/上班时长/)).toBeInTheDocument()
     })
   })
 
@@ -107,10 +95,11 @@ describe('ReminderSection', () => {
     })
   })
 
-  it('显示开启通知按钮（未订阅时）', async () => {
+  it('不再显示推送订阅入口', async () => {
     render(<Wrapper client={client} />)
     await waitFor(() => {
-      expect(screen.getByText('开启推送通知')).toBeInTheDocument()
+      expect(screen.getByRole('combobox')).toBeInTheDocument()
     })
+    expect(screen.queryByText(/推送/)).not.toBeInTheDocument()
   })
 })

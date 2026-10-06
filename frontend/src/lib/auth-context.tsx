@@ -19,7 +19,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isLoggedIn()) {
-      authApi.me().then(data => {
+      // 启动时用现有 token 换取新 token，实现登录态续期
+      authApi.refresh().then(data => {
+        setToken(data.token)
         setUser(data.user)
       }).catch((err: unknown) => {
         if (err instanceof ApiError && err.status === 401) {

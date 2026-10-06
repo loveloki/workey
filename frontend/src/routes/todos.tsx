@@ -3,7 +3,7 @@ import { PageHeader } from '../components/PageHeader'
 import { useAuthGuard } from '../lib/useAuthGuard'
 import { useToast } from '../lib/toast-context'
 import { useState, useRef } from 'react'
-import { type Todo } from '../lib/api'
+import { type Todo, type RecordID } from '../lib/api'
 import { LoadingScreen } from '../components/LoadingScreen'
 import { useSettings, useTodoList, useCreateTodo, useUpdateTodo, useDeleteTodo } from '../lib/queries'
 import { useI18n } from '../lib/i18n'
@@ -87,11 +87,11 @@ function TodoList() {
     await updateMut.mutateAsync({ id: todo.id, data: { done: !todo.done } })
   }
 
-  const updateTodo = async (id: number, d: { content?: string; url?: string }) => {
+  const updateTodo = async (id: RecordID, d: { content?: string; url?: string }) => {
     await updateMut.mutateAsync({ id, data: d })
   }
 
-  const deleteTodo = async (id: number) => {
+  const deleteTodo = async (id: RecordID) => {
     await deleteMut.mutateAsync(id)
   }
 

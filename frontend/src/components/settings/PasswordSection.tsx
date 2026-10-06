@@ -3,9 +3,11 @@ import { settings } from '../../lib/api'
 import { Card } from '../../components/Card'
 import { InputField } from '../../components/InputField'
 import { useI18n } from '../../lib/i18n'
+import { useAuth } from '../../lib/auth-context'
 
 export function PasswordSection() {
   const { t } = useI18n()
+  const { loginWithToken } = useAuth()
   const [oldPw, setOldPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
@@ -30,7 +32,9 @@ export function PasswordSection() {
 
     setSaving(true)
     try {
-      await settings.changePassword(oldPw, newPw)
+      // 修改密码后旧 token 被吊销，必须换用后端返回的新 token，否则会被登出
+      const data = await settings.changePassword(oldPw, newPw)
+      loginWithToken(data.token, data.user)
       setMsg(t('settings.password.changed'))
       setIsError(false)
       setOldPw('')

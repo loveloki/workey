@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   attendance, workLogs, todos, ticketIssues, checklists, checklistSnapshots,
-  settings, iterations, iterationOverrides, holidayCalendar, passkeys, system, history, sync,
+  settings, iterations, iterationOverrides, holidayCalendar, system, history,
   type Attendance, type WorkLog, type Todo, type Checklist,
   type ChecklistItem, type SnapshotData, type AttendanceStats,
-  type TicketIssueInput, type TicketIssueFilters, type SyncConfigInput,
+  type TicketIssueInput, type TicketIssueFilters, type RecordID,
   type SettingsUpdateRequest, type HolidayCalendarImportRequest, type AttendanceStatus,
 } from './api'
 
@@ -35,20 +35,14 @@ export const queryKeys = {
     list: ['checklists'] as const,
   },
   checklistSnapshots: {
-    list: (checklistId: number) => ['checklistSnapshots', checklistId] as const,
+    list: (checklistId: RecordID) => ['checklistSnapshots', checklistId] as const,
   },
   settings: ['settings'] as const,
   iterations: ['iterations'] as const,
   iterationOverrides: ['iterationOverrides'] as const,
   holidayCalendar: ['holidayCalendar'] as const,
-  passkeys: ['passkeys'] as const,
   systemVersion: ['system', 'version'] as const,
   historyDateRange: ['history', 'dateRange'] as const,
-  sync: {
-    config: ['sync', 'config'] as const,
-    status: ['sync', 'status'] as const,
-    logs: ['sync', 'logs'] as const,
-  },
 }
 
 // ─── Attendance Queries ──────────────────────────────────────────
@@ -196,7 +190,7 @@ export function useCreateTodo() {
 export function useUpdateTodo() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { content?: string; url?: string; done?: boolean } }) =>
+    mutationFn: ({ id, data }: { id: RecordID; data: { content?: string; url?: string; done?: boolean } }) =>
       todos.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['todos'] })
@@ -207,7 +201,7 @@ export function useUpdateTodo() {
 export function useDeleteTodo() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => todos.delete(id),
+    mutationFn: (id: RecordID) => todos.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['todos'] })
     },
@@ -243,7 +237,7 @@ export function useCreateTicketIssue() {
 export function useUpdateTicketIssue() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: TicketIssueInput }) => ticketIssues.update(id, data),
+    mutationFn: ({ id, data }: { id: RecordID; data: TicketIssueInput }) => ticketIssues.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['ticketIssues'] }) },
   })
 }
@@ -251,7 +245,7 @@ export function useUpdateTicketIssue() {
 export function useDeleteTicketIssue() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => ticketIssues.delete(id),
+    mutationFn: (id: RecordID) => ticketIssues.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['ticketIssues'] }) },
   })
 }
@@ -266,11 +260,11 @@ export function useChecklistList(enabled = true) {
   })
 }
 
-export function useChecklistSnapshots(checklistId: number, enabled = true) {
+export function useChecklistSnapshots(checklistId: RecordID, enabled = true) {
   return useQuery({
     queryKey: queryKeys.checklistSnapshots.list(checklistId),
     queryFn: () => checklistSnapshots.list(checklistId),
-    enabled: enabled && checklistId > 0,
+    enabled: enabled && !!checklistId,
   })
 }
 
@@ -290,7 +284,7 @@ export function useCreateChecklist() {
 export function useUpdateChecklist() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { title?: string; items?: ChecklistItem[] } }) =>
+    mutationFn: ({ id, data }: { id: RecordID; data: { title?: string; items?: ChecklistItem[] } }) =>
       checklists.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.checklists.list })
@@ -301,7 +295,7 @@ export function useUpdateChecklist() {
 export function useDeleteChecklist() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => checklists.delete(id),
+    mutationFn: (id: RecordID) => checklists.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.checklists.list })
     },
@@ -312,7 +306,7 @@ export function useCreateSnapshot() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ checklistId, title, itemsHash, data }: {
-      checklistId: number; title: string; itemsHash: string; data: SnapshotData
+      checklistId: RecordID; title: string; itemsHash: string; data: SnapshotData
     }) => checklistSnapshots.create(checklistId, title, itemsHash, data),
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: queryKeys.checklistSnapshots.list(vars.checklistId) })
@@ -323,7 +317,7 @@ export function useCreateSnapshot() {
 export function useDeleteSnapshot() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, checklistId }: { id: number; checklistId: number }) =>
+    mutationFn: ({ id, checklistId }: { id: RecordID; checklistId: RecordID }) =>
       checklistSnapshots.delete(id),
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: queryKeys.checklistSnapshots.list(vars.checklistId) })
@@ -424,26 +418,6 @@ export function useDeleteHolidayCalendarYear() {
   })
 }
 
-// ─── Passkeys ────────────────────────────────────────────────────
-
-export function usePasskeyList(enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.passkeys,
-    queryFn: () => passkeys.list(),
-    enabled,
-  })
-}
-
-export function useDeletePasskey() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) => passkeys.delete(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.passkeys })
-    },
-  })
-}
-
 // ─── System ──────────────────────────────────────────────────────
 
 export function useSystemVersion(enabled = true) {
@@ -463,98 +437,5 @@ export function useHistoryDateRange(enabled = true) {
     queryFn: () => history.dateRange(),
     enabled,
     staleTime: 60_000,
-  })
-}
-
-// ─── Sync Queries ─────────────────────────────────────────────────
-
-export function useSyncConfig(enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.sync.config,
-    queryFn: () => sync.getConfig(),
-    enabled,
-    staleTime: 60_000,
-  })
-}
-
-export function useSyncStatus(enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.sync.status,
-    queryFn: () => sync.getStatus(),
-    enabled,
-    staleTime: 30_000,
-  })
-}
-
-export function useSyncLogs(enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.sync.logs,
-    queryFn: () => sync.getLogs(),
-    enabled,
-    staleTime: 60_000,
-  })
-}
-
-export function useSaveSyncConfig() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (data: SyncConfigInput) => sync.saveConfig(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.sync.config })
-      qc.invalidateQueries({ queryKey: queryKeys.sync.status })
-    },
-  })
-}
-
-export function useDeleteSyncConfig() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: () => sync.deleteConfig(),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.sync.config })
-      qc.invalidateQueries({ queryKey: queryKeys.sync.status })
-    },
-  })
-}
-
-export function useValidateSyncConfig() {
-  return useMutation({
-    mutationFn: (data?: SyncConfigInput) => sync.validate(data),
-  })
-}
-
-export function useSyncCheck() {
-  return useMutation({
-    mutationFn: () => sync.check(),
-  })
-}
-
-export function useSyncPush() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ force, loginPassword }: { force: boolean; loginPassword?: string }) => sync.push(force, loginPassword),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.sync.status })
-      qc.invalidateQueries({ queryKey: queryKeys.sync.logs })
-    },
-  })
-}
-
-export function useSyncPull() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ force, loginPassword }: { force: boolean; loginPassword?: string }) => sync.pull(force, loginPassword),
-    onSuccess: () => {
-      // 拉取后本地数据可能发生变化，精确刷新所有相关缓存
-      qc.invalidateQueries({ queryKey: queryKeys.sync.status })
-      qc.invalidateQueries({ queryKey: queryKeys.sync.logs })
-      qc.invalidateQueries({ queryKey: ['attendance'] })
-      qc.invalidateQueries({ queryKey: ['workLogs'] })
-      qc.invalidateQueries({ queryKey: ['todos'] })
-      qc.invalidateQueries({ queryKey: ['ticketIssues'] })
-      qc.invalidateQueries({ queryKey: queryKeys.checklists.list })
-      qc.invalidateQueries({ queryKey: ['settings'] })
-      qc.invalidateQueries({ queryKey: ['iterationOverrides'] })
-    },
   })
 }

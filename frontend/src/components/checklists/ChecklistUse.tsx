@@ -3,6 +3,7 @@ import {
   type Checklist,
   type ChecklistSnapshot,
   type SnapshotData,
+  type RecordID,
 } from '../../lib/api'
 import { useToast } from '../../lib/toast-context'
 import { useI18n } from '../../lib/i18n'
@@ -55,9 +56,9 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
   const savedRuns = snapshotsData?.snapshots ?? []
 
   const [snapshotTitle, setSnapshotTitle] = useState('')
-  const [viewingRunId, setViewingRunId] = useState<number | null>(null)
+  const [viewingRunId, setViewingRunId] = useState<RecordID | null>(null)
   const [showSavedList, setShowSavedList] = useState(false)
-  const [confirmDeleteRunId, setConfirmDeleteRunId] = useState<number | null>(null)
+  const [confirmDeleteRunId, setConfirmDeleteRunId] = useState<RecordID | null>(null)
 
   useEffect(() => {
     try {
@@ -119,7 +120,7 @@ export function ChecklistUse({ checklist, onBack }: { checklist: Checklist; onBa
     }
   }
 
-  const deleteSnapshot = async (id: number) => {
+  const deleteSnapshot = async (id: RecordID) => {
     try {
       await deleteSnapshotMut.mutateAsync({ id, checklistId: checklist.id })
       if (viewingRunId === id) setViewingRunId(null)

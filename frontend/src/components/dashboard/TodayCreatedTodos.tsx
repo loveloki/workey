@@ -1,6 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useState, useRef, type FormEvent, type KeyboardEvent } from 'react'
-import { type Todo } from '../../lib/api'
+import { type Todo, type RecordID } from '../../lib/api'
 import { useToast } from '../../lib/toast-context'
 import { useCreatedTodosToday, useCreateTodo, useUpdateTodo, useDeleteTodo } from '../../lib/queries'
 import { useI18n } from '../../lib/i18n'
@@ -17,11 +17,11 @@ function useTodayCreatedTodos() {
     await updateMut.mutateAsync({ id: todo.id, data: { done: !todo.done } })
   }
 
-  const updateTodo = async (id: number, d: { content?: string; url?: string }) => {
+  const updateTodo = async (id: RecordID, d: { content?: string; url?: string }) => {
     await updateMut.mutateAsync({ id, data: d })
   }
 
-  const deleteTodo = async (id: number) => {
+  const deleteTodo = async (id: RecordID) => {
     await deleteMut.mutateAsync(id)
   }
 

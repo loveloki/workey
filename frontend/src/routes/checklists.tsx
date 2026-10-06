@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { PageHeader } from '../components/PageHeader'
 import { useAuthGuard } from '../lib/useAuthGuard'
 import { useState } from 'react'
-import { type Checklist } from '../lib/api'
+import { type Checklist, type RecordID } from '../lib/api'
 import { LoadingScreen } from '../components/LoadingScreen'
 import { ChecklistForm } from '../components/checklists/ChecklistForm'
 import { ChecklistCard } from '../components/checklists/ChecklistCard'
@@ -28,7 +28,7 @@ function ChecklistsPage() {
 }
 
 function ChecklistManager() {
-  const [activeId, setActiveId] = useState<number | null>(null)
+  const [activeId, setActiveId] = useState<RecordID | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const { data, isLoading } = useChecklistList()
   const { t } = useI18n()
@@ -43,7 +43,7 @@ function ChecklistManager() {
     // mutation hook 会自动 invalidate query，无需手动更新
   }
 
-  const handleDeleted = (id: number) => {
+  const handleDeleted = (id: RecordID) => {
     if (activeId === id) setActiveId(null)
   }
 

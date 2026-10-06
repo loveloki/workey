@@ -41,13 +41,13 @@ describe('AuthProvider', () => {
     })
   })
 
-  it('有 token 时调用 /api/auth/me 恢复用户', async () => {
+  it('有 token 时调用 refresh 恢复用户并换发新 token', async () => {
     setToken('valid-token')
     globalThis.fetch = vi.fn().mockResolvedValue({
       status: 200,
       ok: true,
       headers: new Headers(),
-      text: () => Promise.resolve(JSON.stringify({ user: { id: 1, username: 'alice' } })),
+      text: () => Promise.resolve(JSON.stringify({ token: 'refreshed-token', user: { id: 'a1', username: 'alice' } })),
     })
 
     render(
@@ -59,6 +59,8 @@ describe('AuthProvider', () => {
     await waitFor(() => {
       expect(screen.getByTestId('username')).toHaveTextContent('alice')
     })
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/workey/auth/refresh', expect.any(Object))
+    expect(localStorage.getItem('token')).toBe('refreshed-token')
   })
 
   it('token 过期（401）时清除 token 并显示未登录', async () => {
@@ -90,7 +92,7 @@ describe('AuthProvider', () => {
       status: 200,
       ok: true,
       headers: new Headers(),
-      text: () => Promise.resolve(JSON.stringify({ user: { id: 1, username: 'bob' } })),
+      text: () => Promise.resolve(JSON.stringify({ token: 'refreshed-token', user: { id: 'b1', username: 'bob' } })),
     })
 
     render(
@@ -115,7 +117,7 @@ describe('AuthProvider', () => {
     setToken('valid-token')
     globalThis.fetch = vi.fn().mockResolvedValue(new Response('<html>Proxy sign-in</html>', {
       status,
-      headers: { 'Content-Type': 'text/html', 'X-New-Token': 'proxy-token' },
+      headers: { 'Content-Type': 'text/html' },
     }))
 
     render(<AuthProvider><TestConsumer /></AuthProvider>)
