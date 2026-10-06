@@ -25,7 +25,7 @@ pnpm test:coverage  # 覆盖率报告
 
 ## API 地址与部署
 
-未配置时，开发和构建均默认连接 `https://pockethost.exe.xyz`，不自动回退到本地旧版 `/api`。该服务必须将普通 PocketBase 二进制替换为 **Workey Go PocketBase 扩展二进制**；普通 PocketBase 的管理/集合 API 不能替代 Workey 路由。
+未配置时，开发和构建均默认连接 `https://pockethost.exe.xyz`，不自动回退到本地 `/api`。该服务必须将普通 PocketBase 二进制替换为 **Workey Go PocketBase 扩展二进制**；普通 PocketBase 的管理/集合 API 不能替代 Workey 路由。
 
 可复制 `.env.example` 为 `.env.local` 并设置 `VITE_API_BASE_URL`。地址末尾的 `/` 会自动规范化，也支持带路径前缀的地址。此变量在构建时写入浏览器代码，修改后须重启开发服务器或重新构建；**禁止放入 PocketBase 管理员凭据或任何密钥**。
 
@@ -46,7 +46,7 @@ VITE_API_BASE_URL= pnpm dev
 VITE_API_BASE_URL=
 ```
 
-这会让开发请求走同源 `/api` 的 Vite proxy，也会影响后续构建；若此文件存在，远程构建应显式设置 `VITE_API_BASE_URL=https://pockethost.exe.xyz`。为不覆盖可能被旧服务使用的 `frontend/dist`，构建验证使用 `pnpm exec vite build --outDir /tmp/workey-pocketbase-frontend`，不代表已经部署或重启服务。
+这会让开发请求走同源 `/api` 的 Vite proxy，也会影响后续构建；若此文件存在，远程构建应显式设置 `VITE_API_BASE_URL=https://pockethost.exe.xyz`。为避免覆盖运行中的 `frontend/dist`，构建验证使用 `pnpm exec vite build --outDir /tmp/workey-pocketbase-frontend`，不代表已经部署或重启服务。
 
 所有 API 请求（含导出 ZIP、导入、Passkey 和 Push）均使用该地址并带 `credentials: include`，用于 exe.dev 代理会话；Workey 用户 token 仍使用 Bearer 认证。远程服务需允许 **React 页面真实 Origin** 的跨域请求与 credentials（不能使用通配符来源），并暴露 `X-New-Token` 响应头以支持 token 刷新。浏览器 Cookie 策略仍可能限制跨站会话。
 
