@@ -109,7 +109,6 @@ export interface HolidayCalendarImportRequest {
 }
 export interface SettingsUpdateRequest {
   timezone?: string;
-  kanban_url?: string;
   theme?: string;
   iteration_start_date?: string;
   iteration_duration_days?: string; // 兼容旧客户端
@@ -225,7 +224,6 @@ export interface HolidayCalendarImportResponse {
 }
 export interface SettingsResponse {
   timezone: string;
-  kanban_url: string;
   theme: string;
   iteration_start_date: string;
   iteration_duration_days: string; // 兼容旧客户端

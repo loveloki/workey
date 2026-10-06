@@ -59,7 +59,7 @@ func TestHandleSettings(t *testing.T) {
 	})
 
 	t.Run("更新所有设置", func(t *testing.T) {
-		body := `{"timezone":"+0","theme":"auto","kanban_url":"https://custom.url","iteration_start_date":"2024-01-01","iteration_duration_days":"7"}`
+		body := `{"timezone":"+0","theme":"auto","iteration_start_date":"2024-01-01","iteration_duration_days":"7"}`
 		req := createAuthenticatedRequest(t, "POST", "/api/workey/settings", body, userID)
 		rr := httptest.NewRecorder()
 
@@ -71,7 +71,6 @@ func TestHandleSettings(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 		assert.Equal(t, "+0", resp.Timezone)
 		assert.Equal(t, "auto", resp.Theme)
-		assert.Equal(t, "https://custom.url", resp.KanbanURL)
 		assert.Equal(t, "2024-01-01", resp.IterationStartDate)
 		assert.Equal(t, "7", resp.IterationDurationDays)
 	})
@@ -131,7 +130,6 @@ func TestHandleSettings(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 		assert.Equal(t, "+0", resp.Timezone)
 		assert.Equal(t, "auto", resp.Theme)
-		assert.Equal(t, "https://custom.url", resp.KanbanURL)
 		assert.Equal(t, "2024-01-01", resp.IterationStartDate)
 		assert.Equal(t, "7", resp.IterationDurationDays)
 	})

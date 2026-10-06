@@ -10,14 +10,13 @@ import (
 // 用户设置 handler：设置保存在 workey_accounts 认证记录的同名字段上，空值表示使用默认值。
 
 var settingKeys = []string{
-	"timezone", "kanban_url", "theme", "iteration_start_date",
+	"timezone", "theme", "iteration_start_date",
 	"iteration_duration_days", "iteration_workdays", "reminder_delay",
 }
 
 func defaultSettings() map[string]string {
 	return map[string]string{
 		"timezone":                "+8",
-		"kanban_url":              "https://www.fizzy.do/",
 		"theme":                   "light",
 		"iteration_start_date":    "2019-09-02",
 		"iteration_duration_days": "14",
@@ -72,7 +71,6 @@ func loadSettings(account *core.Record) map[string]string {
 func settingsResponse(values map[string]string) SettingsResponse {
 	return SettingsResponse{
 		Timezone:              values["timezone"],
-		KanbanURL:             values["kanban_url"],
 		Theme:                 values["theme"],
 		IterationStartDate:    values["iteration_start_date"],
 		IterationDurationDays: values["iteration_duration_days"],
@@ -113,7 +111,6 @@ func handleSaveSettings(e *core.RequestEvent) error {
 	account := e.Auth
 	for key, value := range map[string]string{
 		"timezone":                req.Timezone,
-		"kanban_url":              req.KanbanURL,
 		"theme":                   req.Theme,
 		"iteration_start_date":    req.IterationStartDate,
 		"iteration_duration_days": req.IterationDurationDays,

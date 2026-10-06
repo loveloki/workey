@@ -5,7 +5,6 @@ import { LoadingScreen } from '../components/LoadingScreen'
 import { LanguageSection } from '../components/settings/LanguageSection'
 import { ThemeSection } from '../components/settings/ThemeSection'
 import { TimezoneSection } from '../components/settings/TimezoneSection'
-import { KanbanUrlSection } from '../components/settings/KanbanUrlSection'
 import { PasswordSection } from '../components/settings/PasswordSection'
 import { DataSection } from '../components/settings/DataSection'
 import { DeleteDataSection } from '../components/settings/DeleteDataSection'
@@ -32,7 +31,6 @@ function SettingsPage() {
         <ThemeSection />
         <TimezoneSection />
         <IterationSettingsSection />
-        <KanbanUrlSection />
         <PasswordSection />
         <DataSection />
         <DeleteDataSection />

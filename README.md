@@ -25,7 +25,7 @@
 
 | collection | 类型 | 说明 |
 |---|---|---|
-| `workey_accounts` | auth | `username` 为登录标识（唯一索引），用户设置（时区、主题、看板地址、迭代参数、下班时长）作为记录字段 |
+| `workey_accounts` | auth | `username` 为登录标识（唯一索引），用户设置（时区、主题、迭代参数、下班时长）作为记录字段 |
 | `attendance` / `work_logs` | base | 每用户每天一条（`user, date` 唯一） |
 | `todos` / `ticket_issues` | base | 待办、工单复盘 |
 | `checklists` / `checklist_snapshots` | base | 清单与快照，快照随清单级联删除 |

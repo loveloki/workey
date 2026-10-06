@@ -5,7 +5,7 @@ import { useToast } from '../lib/toast-context'
 import { useState, useRef } from 'react'
 import { type Todo, type RecordID } from '../lib/api'
 import { LoadingScreen } from '../components/LoadingScreen'
-import { useSettings, useTodoList, useCreateTodo, useUpdateTodo, useDeleteTodo } from '../lib/queries'
+import { useTodoList, useCreateTodo, useUpdateTodo, useDeleteTodo } from '../lib/queries'
 import { useI18n } from '../lib/i18n'
 
 export const Route = createFileRoute('/todos')({ component: TodosPage })
@@ -19,37 +19,10 @@ function TodosPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-4 pb-8 pt-8">
-      <PageHeader eyebrow={t('todos.eyebrow')} title={t('todos.title')} actions={<KanbanLink />} />
+      <PageHeader eyebrow={t('todos.eyebrow')} title={t('todos.title')} />
 
       <TodoList />
     </main>
-  )
-}
-
-/* ── Kanban external link ─────────────────────────────────── */
-
-function KanbanLink() {
-  const { data } = useSettings()
-  const { t } = useI18n()
-  const url = data?.kanban_url || 'https://www.fizzy.do/'
-
-  if (!data) return null
-
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center gap-2 rounded-md border border-[var(--color-border)] px-4 py-2 font-mono text-sm text-[var(--color-ink-muted)] no-underline transition-colors hover:bg-[var(--color-surface-hover)]"
-    >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="7" height="7" />
-        <rect x="14" y="3" width="7" height="7" />
-        <rect x="3" y="14" width="7" height="7" />
-        <rect x="14" y="14" width="7" height="7" />
-      </svg>
-      {t('todos.kanban')}
-    </a>
   )
 }
 

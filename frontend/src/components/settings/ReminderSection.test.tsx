@@ -19,7 +19,6 @@ import { settings } from '../../lib/api'
 
 const defaultSettings = {
   timezone: '+8',
-  kanban_url: 'https://www.fizzy.do/',
   theme: 'light',
   iteration_start_date: '2019-09-02',
   iteration_duration_days: '14',

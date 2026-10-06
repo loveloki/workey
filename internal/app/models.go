@@ -141,7 +141,6 @@ type HolidayCalendarImportRequest struct {
 
 type SettingsUpdateRequest struct {
 	Timezone              string `json:"timezone,omitempty"`
-	KanbanURL             string `json:"kanban_url,omitempty"`
 	Theme                 string `json:"theme,omitempty"`
 	IterationStartDate    string `json:"iteration_start_date,omitempty"`
 	IterationDurationDays string `json:"iteration_duration_days,omitempty"` // 兼容旧客户端

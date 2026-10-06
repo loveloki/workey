@@ -136,7 +136,6 @@ type HolidayCalendarImportResponse struct {
 
 type SettingsResponse struct {
 	Timezone              string `json:"timezone"`
-	KanbanURL             string `json:"kanban_url"`
 	Theme                 string `json:"theme"`
 	IterationStartDate    string `json:"iteration_start_date"`
 	IterationDurationDays string `json:"iteration_duration_days"` // 兼容旧客户端
