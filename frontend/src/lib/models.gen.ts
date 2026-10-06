@@ -4,7 +4,7 @@
 // source: models.go
 
 /**
- * RecordID 是 PocketBase record ID；反序列化时兼容旧版备份中的数字 ID。
+ * RecordID 是 PocketBase record ID（字符串）。
  */
 export type RecordID = string;
 export interface User {
@@ -62,7 +62,7 @@ export interface Checklist {
   user_id: RecordID;
   title: string;
   items: string; // JSON 数组字符串
-  kind: string; // 固定为 manual，保留以兼容旧备份
+  kind: string; // 固定为 manual
   created_at: string;
   updated_at: string;
 }
@@ -238,17 +238,6 @@ export interface VersionResponse {
 export interface VersionRangeResponse {
   earliest?: string;
   latest?: string;
-}
-export interface DataImportResponse {
-  message: string;
-  attendance_count: number /* int */;
-  work_log_count: number /* int */;
-  todo_count: number /* int */;
-  ticket_issue_count: number /* int */;
-  checklist_count: number /* int */;
-  snapshot_count: number /* int */;
-  override_count: number /* int */;
-  calendar_day_count: number /* int */;
 }
 export interface DataDeleteResponse {
   message: string;

@@ -158,18 +158,6 @@ type VersionRangeResponse struct {
 
 // ─── Data ───────────────────────────────────────────────────
 
-type DataImportResponse struct {
-	Message          string `json:"message"`
-	AttendanceCount  int    `json:"attendance_count"`
-	WorkLogCount     int    `json:"work_log_count"`
-	TodoCount        int    `json:"todo_count"`
-	TicketIssueCount int    `json:"ticket_issue_count"`
-	ChecklistCount   int    `json:"checklist_count"`
-	SnapshotCount    int    `json:"snapshot_count"`
-	OverrideCount    int    `json:"override_count"`
-	CalendarDayCount int    `json:"calendar_day_count"`
-}
-
 type DataDeleteResponse struct {
 	Message          string `json:"message"`
 	AttendanceCount  int64  `json:"attendance_count"`

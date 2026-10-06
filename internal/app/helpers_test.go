@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -21,19 +20,4 @@ func TestValidDate(t *testing.T) {
 	assert.False(t, validDate("2023-02-29"))
 	assert.False(t, validDate("2024-2-1"))
 	assert.False(t, validDate(""))
-}
-
-func TestRecordIDAcceptsLegacyNumbers(t *testing.T) {
-	var data struct {
-		ID RecordID `json:"id"`
-	}
-	assert.NoError(t, decodeJSONForTest(`{"id": 42}`, &data))
-	assert.Equal(t, RecordID("42"), data.ID)
-	assert.NoError(t, decodeJSONForTest(`{"id": "abc123"}`, &data))
-	assert.Equal(t, RecordID("abc123"), data.ID)
-	assert.Error(t, decodeJSONForTest(`{"id": 1.5}`, &data))
-}
-
-func decodeJSONForTest(raw string, v any) error {
-	return json.Unmarshal([]byte(raw), v)
 }

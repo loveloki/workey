@@ -130,7 +130,7 @@ internal/app/
 - collection 的 API 规则保持 nil（仅超级管理员）；前端只调用 `/api/workey/*`，不直接使用 PocketBase record API / SDK。
 - 自定义路由必须在 `/api/workey` 下（避免与 PocketBase 系统路由冲突），需登录的路由绑定 `apis.RequireAuth("workey_accounts")`，用 `e.Auth` 取当前用户。
 - 前后端同源部署（同一个二进制提供 SPA 与 API）；CORS 使用 PocketBase 内置配置（`serve --origins`）。
-- 旧版迁移仅支持 ZIP 导出/导入（兼容旧版数字 ID）；不自动搬迁账号或旧数据库文件。
+- 不提供旧版数据导入；不自动搬迁账号或旧数据库文件。数据只能通过 `/api/workey/data/export` 导出 ZIP 归档。
 
 ### Handler 模式
 

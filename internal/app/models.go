@@ -1,36 +1,9 @@
 package app
 
-import (
-	"bytes"
-	"encoding/json"
-	"strconv"
-)
-
 // 数据模型定义
 
-// RecordID 是 PocketBase record ID；反序列化时兼容旧版备份中的数字 ID。
+// RecordID 是 PocketBase record ID（字符串）。
 type RecordID string
-
-func (id *RecordID) UnmarshalJSON(data []byte) error {
-	data = bytes.TrimSpace(data)
-	if len(data) > 0 && data[0] != '"' {
-		var number json.Number
-		if err := json.Unmarshal(data, &number); err != nil {
-			return err
-		}
-		if _, err := strconv.ParseInt(number.String(), 10, 64); err != nil {
-			return err
-		}
-		*id = RecordID(number.String())
-		return nil
-	}
-	var value string
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*id = RecordID(value)
-	return nil
-}
 
 type User struct {
 	ID        RecordID `json:"id"`
@@ -90,7 +63,7 @@ type Checklist struct {
 	UserID    RecordID `json:"user_id"`
 	Title     string   `json:"title"`
 	Items     string   `json:"items"` // JSON 数组字符串
-	Kind      string   `json:"kind"`  // 固定为 manual，保留以兼容旧备份
+	Kind      string   `json:"kind"`  // 固定为 manual
 	CreatedAt string   `json:"created_at"`
 	UpdatedAt string   `json:"updated_at"`
 }

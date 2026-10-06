@@ -11,7 +11,7 @@ import type {
   HolidayCalendarResponse, HolidayCalendarImportResponse, HolidayCalendarImportRequest,
   SettingsResponse, SettingsUpdateRequest, VersionResponse, VersionRangeResponse,
   MessageResponse, AuthResponse, MeResponse,
-  DataImportResponse, DataDeleteResponse, RecordID,
+  DataDeleteResponse, RecordID,
 } from './models.gen'
 import { t } from './i18n'
 
@@ -357,12 +357,4 @@ export const settings = {
       method: 'DELETE',
       body: JSON.stringify({ password }),
     }),
-  importData: async (file: File): Promise<DataImportResponse> => {
-    const form = new FormData()
-    form.append('file', file)
-    return request<DataImportResponse>('/api/workey/data/import', {
-      method: 'POST',
-      body: form,
-    })
-  },
 }
