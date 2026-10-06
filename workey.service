@@ -11,7 +11,6 @@ Restart=always
 RestartSec=3
 Environment=HOME=/home/exedev
 Environment=WORKEY_DATA=/home/exedev/workey/pb_data
-Environment=WORKEY_ALLOWED_ORIGINS=https://workey.exe.xyz,https://pockethost.exe.xyz
 
 [Install]
 WantedBy=multi-user.target

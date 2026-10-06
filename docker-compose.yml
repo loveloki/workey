@@ -3,14 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL-https://pockethost.exe.xyz}
     container_name: workey
     ports:
       - "8000:8000"
     environment:
       - WORKEY_DATA=/app/pb_data
-      - WORKEY_ALLOWED_ORIGINS=${WORKEY_ALLOWED_ORIGINS-https://workey.exe.xyz,https://pockethost.exe.xyz,http://localhost:3000,http://localhost:8000}
     volumes:
       - pocketbase-data:/app/pb_data
     restart: unless-stopped

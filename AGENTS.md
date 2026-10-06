@@ -6,7 +6,7 @@ Workey 是一个全栈个人工作管理系统，**几乎完全由 AI 生成**�
 
 | 层 | 技术栈 |
 |---|---|
-| 后端 | Go 1.27.1+ · PocketBase Go 扩展 · SQLite（PocketBase 管理） |
+| 后端 | Go 1.27.1+ · PocketBase Go 扩展 · 业务数据为 PocketBase collection |
 | 前端 | React 19 · TanStack Router · TanStack Query · Tailwind CSS v4 · Vite 6 |
 | 类型同步 | tygo（Go struct → TypeScript interface 自动生成） |
 | 测试 | Go testing + testify · Vitest + Testing Library |
@@ -36,7 +36,7 @@ tygo generate
 
 1. 在 `internal/app/models.go` 中定义数据模型（如果是新模型）
 2. 在 `internal/app/responses.go` 中定义响应类型
-3. 在 handler 中使用 `jsonOK(w, ResponseStruct{...})` 返回
+3. 在 `internal/app/app.go` 的 `/api/workey` 路由组注册 `func(e *core.RequestEvent) error` handler，使用 `e.JSON(200, ResponseStruct{...})` 返回
 4. 运行 `tygo generate` 更新前端类型
 5. 在 `frontend/src/lib/api.ts` 中添加 API 函数，泛型参数使用生成的响应类型
 6. 在 `frontend/src/lib/queries.ts` 中添加 TanStack Query hook
@@ -108,43 +108,45 @@ frontend/src/
 ### 文件结构
 
 ```
-cmd/workey/main.go         — 程序入口
+cmd/workey/main.go         — 程序入口（空白导入 workey/migrations）
+migrations/                — collection 定义（PocketBase Go migrations）
 internal/app/
-├── app.go                 — PocketBase 生命周期与自定义路由注册
+├── app.go                 — 启动配置与 /api/workey 路由注册
 ├── models.go              — 数据模型定义
 ├── responses.go           — API 响应类型定义
+├── records.go             — collection 名称、record ↔ 模型转换、按用户归属查询
+├── auth.go                — 注册、登录、刷新 token、修改密码
 ├── handler_*.go           — 按功能分组的 API handler
-├── middleware.go          — 中间件（CORS、认证、jsonOK/jsonError）
-├── database.go            — PocketBase auth collection / 自定义业务表的 Go migration
-├── database_adapter.go    — core.App.DB() / dbx 查询与已有事务模块的适配
-├── auth.go                — PocketBase 认证记录、原生 auth token 与数字用户 ID 映射
-├── passkey.go             — WebAuthn / Passkey
 ├── helpers.go             — 通用工具函数
-└── spa.go                 — SPA 前端静态文件服务
+└── spa.go                 — SPA 前端静态文件服务（apis.Static）
 ```
 
 ### PocketBase 集成
 
-- `workey_accounts` 为原生 auth collection；密码验证与 token 签发/吊销必须使用 PocketBase API，禁止自签 JWT 或复制密码哈希。
-- 业务数字 ID 保留以兼容旧备份，通过 `workey_profiles` 映射到 auth record ID。
-- 业务自定义 SQL 表都在 PocketBase 的 `data.db` 内，经 `core.App.DB()` / dbx 管理；禁止另行打开 `workey.db` 或初始化 SQLite 连接池。
-- schema 变更通过 Go migrations，普通 HTTP handler 通过官方 `apis.WrapStdHandler` 挂载。
-- React 默认连接 `https://pockethost.exe.xyz`，该服务需部署本项目的 Go 扩展二进制；本地同源开发显式设置 `VITE_API_BASE_URL=`。
-- 旧版迁移仅支持 ZIP 导出/导入；不自动搬迁账号、Passkey、WebDAV 凭据或旧数据库文件。
+- `workey_accounts` 为原生 auth collection；密码验证与 token 签发/吊销必须使用 PocketBase API，禁止自签 JWT 或复制密码哈希。用户设置是该记录上的字段。
+- 业务数据均为 PocketBase base collection，以 `user` relation 归属账号；ID 为 PocketBase record ID（字符串），时间使用 autodate 字段 `created` / `updated`。
+- 读写优先用 record API（`FindRecordsByFilter`、`Save`、`Delete`，filter 参数一律用 `{:param}` 绑定）；聚合统计可直接用 `e.App.DB()` / dbx 查询 collection 表。多步写入用 `app.RunInTransaction`，回调内只使用 `txApp`。
+- schema 变更在 `migrations/` 新增 Go migration，不修改已发布的 migration；禁止另行打开 SQLite 或手写 `CREATE TABLE`。
+- collection 的 API 规则保持 nil（仅超级管理员）；前端只调用 `/api/workey/*`，不直接使用 PocketBase record API / SDK。
+- 自定义路由必须在 `/api/workey` 下（避免与 PocketBase 系统路由冲突），需登录的路由绑定 `apis.RequireAuth("workey_accounts")`，用 `e.Auth` 取当前用户。
+- 前后端同源部署（同一个二进制提供 SPA 与 API）；CORS 使用 PocketBase 内置配置（`serve --origins`）。
+- 旧版迁移仅支持 ZIP 导出/导入（兼容旧版数字 ID）；不自动搬迁账号或旧数据库文件。
 
 ### Handler 模式
 
 ```go
-// 成功响应：使用具名结构体
-jsonOK(w, AttendanceResponse{Attendance: attendance})
-
-// 错误响应
-jsonError(w, "错误描述", http.StatusBadRequest)
+func handleX(e *core.RequestEvent) error {
+	// 成功响应：使用具名结构体
+	return e.JSON(http.StatusOK, AttendanceResponse{Attendance: &attendance})
+	// 错误响应：PocketBase ApiError，前端读取 message 字段
+	return e.BadRequestError("错误描述", err)
+}
 ```
 
 ### 测试
 
 - 使用具名响应结构体反序列化（`var resp AttendanceResponse`），而非 `map[string]interface{}`
+- Go 测试通过 `setupTestDB` 创建带迁移的临时 PocketBase 应用，经完整路由（`serveTest`）发起请求
 - 不要运行 `complexTable.test.ts` 中的测试
 
 ## 提交规范

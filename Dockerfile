@@ -4,7 +4,8 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN corepack enable && pnpm config set dangerouslyAllowAllBuilds true && pnpm install --frozen-lockfile
 COPY frontend/ ./
-ARG VITE_API_BASE_URL=https://pockethost.exe.xyz
+# 默认同源调用 API；前后端分开部署时才需要设置
+ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN pnpm build
 
