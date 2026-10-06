@@ -100,6 +100,7 @@ func registerRoutes(r *router.Router[*core.RequestEvent]) {
 	g.GET("/history/date-range", handleHistoryDateRange)
 
 	g.GET("/data/export", handleDataExport)
+	g.POST("/data/import", handleDataImport).Bind(apis.BodyLimit(maxDataArchiveBytes + (1 << 20)))
 	g.DELETE("/data/delete", handleDataDelete)
 
 	registerSPA(r)

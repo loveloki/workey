@@ -115,7 +115,7 @@ func handleImportHolidayCalendar(e *core.RequestEvent) error {
 	return e.JSON(200, HolidayCalendarImportResponse{ImportedCount: len(uniqueDays), ReplacedYears: years})
 }
 
-// upsertHolidayDay 按 (user, date) 新增或更新一天。
+// upsertHolidayDay 按 (user, date) 新增或更新一天；day 带时间戳时原样保留（用于备份导入）。
 func upsertHolidayDay(app core.App, userID string, day HolidayCalendarDay) error {
 	record, err := app.FindFirstRecordByFilter(holidayCollection, "user = {:user} && date = {:date}",
 		dbx.Params{"user": userID, "date": day.Date})
@@ -131,7 +131,7 @@ func upsertHolidayDay(app core.App, userID string, day HolidayCalendarDay) error
 	record.Set("is_workday", day.IsWorkday)
 	record.Set("name", day.Name)
 	record.Set("source", day.Source)
-	return app.Save(record)
+	return saveImported(app, record, day.CreatedAt, day.UpdatedAt)
 }
 
 func deleteHolidayYear(app core.App, userID, year string, count *int) error {

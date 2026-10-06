@@ -1,7 +1,10 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -61,4 +64,26 @@ func TestPocketBaseWorkeyIntegration(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "不能生成独立的旧版数据库")
 	_, err = os.Stat(filepath.Join(testApp.DataDir(), "data.db"))
 	require.NoError(t, err)
+}
+
+func TestPocketBaseImportBodyLimit(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+	userID := createTestUser(t, "uploadlimituser", "password123")
+	var archive, form bytes.Buffer
+	require.NoError(t, writeDataZip(&archive, &ExportData{}))
+	writer := multipart.NewWriter(&form)
+	part, err := writer.CreateFormFile("file", "legacy.zip")
+	require.NoError(t, err)
+	_, err = part.Write(archive.Bytes())
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	request := createAuthenticatedRequest(t, http.MethodPost, "/api/workey/data/import", "", userID)
+	request.Body = io.NopCloser(&form)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	// 验证该路由覆盖 PocketBase 默认的 32 MiB 限额，仍接受旧备份允许的 50 MiB。
+	request.ContentLength = 40 << 20
+	response := httptest.NewRecorder()
+	serveTest(response, request)
+	assert.Equal(t, http.StatusOK, response.Code, response.Body.String())
 }

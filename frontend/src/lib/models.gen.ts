@@ -239,6 +239,17 @@ export interface VersionRangeResponse {
   earliest?: string;
   latest?: string;
 }
+export interface DataImportResponse {
+  message: string;
+  attendance_count: number /* int */;
+  work_log_count: number /* int */;
+  todo_count: number /* int */;
+  ticket_issue_count: number /* int */;
+  checklist_count: number /* int */;
+  snapshot_count: number /* int */;
+  override_count: number /* int */;
+  calendar_day_count: number /* int */;
+}
 export interface DataDeleteResponse {
   message: string;
   attendance_count: number /* int64 */;

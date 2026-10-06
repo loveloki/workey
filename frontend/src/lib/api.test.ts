@@ -328,21 +328,46 @@ describe('export and import requests', () => {
     )
   })
 
-  it('导出也拒绝代理登录页', async () => {
+  it('导入使用统一地址，不设置 multipart Content-Type 边界', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.com/prefix/')
+    const file = new File(['zip-content'], 'workey.zip', { type: 'application/zip' })
+    const response = { message: 'ok', counts: {} }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(response))))
+
+    await expect(settings.importData(file)).resolves.toEqual(response)
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      'https://api.example.com/prefix/api/workey/data/import',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        headers: expect.objectContaining({ Authorization: 'Bearer user-token' }),
+        body: expect.any(FormData),
+      }),
+    )
+    const [, options] = vi.mocked(fetch).mock.calls[0]
+    expect(new Headers(options?.headers).has('Content-Type')).toBe(false)
+    expect((options?.body as FormData).get('file')).toBe(file)
+  })
+
+  it.each(['export', 'import'] as const)('%s 也拒绝代理登录页', async operation => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
       new Response('<!doctype html><html>Sign in</html>', { headers: { 'Content-Type': 'text/plain' } }),
     ))
+    const result = operation === 'export'
+      ? settings.exportData()
+      : settings.importData(new File(['zip'], 'workey.zip'))
 
-    await expect(settings.exportData()).rejects.toThrow(t('api.loginPage', { url: '/' }))
+    await expect(result).rejects.toThrow(t('api.loginPage', { url: '/' }))
     expect(localStorage.getItem('token')).toBe('user-token')
   })
 
-  it('导出的 JSON 失败保留 Workey 错误', async () => {
+  it('导出和导入的 JSON 失败保留 Workey 错误', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation(() =>
       Promise.resolve(new Response('{"status":403,"message":"forbidden"}', { status: 403 })),
     ))
 
     await expect(settings.exportData()).rejects.toMatchObject({ status: 403, message: 'forbidden' })
+    await expect(settings.importData(new File(['zip'], 'workey.zip'))).rejects.toMatchObject({ status: 403, message: 'forbidden' })
   })
 })
 
